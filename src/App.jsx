@@ -857,6 +857,6 @@ View Product
       50% { transform: translateY(-0.5rem); }
     }
   `}</style>
-</div>
+</div>  
 );
 };
