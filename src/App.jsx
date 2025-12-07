@@ -1,4 +1,3 @@
-Perfect! Here's the COMPLETE App.jsx file - I'll give it to you in one large block. Copy everything from import to export default:
 javascriptimport React, { useState, useRef, useEffect } from 'react';
 import { Camera, MessageCircle, BookOpen, Upload, X, Send, AlertCircle, Info, Mail, Sparkles, Loader } from 'lucide-react';
 
