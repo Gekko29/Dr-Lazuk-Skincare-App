@@ -72,7 +72,64 @@ const DermatologyApp = () => {
       price: 149.99,
       category: 'Mask',
       benefits: ['Tightens pores', 'Reduces fine lines', 'Deep hydration'],
-      url: 'https://www.skindoctor.ai/product-page/revit
+      url: 'https://www.skindoctor.ai/product-page/revitalizing-hydrating-beauty-cleansing-face-cloud-mask'
+    },
+    {
+      name: 'Luxury Skincare Solution',
+      price: 350.00,
+      category: 'Complete Set',
+      benefits: ['Complete skincare routine', 'All essential products', 'Premium value'],
+      url: 'https://www.skindoctor.ai/product-page/luxury-skincare-solution'
+    }
+  ];
+
+  const getRecommendedProducts = (concern) => {
+    const productRecommendations = {
+      acne: [
+        drLazukProducts.find(p => p.name.includes('Balancing Toner Pads with Niacinamide')),
+        drLazukProducts.find(p => p.name.includes('Beneficial Face Cleanser')),
+        drLazukProducts.find(p => p.name.includes('Natural Mineral Sunscreen')),
+        drLazukProducts.find(p => p.name.includes('Rehydrating Face Emulsion'))
+      ],
+      aging: [
+        drLazukProducts.find(p => p.name.includes('Rehydrating Face Emulsion')),
+        drLazukProducts.find(p => p.name.includes('Natural Mineral Sunscreen')),
+        drLazukProducts.find(p => p.name.includes('Enriched Face Wash')),
+        drLazukProducts.find(p => p.name.includes('Hydrating Face Cloud Mask'))
+      ],
+      pigmentation: [
+        drLazukProducts.find(p => p.name.includes('Balancing Toner Pads with Niacinamide')),
+        drLazukProducts.find(p => p.name.includes('Natural Mineral Sunscreen')),
+        drLazukProducts.find(p => p.name.includes('Rehydrating Face Emulsion')),
+        drLazukProducts.find(p => p.name.includes('Enriched Face Wash'))
+      ],
+      redness: [
+        drLazukProducts.find(p => p.name.includes('Beneficial Face Cleanser')),
+        drLazukProducts.find(p => p.name.includes('Rehydrating Face Emulsion')),
+        drLazukProducts.find(p => p.name.includes('Concentrated Toner Pads with Hyaluronic Acid')),
+        drLazukProducts.find(p => p.name.includes('Natural Mineral Sunscreen'))
+      ],
+      texture: [
+        drLazukProducts.find(p => p.name.includes('Enriched Face Wash')),
+        drLazukProducts.find(p => p.name.includes('Balancing Toner Pads with Niacinamide')),
+        drLazukProducts.find(p => p.name.includes('Hydrating Face Cloud Mask')),
+        drLazukProducts.find(p => p.name.includes('Rehydrating Face Emulsion'))
+      ],
+      dryness: [
+        drLazukProducts.find(p => p.name.includes('Enriched Face Wash')),
+        drLazukProducts.find(p => p.name.includes('Concentrated Toner Pads with Hyaluronic Acid')),
+        drLazukProducts.find(p => p.name.includes('Rehydrating Face Emulsion')),
+        drLazukProducts.find(p => p.name.includes('Hydrating Face Cloud Mask'))
+      ]
+    };
+
+    return (productRecommendations[concern] || [
+      drLazukProducts.find(p => p.name.includes('Beneficial Face Cleanser')),
+      drLazukProducts.find(p => p.name.includes('Rehydrating Face Emulsion')),
+      drLazukProducts.find(p => p.name.includes('Natural Mineral Sunscreen')),
+      drLazukProducts.find(p => p.name.includes('Concentrated Toner Pads'))
+    ]).filter(Boolean);
+  };
 
   const startCamera = async () => {
     try {
@@ -146,6 +203,8 @@ const DermatologyApp = () => {
         }
       };
 
+      const productList = drLazukProducts.map(p => `${p.name} ($${p.price}) - ${p.benefits.join(', ')}`).join('\n');
+
       const response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -154,10 +213,15 @@ const DermatologyApp = () => {
         body: JSON.stringify({
           model: 'claude-sonnet-4-20250514',
           max_tokens: 4000,
-          system: 'You are Dr. Iryna Lazuk, providing warm, expert skincare analysis. Generate a report with these sections: Initial Skincare Analysis, Aging Prognosis Current State, Esthetic Deep-Dive, Assessment If You Change Nothing, Future Roadmap, Why Pause Current Products, Daily Skincare Plan, and Important Notice disclaimer. Be warm, expert, non-diagnostic. Recommend Dr. Lazuk products: Beneficial Face Cleanser, Rehydrating Face Emulsion, Natural Mineral Sunscreen.',
+          system: `You are Dr. Iryna Lazuk, providing warm, expert skincare analysis. Generate a report with these sections: Initial Skincare Analysis, Aging Prognosis Current State, Esthetic Deep-Dive, Assessment If You Change Nothing, Future Roadmap, Why Pause Current Products, Daily Skincare Plan, and Important Notice disclaimer. Be warm, expert, non-diagnostic.
+
+Available Dr. Lazuk Products:
+${productList}
+
+When recommending products in the Daily Skincare Plan section, choose the most appropriate products based on the user's concerns. For acne concerns, emphasize Balancing Toner Pads with Niacinamide and Beneficial Face Cleanser. For aging, emphasize Rehydrating Face Emulsion and sunscreen. For dryness, emphasize Enriched Face Wash and Concentrated Toner Pads with Hyaluronic Acid. For pigmentation, emphasize Niacinamide toner and sunscreen. Always include sunscreen in recommendations.`,
           messages: [{
             role: 'user',
-            content: `Generate skincare analysis for: Age ${ageRange}, Concern ${primaryConcern}, Question ${visitorQuestion || 'none'}, Analysis ${JSON.stringify(mockAnalysisData)}`
+            content: `Generate skincare analysis for: Age ${ageRange}, Primary Concern: ${primaryConcern}, Question ${visitorQuestion || 'none'}, Analysis ${JSON.stringify(mockAnalysisData)}`
           }]
         })
       });
@@ -165,7 +229,12 @@ const DermatologyApp = () => {
       const data = await response.json();
       const reportContent = data.content[0].text;
       
-      setAnalysisReport(reportContent);
+      const recommendedProducts = getRecommendedProducts(primaryConcern);
+      
+      setAnalysisReport({
+        report: reportContent,
+        recommendedProducts: recommendedProducts
+      });
       
       console.log('Email to contact@skindoctor.ai - Subject: New Skincare Prospect');
       console.log('User:', userEmail, 'Age:', ageRange, 'Concern:', primaryConcern);
@@ -197,6 +266,8 @@ const DermatologyApp = () => {
     setChatLoading(true);
 
     try {
+      const productList = drLazukProducts.map(p => `${p.name} ($${p.price})`).join(', ');
+      
       const response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -205,7 +276,7 @@ const DermatologyApp = () => {
         body: JSON.stringify({
           model: 'claude-sonnet-4-20250514',
           max_tokens: 1000,
-          system: 'You are Dr. Lazuk virtual assistant. Provide warm expert dermatological advice. Mention Dr. Lazuk products when relevant. Always remind users to consult dermatologist for medical concerns.',
+          system: `You are Dr. Lazuk virtual assistant. Provide warm expert dermatological advice. Available products: ${productList}. Mention Dr. Lazuk products when relevant. Always remind users to consult dermatologist for medical concerns.`,
           messages: [
             ...chatMessages.map(m => ({ role: m.role, content: m.content })),
             { role: 'user', content: userMsg }
@@ -407,12 +478,12 @@ const DermatologyApp = () => {
                   <button onClick={resetAnalysis} className="px-4 py-2 bg-gray-300 text-gray-900 font-bold hover:bg-gray-400 transition-colors text-sm">New Analysis</button>
                 </div>
                 <div className="bg-white border-2 border-gray-900 p-8">
-                  <div className="prose prose-sm max-w-none text-gray-700 whitespace-pre-wrap">{analysisReport}</div>
+                  <div className="prose prose-sm max-w-none text-gray-700 whitespace-pre-wrap">{analysisReport.report}</div>
                 </div>
                 <div className="bg-white border-2 border-gray-900 p-8">
-                  <h4 className="font-bold text-gray-900 mb-4 text-2xl">Recommended Dr. Lazuk Products</h4>
-                  <div className="grid md:grid-cols-3 gap-4">
-                    {drLazukProducts.map((product, idx) => (
+                  <h4 className="font-bold text-gray-900 mb-4 text-2xl">Recommended Dr. Lazuk Products for Your {primaryConcern === 'not sure' ? 'Skin' : primaryConcern.charAt(0).toUpperCase() + primaryConcern.slice(1)} Concerns</h4>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    {analysisReport.recommendedProducts.map((product, idx) => (
                       <div key={idx} className="bg-gray-50 border border-gray-300 p-5 hover:border-gray-900 transition-all">
                         <div className="mb-3">
                           <h5 className="font-bold text-gray-900 mb-1">{product.name}</h5>
@@ -458,59 +529,4 @@ const DermatologyApp = () => {
                         <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
                         <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                       </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-              <div className="border-t border-gray-300 p-4 bg-white">
-                <div className="flex gap-2">
-                  <input type="text" value={inputMessage} onChange={(e) => setInputMessage(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && sendMessage()} placeholder="Ask about skin conditions routines products..." className="flex-1 px-4 py-3 border-2 border-gray-300 focus:outline-none focus:border-gray-900" />
-                  <button onClick={sendMessage} disabled={chatLoading || !inputMessage.trim()} className="px-8 py-3 bg-gray-900 text-white font-bold hover:bg-gray-800 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed">
-                    <Send size={20} />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'education' && (
-          <div className="bg-white border border-gray-200 shadow-sm p-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Dr. Lazuk Cosmetics Product Line</h2>
-            <p className="text-gray-600 mb-8">Dermatologist-formulated natural skincare powered by science and botanical ingredients.</p>
-            <div className="grid md:grid-cols-3 gap-6">
-              {drLazukProducts.map((product, idx) => (
-                <div key={idx} className="border-2 border-gray-300 p-6 hover:border-gray-900 transition-all">
-                  <div className="mb-4">
-                    <span className="inline-block px-3 py-1 bg-gray-900 text-white text-xs uppercase tracking-wider mb-3">{product.category}</span>
-                    <h3 className="font-bold text-gray-900 text-lg mb-2">{product.name}</h3>
-                    <span className="text-xl font-bold text-gray-900">${product.price}</span>
-                  </div>
-                  <ul className="space-y-2 mb-5">
-                    {product.benefits.map((benefit, bidx) => (
-                      <li key={bidx} className="text-sm text-gray-700 flex items-start">
-                        <span className="text-gray-900 mr-2 font-bold">✓</span>
-                        {benefit}
-                      </li>
-                    ))}
-                  </ul>
-                  <a href={product.url} target="_blank" rel="noopener noreferrer" className="block w-full text-center bg-gray-900 text-white py-3 font-bold hover:bg-gray-800 transition-colors">Learn More</a>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="bg-gray-900 text-white py-8 mt-12">
-        <div className="max-w-6xl mx-auto px-4 text-center">
-          <p className="text-sm text-gray-400">© 2026 by SkinDoctor AI®</p>
-          <p className="text-sm text-gray-400 mt-2">Dr. Lazuk Cosmetics® | Dr. Lazuk Esthetics® | Dr. Lazuk Biotics® | Dr. Lazuk Nutrition®</p>
-          <p className="text-sm text-gray-400 mt-2">Johns Creek Georgia | Alpharetta Georgia | Atlanta Georgia | Cumming Georgia</p>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-export default DermatologyApp;
+                    </d
