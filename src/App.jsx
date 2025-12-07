@@ -26,11 +26,18 @@ const DermatologyApp = () => {
 
   const drLazukProducts = [
     {
-      name: 'Beneficial Face Cleanser with Centella Asiatica',
+      name: 'Beneficial Face Cleanser with Centella Asiatica (Dermo Complex)',
       price: 139.99,
       category: 'Cleanser',
       benefits: ['Soothes irritation', 'Reduces redness', 'Strengthens barrier'],
       url: 'https://www.skindoctor.ai/product-page/beneficial-face-cleanser-with-centella-asiatica'
+    },
+    {
+      name: 'Enriched Face Wash with Hyaluronic and Amino Acid',
+      price: 169.99,
+      category: 'Cleanser',
+      benefits: ['Deep hydration', 'Plump skin', 'Strengthens barrier'],
+      url: 'https://www.skindoctor.ai/product-page/enriched-face-wash-with-hyaluronic-and-amino-acid'
     },
     {
       name: 'Rehydrating Face Emulsion with Centella Asiatica and Peptides',
@@ -40,13 +47,32 @@ const DermatologyApp = () => {
       url: 'https://www.skindoctor.ai/product-page/rehydrating-face-emulsion-with-centella-asiatica-and-peptides'
     },
     {
+      name: 'Concentrated Toner Pads with Hyaluronic Acid',
+      price: 99.99,
+      category: 'Toner',
+      benefits: ['Pore-tightening', 'Tone-evening', 'Barrier-boosting'],
+      url: 'https://www.skindoctor.ai/product-page/concentrated-toner-pads-with-hyaluronic-acid'
+    },
+    {
+      name: 'Balancing Toner Pads with Niacinamide',
+      price: 99.99,
+      category: 'Toner',
+      benefits: ['Brightening', 'Oil control', 'Radiant glow'],
+      url: 'https://www.skindoctor.ai/product-page/balancing-toner-pads-with-niacinamide'
+    },
+    {
       name: 'Natural Mineral Sunscreen Protection',
       price: 79.99,
       category: 'Sunscreen',
       benefits: ['Zinc oxide protection', 'Botanical nourishment', 'No white cast'],
       url: 'https://www.skindoctor.ai/product-page/natural-mineral-sunscreen-protection'
-    }
-  ];
+    },
+    {
+      name: 'Hydrating Face Cloud Mask',
+      price: 149.99,
+      category: 'Mask',
+      benefits: ['Tightens pores', 'Reduces fine lines', 'Deep hydration'],
+      url: 'https://www.skindoctor.ai/product-page/revit
 
   const startCamera = async () => {
     try {
