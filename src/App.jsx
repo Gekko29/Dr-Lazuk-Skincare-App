@@ -1,4 +1,4 @@
-jsximport React, { useState, useRef, useEffect } from 'react';
+jsximport React, { useState, useRef, useEffect } from 'react'; 
 import { Camera, MessageCircle, BookOpen, Upload, X, Send, AlertCircle, Info, Mail, Sparkles, Loader } from 'lucide-react';
 
 const DermatologyApp = () => {
