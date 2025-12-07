@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
+Perfect! Here's the COMPLETE App.jsx file - I'll give it to you in one large block. Copy everything from import to export default:
+javascriptimport React, { useState, useRef, useEffect } from 'react';
 import { Camera, MessageCircle, BookOpen, Upload, X, Send, AlertCircle, Info, Mail, Sparkles, Loader } from 'lucide-react';
 
 const DermatologyApp = () => {
@@ -529,4 +530,57 @@ When recommending products in the Daily Skincare Plan section, choose the most a
                         <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
                         <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                       </div>
-                    </d
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="border-t border-gray-300 p-4 bg-white">
+                <div className="flex gap-2">
+                  <input type="textMContinue" value={inputMessage} onChange={(e) => setInputMessage(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && sendMessage()} placeholder="Ask about skin conditions routines products..." className="flex-1 px-4 py-3 border-2 border-gray-300 focus:outline-none focus:border-gray-900" />
+<button onClick={sendMessage} disabled={chatLoading || !inputMessage.trim()} className="px-8 py-3 bg-gray-900 text-white font-bold hover:bg-gray-800 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed">
+<Send size={20} />
+</button>
+</div>
+</div>
+</div>
+</div>
+)}
+    {activeTab === 'education' && (
+      <div className="bg-white border border-gray-200 shadow-sm p-8">
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Dr. Lazuk Cosmetics Product Line</h2>
+        <p className="text-gray-600 mb-8">Dermatologist-formulated natural skincare powered by science and botanical ingredients.</p>
+        <div className="grid md:grid-cols-3 gap-6">
+          {drLazukProducts.map((product, idx) => (
+            <div key={idx} className="border-2 border-gray-300 p-6 hover:border-gray-900 transition-all">
+              <div className="mb-4">
+                <span className="inline-block px-3 py-1 bg-gray-900 text-white text-xs uppercase tracking-wider mb-3">{product.category}</span>
+                <h3 className="font-bold text-gray-900 text-lg mb-2">{product.name}</h3>
+                <span className="text-xl font-bold text-gray-900">${product.price}</span>
+              </div>
+              <ul className="space-y-2 mb-5">
+                {product.benefits.map((benefit, bidx) => (
+                  <li key={bidx} className="text-sm text-gray-700 flex items-start">
+                    <span className="text-gray-900 mr-2 font-bold">✓</span>
+                    {benefit}
+                  </li>
+                ))}
+              </ul>
+              <a href={product.url} target="_blank" rel="noopener noreferrer" className="block w-full text-center bg-gray-900 text-white py-3 font-bold hover:bg-gray-800 transition-colors">Learn More</a>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+  </div>
+
+  <div className="bg-gray-900 text-white py-8 mt-12">
+    <div className="max-w-6xl mx-auto px-4 text-center">
+      <p className="text-sm text-gray-400">© 2026 by SkinDoctor AI®</p>
+      <p className="text-sm text-gray-400 mt-2">Dr. Lazuk Cosmetics® | Dr. Lazuk Esthetics® | Dr. Lazuk Biotics® | Dr. Lazuk Nutrition®</p>
+      <p className="text-sm text-gray-400 mt-2">Johns Creek Georgia | Alpharetta Georgia | Atlanta Georgia | Cumming Georgia</p>
+    </div>
+  </div>
+</div>
+);
+};
+export default DermatologyApp;
