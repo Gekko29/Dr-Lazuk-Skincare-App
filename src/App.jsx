@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Camera, MessageCircle, BookOpen, Upload, X, Send, AlertCircle, Info, Mail, Sparkles, Loader } from 'lucide-react';
+import { Camera, MessageCircle, BookOpen, Upload, X, Send, Info, Mail, Sparkles, Loader } from 'lucide-react';
 
 const DermatologyApp = () => {
   const [activeTab, setActiveTab] = useState('home');
@@ -73,62 +73,62 @@ const DermatologyApp = () => {
       category: 'Mask',
       benefits: ['Tightens pores', 'Reduces fine lines', 'Deep hydration'],
       url: 'https://www.skindoctor.ai/product-page/revitalizing-hydrating-beauty-cleansing-face-cloud-mask'
+    }
+  ];
+
+  const estheticServices = [
+    {
+      name: 'HydraFacial',
+      description: 'Medical-grade facial that cleanses, exfoliates, and hydrates',
+      benefits: ['Deep pore cleansing', 'Instant glow', 'No downtime'],
+      recommendFor: ['acne', 'texture', 'dryness'],
+      whyRecommended: 'Perfect for clearing congested pores and achieving immediate radiance'
     },
     {
-      name: 'Luxury Skincare Solution',
-      price: 350.00,
-      category: 'Complete Set',
-      benefits: ['Complete skincare routine', 'All essential products', 'Premium value'],
-      url: 'https://www.skindoctor.ai/product-page/luxury-skincare-solution'
+      name: 'Chemical Peel',
+      description: 'Professional exfoliation to reveal fresh skin',
+      benefits: ['Reduces pigmentation', 'Improves texture', 'Minimizes fine lines'],
+      recommendFor: ['pigmentation', 'aging', 'texture'],
+      whyRecommended: 'Effectively targets uneven tone and texture at a deeper level'
+    },
+    {
+      name: 'Microneedling with PRP',
+      description: 'Collagen induction with platelet-rich plasma',
+      benefits: ['Boosts collagen', 'Reduces scars', 'Firms skin'],
+      recommendFor: ['aging', 'texture', 'acne'],
+      whyRecommended: 'Stimulates natural collagen production for long-term improvement'
+    },
+    {
+      name: 'Laser Rejuvenation',
+      description: 'Advanced laser for comprehensive skin renewal',
+      benefits: ['Reduces sun damage', 'Evens tone', 'Stimulates collagen'],
+      recommendFor: ['pigmentation', 'aging', 'redness'],
+      whyRecommended: 'Most effective for treating sun damage and pigmentation'
+    },
+    {
+      name: 'LED Light Therapy',
+      description: 'Non-invasive light treatment',
+      benefits: ['Reduces inflammation', 'Kills bacteria', 'Promotes healing'],
+      recommendFor: ['acne', 'redness'],
+      whyRecommended: 'Gentle yet effective for calming inflammation and preventing breakouts'
     }
   ];
 
   const getRecommendedProducts = (concern) => {
-    const productRecommendations = {
-      acne: [
-        drLazukProducts.find(p => p.name.includes('Balancing Toner Pads with Niacinamide')),
-        drLazukProducts.find(p => p.name.includes('Beneficial Face Cleanser')),
-        drLazukProducts.find(p => p.name.includes('Natural Mineral Sunscreen')),
-        drLazukProducts.find(p => p.name.includes('Rehydrating Face Emulsion'))
-      ],
-      aging: [
-        drLazukProducts.find(p => p.name.includes('Rehydrating Face Emulsion')),
-        drLazukProducts.find(p => p.name.includes('Natural Mineral Sunscreen')),
-        drLazukProducts.find(p => p.name.includes('Enriched Face Wash')),
-        drLazukProducts.find(p => p.name.includes('Hydrating Face Cloud Mask'))
-      ],
-      pigmentation: [
-        drLazukProducts.find(p => p.name.includes('Balancing Toner Pads with Niacinamide')),
-        drLazukProducts.find(p => p.name.includes('Natural Mineral Sunscreen')),
-        drLazukProducts.find(p => p.name.includes('Rehydrating Face Emulsion')),
-        drLazukProducts.find(p => p.name.includes('Enriched Face Wash'))
-      ],
-      redness: [
-        drLazukProducts.find(p => p.name.includes('Beneficial Face Cleanser')),
-        drLazukProducts.find(p => p.name.includes('Rehydrating Face Emulsion')),
-        drLazukProducts.find(p => p.name.includes('Concentrated Toner Pads with Hyaluronic Acid')),
-        drLazukProducts.find(p => p.name.includes('Natural Mineral Sunscreen'))
-      ],
-      texture: [
-        drLazukProducts.find(p => p.name.includes('Enriched Face Wash')),
-        drLazukProducts.find(p => p.name.includes('Balancing Toner Pads with Niacinamide')),
-        drLazukProducts.find(p => p.name.includes('Hydrating Face Cloud Mask')),
-        drLazukProducts.find(p => p.name.includes('Rehydrating Face Emulsion'))
-      ],
-      dryness: [
-        drLazukProducts.find(p => p.name.includes('Enriched Face Wash')),
-        drLazukProducts.find(p => p.name.includes('Concentrated Toner Pads with Hyaluronic Acid')),
-        drLazukProducts.find(p => p.name.includes('Rehydrating Face Emulsion')),
-        drLazukProducts.find(p => p.name.includes('Hydrating Face Cloud Mask'))
-      ]
+    const recs = {
+      acne: [0, 4, 5],
+      aging: [2, 5, 1],
+      pigmentation: [4, 5, 2],
+      redness: [0, 2, 3],
+      texture: [1, 4, 6],
+      dryness: [1, 3, 2]
     };
+    const indices = recs[concern] || [0, 2, 5];
+    return indices.map(i => drLazukProducts[i]).filter(Boolean);
+  };
 
-    return (productRecommendations[concern] || [
-      drLazukProducts.find(p => p.name.includes('Beneficial Face Cleanser')),
-      drLazukProducts.find(p => p.name.includes('Rehydrating Face Emulsion')),
-      drLazukProducts.find(p => p.name.includes('Natural Mineral Sunscreen')),
-      drLazukProducts.find(p => p.name.includes('Concentrated Toner Pads'))
-    ]).filter(Boolean);
+  const getRecommendedServices = (concern) => {
+    return estheticServices.filter(s => s.recommendFor.includes(concern)).slice(0, 2);
   };
 
   const startCamera = async () => {
@@ -193,35 +193,24 @@ const DermatologyApp = () => {
     setEmailSubmitting(true);
     
     try {
-      const mockAnalysisData = {
-        fitzpatrickType: 'III (medium, tans uniformly)',
-        skinTypeCharacteristics: {
-          sebumLevel: 'combination',
-          shinePattern: 'T-zone',
-          poreVisibility: 'moderate',
-          hydrationLevel: 'balanced'
-        }
-      };
-
-      const productList = drLazukProducts.map(p => `${p.name} ($${p.price}) - ${p.benefits.join(', ')}`).join('\n');
+      const productList = drLazukProducts.map(p => `${p.name} ($${p.price})`).join(', ');
+      const serviceList = estheticServices.map(s => `${s.name}: ${s.description}`).join('; ');
 
       const response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: 'claude-sonnet-4-20250514',
           max_tokens: 4000,
-          system: `You are Dr. Iryna Lazuk, providing warm, expert skincare analysis. Generate a report with these sections: Initial Skincare Analysis, Aging Prognosis Current State, Esthetic Deep-Dive, Assessment If You Change Nothing, Future Roadmap, Why Pause Current Products, Daily Skincare Plan, and Important Notice disclaimer. Be warm, expert, non-diagnostic.
+          system: `You are Dr. Iryna Lazuk. Generate a skincare report with: Initial Analysis, Aging Prognosis, Esthetic Deep-Dive, Future Roadmap, Daily Skincare Plan, and Important Notice. Be warm, expert, non-diagnostic.
 
-Available Dr. Lazuk Products:
-${productList}
+Products: ${productList}
+Services: ${serviceList}
 
-When recommending products in the Daily Skincare Plan section, choose the most appropriate products based on the user's concerns. For acne concerns, emphasize Balancing Toner Pads with Niacinamide and Beneficial Face Cleanser. For aging, emphasize Rehydrating Face Emulsion and sunscreen. For dryness, emphasize Enriched Face Wash and Concentrated Toner Pads with Hyaluronic Acid. For pigmentation, emphasize Niacinamide toner and sunscreen. Always include sunscreen in recommendations.`,
+Recommend appropriate products AND in-clinic services. For services, explain what they do and why they help.`,
           messages: [{
             role: 'user',
-            content: `Generate skincare analysis for: Age ${ageRange}, Primary Concern: ${primaryConcern}, Question ${visitorQuestion || 'none'}, Analysis ${JSON.stringify(mockAnalysisData)}`
+            content: `Age ${ageRange}, Concern ${primaryConcern}, Question ${visitorQuestion || 'none'}`
           }]
         })
       });
@@ -229,14 +218,13 @@ When recommending products in the Daily Skincare Plan section, choose the most a
       const data = await response.json();
       const reportContent = data.content[0].text;
       
-      const recommendedProducts = getRecommendedProducts(primaryConcern);
-      
       setAnalysisReport({
         report: reportContent,
-        recommendedProducts: recommendedProducts
+        recommendedProducts: getRecommendedProducts(primaryConcern),
+        recommendedServices: getRecommendedServices(primaryConcern)
       });
       
-      console.log('Email to contact@skindoctor.ai - Subject: New Skincare Prospect');
+      console.log('Email to contact@skindoctor.ai');
       console.log('User:', userEmail, 'Age:', ageRange, 'Concern:', primaryConcern);
       
       setEmailSubmitting(false);
@@ -245,7 +233,7 @@ When recommending products in the Daily Skincare Plan section, choose the most a
     } catch (error) {
       console.error('Analysis error:', error);
       setEmailSubmitting(false);
-      alert('There was an error processing your analysis. Please try again.');
+      alert('There was an error. Please try again.');
     }
   };
 
@@ -266,17 +254,13 @@ When recommending products in the Daily Skincare Plan section, choose the most a
     setChatLoading(true);
 
     try {
-      const productList = drLazukProducts.map(p => `${p.name} ($${p.price})`).join(', ');
-      
       const response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: 'claude-sonnet-4-20250514',
           max_tokens: 1000,
-          system: `You are Dr. Lazuk virtual assistant. Provide warm expert dermatological advice. Available products: ${productList}. Mention Dr. Lazuk products when relevant. Always remind users to consult dermatologist for medical concerns.`,
+          system: 'You are Dr. Lazuk virtual assistant. Provide warm expert advice. Mention Dr. Lazuk products when relevant.',
           messages: [
             ...chatMessages.map(m => ({ role: m.role, content: m.content })),
             { role: 'user', content: userMsg }
@@ -285,13 +269,11 @@ When recommending products in the Daily Skincare Plan section, choose the most a
       });
 
       const data = await response.json();
-      const assistantMsg = data.content[0].text;
-      
-      setChatMessages(prev => [...prev, { role: 'assistant', content: assistantMsg }]);
+      setChatMessages(prev => [...prev, { role: 'assistant', content: data.content[0].text }]);
     } catch (error) {
       setChatMessages(prev => [...prev, { 
         role: 'assistant', 
-        content: 'I apologize but I am having trouble connecting right now. Please try again.' 
+        content: 'I apologize but I am having trouble connecting. Please try again.' 
       }]);
     }
     
@@ -346,7 +328,7 @@ When recommending products in the Daily Skincare Plan section, choose the most a
             </button>
             <button onClick={() => setActiveTab('education')} className={`flex items-center gap-2 px-6 py-3 font-medium transition-all ${activeTab === 'education' ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-200'}`}>
               <BookOpen size={18} />
-              <span>Products</span>
+              <span>Services</span>
             </button>
           </div>
         </div>
@@ -355,16 +337,16 @@ When recommending products in the Daily Skincare Plan section, choose the most a
       <div className="max-w-6xl mx-auto px-4 py-8">
         {activeTab === 'home' && (
           <div className="bg-white border border-gray-200 shadow-sm p-8">
-            <div className="flex items-center gap-3 mb-6">
-              <Sparkles className="text-gray-900" size={28} />
-              <h2 className="text-2xl font-bold text-gray-900">Virtual Skin Analysis</h2>
-            </div>
-
             {step === 'photo' && (
               <>
+                <div className="flex items-center gap-3 mb-6">
+                  <Sparkles className="text-gray-900" size={28} />
+                  <h2 className="text-2xl font-bold text-gray-900">Virtual Skin Analysis</h2>
+                </div>
+
                 <div className="bg-gray-50 border border-gray-300 p-4 mb-8 flex items-start gap-3">
                   <Info className="text-gray-700 flex-shrink-0 mt-0.5" size={20} />
-                  <p className="text-sm text-gray-700">Take or upload a well-lit photo of your face. Our AI will provide comprehensive analysis in Dr. Lazuk expert voice.</p>
+                  <p className="text-sm text-gray-700">Take or upload a well-lit photo. Your complete report will be emailed to you.</p>
                 </div>
 
                 {!capturedImage && !cameraActive && (
@@ -372,12 +354,10 @@ When recommending products in the Daily Skincare Plan section, choose the most a
                     <button onClick={startCamera} className="flex flex-col items-center justify-center p-12 border-2 border-dashed border-gray-400 hover:border-gray-900 hover:bg-gray-50 transition-all">
                       <Camera size={56} className="text-gray-900 mb-4" />
                       <span className="font-bold text-gray-900 text-lg">Use Camera</span>
-                      <span className="text-sm text-gray-600 mt-2">Take a photo now</span>
                     </button>
                     <button onClick={() => fileInputRef.current?.click()} className="flex flex-col items-center justify-center p-12 border-2 border-dashed border-gray-400 hover:border-gray-900 hover:bg-gray-50 transition-all">
                       <Upload size={56} className="text-gray-900 mb-4" />
                       <span className="font-bold text-gray-900 text-lg">Upload Photo</span>
-                      <span className="text-sm text-gray-600 mt-2">From your device</span>
                     </button>
                     <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
                   </div>
@@ -389,8 +369,8 @@ When recommending products in the Daily Skincare Plan section, choose the most a
                       <video ref={videoRef} autoPlay playsInline className="w-full" />
                     </div>
                     <div className="flex gap-3 justify-center">
-                      <button onClick={capturePhoto} className="px-8 py-3 bg-gray-900 text-white font-bold hover:bg-gray-800 transition-colors">Capture Photo</button>
-                      <button onClick={stopCamera} className="px-8 py-3 bg-gray-300 text-gray-900 font-bold hover:bg-gray-400 transition-colors">Cancel</button>
+                      <button onClick={capturePhoto} className="px-8 py-3 bg-gray-900 text-white font-bold hover:bg-gray-800">Capture</button>
+                      <button onClick={stopCamera} className="px-8 py-3 bg-gray-300 text-gray-900 font-bold hover:bg-gray-400">Cancel</button>
                     </div>
                   </div>
                 )}
@@ -409,8 +389,8 @@ When recommending products in the Daily Skincare Plan section, choose the most a
                       <div>
                         <label className="block text-sm font-bold text-gray-900 mb-2">Age Range *</label>
                         <select value={ageRange} onChange={(e) => setAgeRange(e.target.value)} required className="w-full px-4 py-3 border-2 border-gray-300 focus:outline-none focus:border-gray-900">
-                          <option value="">Select your age range</option>
-                          <option value="teens">Teens (13-19)</option>
+                          <option value="">Select</option>
+                          <option value="teens">Teens</option>
                           <option value="20s">20s</option>
                           <option value="30s">30s</option>
                           <option value="40s">40s</option>
@@ -419,27 +399,26 @@ When recommending products in the Daily Skincare Plan section, choose the most a
                         </select>
                       </div>
                       <div>
-                        <label className="block text-sm font-bold text-gray-900 mb-2">Primary Skin Concern *</label>
+                        <label className="block text-sm font-bold text-gray-900 mb-2">Primary Concern *</label>
                         <select value={primaryConcern} onChange={(e) => setPrimaryConcern(e.target.value)} required className="w-full px-4 py-3 border-2 border-gray-300 focus:outline-none focus:border-gray-900">
-                          <option value="">Select your main concern</option>
-                          <option value="acne">Acne and Breakouts</option>
-                          <option value="aging">Aging and Fine Lines</option>
-                          <option value="pigmentation">Dark Spots and Pigmentation</option>
-                          <option value="redness">Redness and Sensitivity</option>
-                          <option value="texture">Texture and Pores</option>
-                          <option value="dryness">Dryness and Dehydration</option>
-                          <option value="not sure">Not Sure</option>
+                          <option value="">Select</option>
+                          <option value="acne">Acne</option>
+                          <option value="aging">Aging</option>
+                          <option value="pigmentation">Pigmentation</option>
+                          <option value="redness">Redness</option>
+                          <option value="texture">Texture</option>
+                          <option value="dryness">Dryness</option>
                         </select>
                       </div>
                       <div>
-                        <label className="block text-sm font-bold text-gray-900 mb-2">Ask Dr. Lazuk a Question (Optional)</label>
-                        <textarea value={visitorQuestion} onChange={(e) => setVisitorQuestion(e.target.value)} placeholder="E.g., What is the best way to prevent wrinkles?" rows="4" className="w-full px-4 py-3 border-2 border-gray-300 focus:outline-none focus:border-gray-900" />
+                        <label className="block text-sm font-bold text-gray-900 mb-2">Question (Optional)</label>
+                        <textarea value={visitorQuestion} onChange={(e) => setVisitorQuestion(e.target.value)} rows="3" className="w-full px-4 py-3 border-2 border-gray-300 focus:outline-none focus:border-gray-900" />
                       </div>
                     </div>
                   </div>
                   <div className="flex gap-3">
-                    <button onClick={resetAnalysis} className="px-6 py-3 bg-gray-300 text-gray-900 font-bold hover:bg-gray-400 transition-colors">Start Over</button>
-                    <button onClick={handleQuestionsSubmit} className="flex-1 px-6 py-3 bg-gray-900 text-white font-bold hover:bg-gray-800 transition-colors">Continue to Analysis</button>
+                    <button onClick={resetAnalysis} className="px-6 py-3 bg-gray-300 text-gray-900 font-bold hover:bg-gray-400">Start Over</button>
+                    <button onClick={handleQuestionsSubmit} className="flex-1 px-6 py-3 bg-gray-900 text-white font-bold hover:bg-gray-800">Continue</button>
                   </div>
                 </div>
               </div>
@@ -447,25 +426,17 @@ When recommending products in the Daily Skincare Plan section, choose the most a
 
             {step === 'email' && (
               <div className="max-w-xl mx-auto">
-                <div className="bg-gray-900 text-white p-8 border border-gray-800">
+                <div className="bg-gray-900 text-white p-8">
                   <div className="flex items-center gap-3 mb-4">
-                    <Mail className="text-white" size={32} />
-                    <h3 className="text-2xl font-bold">Get Your Personalized Analysis</h3>
+                    <Mail size={32} />
+                    <h3 className="text-2xl font-bold">Get Your Analysis</h3>
                   </div>
-                  <p className="text-gray-300 mb-6">Enter your email to receive your comprehensive skin analysis report from Dr. Lazuk including personalized product recommendations and aging prognosis.</p>
+                  <p className="text-gray-300 mb-6">Enter your email to receive your complete report with product and treatment recommendations.</p>
                   <div className="space-y-4">
-                    <input type="email" value={userEmail} onChange={(e) => setUserEmail(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleEmailSubmit()} placeholder="your.email@example.com" required className="w-full px-4 py-3 bg-white text-gray-900 border-2 border-gray-300 focus:outline-none focus:border-gray-600" />
-                    <button onClick={handleEmailSubmit} disabled={emailSubmitting} className="w-full px-6 py-3 bg-white text-gray-900 font-bold hover:bg-gray-200 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-                      {emailSubmitting ? (
-                        <>
-                          <Loader className="animate-spin" size={20} />
-                          <span>Analyzing Your Skin...</span>
-                        </>
-                      ) : (
-                        'View My Results'
-                      )}
+                    <input type="email" value={userEmail} onChange={(e) => setUserEmail(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleEmailSubmit()} placeholder="your.email@example.com" className="w-full px-4 py-3 bg-white text-gray-900 border-2" />
+                    <button onClick={handleEmailSubmit} disabled={emailSubmitting} className="w-full px-6 py-3 bg-white text-gray-900 font-bold hover:bg-gray-200 disabled:bg-gray-400 flex items-center justify-center gap-2">
+                      {emailSubmitting ? <><Loader className="animate-spin" size={20} /><span>Analyzing...</span></> : 'View Results'}
                     </button>
-                    <p className="text-xs text-gray-400 text-center">We respect your privacy. Your analysis will be sent to contact@skindoctor.ai and you will receive a copy via email.</p>
                   </div>
                 </div>
               </div>
@@ -474,28 +445,41 @@ When recommending products in the Daily Skincare Plan section, choose the most a
             {step === 'results' && analysisReport && (
               <div className="space-y-6">
                 <div className="flex justify-between items-center">
-                  <h3 className="text-2xl font-bold text-gray-900">Your Personalized Skincare Analysis</h3>
-                  <button onClick={resetAnalysis} className="px-4 py-2 bg-gray-300 text-gray-900 font-bold hover:bg-gray-400 transition-colors text-sm">New Analysis</button>
+                  <h3 className="text-2xl font-bold text-gray-900">Your Analysis</h3>
+                  <button onClick={resetAnalysis} className="px-4 py-2 bg-gray-300 text-gray-900 font-bold hover:bg-gray-400 text-sm">New Analysis</button>
                 </div>
                 <div className="bg-white border-2 border-gray-900 p-8">
                   <div className="prose prose-sm max-w-none text-gray-700 whitespace-pre-wrap">{analysisReport.report}</div>
                 </div>
                 <div className="bg-white border-2 border-gray-900 p-8">
-                  <h4 className="font-bold text-gray-900 mb-4 text-2xl">Recommended Dr. Lazuk Products for Your {primaryConcern === 'not sure' ? 'Skin' : primaryConcern.charAt(0).toUpperCase() + primaryConcern.slice(1)} Concerns</h4>
-                  <div className="grid md:grid-cols-2 gap-4">
-                    {analysisReport.recommendedProducts.map((product, idx) => (
-                      <div key={idx} className="bg-gray-50 border border-gray-300 p-5 hover:border-gray-900 transition-all">
-                        <div className="mb-3">
-                          <h5 className="font-bold text-gray-900 mb-1">{product.name}</h5>
-                          <span className="text-gray-900 font-bold text-lg">${product.price}</span>
-                        </div>
-                        <p className="text-xs text-gray-500 mb-3 uppercase tracking-wider">{product.category}</p>
-                        <ul className="space-y-1 mb-4">
-                          {product.benefits.map((benefit, bidx) => (
-                            <li key={bidx} className="text-sm text-gray-700">✓ {benefit}</li>
-                          ))}
+                  <h4 className="font-bold text-gray-900 mb-4 text-2xl">Recommended Products</h4>
+                  <div className="grid md:grid-cols-3 gap-4 mb-8">
+                    {analysisReport.recommendedProducts.map((p, i) => (
+                      <div key={i} className="bg-gray-50 border p-4">
+                        <h5 className="font-bold text-gray-900 mb-1">{p.name}</h5>
+                        <p className="text-gray-900 font-bold mb-2">${p.price}</p>
+                        <ul className="text-sm text-gray-700 mb-3">
+                          {p.benefits.map((b, j) => <li key={j}>✓ {b}</li>)}
                         </ul>
-                        <a href={product.url} target="_blank" rel="noopener noreferrer" className="block w-full text-center bg-gray-900 text-white py-3 font-bold hover:bg-gray-800 transition-colors">View Product</a>
+                        <a href={p.url} target="_blank" rel="noopener noreferrer" className="block text-center bg-gray-900 text-white py-2 font-bold hover:bg-gray-800">View</a>
+                      </div>
+                    ))}
+                  </div>
+                  <h4 className="font-bold text-gray-900 mb-4 text-2xl">Recommended Treatments</h4>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    {analysisReport.recommendedServices.map((s, i) => (
+                      <div key={i} className="bg-blue-50 border-2 border-blue-200 p-5">
+                        <h5 className="font-bold text-blue-900 mb-2 text-lg">{s.name}</h5>
+                        <p className="text-sm text-blue-800 mb-3">{s.description}</p>
+                        <p className="text-sm text-blue-900 font-semibold mb-2">Why We Recommend This:</p>
+                        <p className="text-sm text-blue-800 mb-3">{s.whyRecommended}</p>
+                        <div className="mb-4">
+                          <p className="text-xs font-bold text-blue-900 mb-1">Benefits:</p>
+                          <ul className="text-sm text-blue-800">
+                            {s.benefits.map((b, j) => <li key={j}>✓ {b}</li>)}
+                          </ul>
+                        </div>
+                        <a href="mailto:contact@skindoctor.ai" className="block text-center bg-blue-600 text-white py-3 font-bold hover:bg-blue-700">Book Appointment</a>
                       </div>
                     ))}
                   </div>
@@ -507,79 +491,69 @@ When recommending products in the Daily Skincare Plan section, choose the most a
         )}
 
         {activeTab === 'chat' && (
-          <div className="bg-white border border-gray-200 shadow-sm overflow-hidden" style={{ height: '600px' }}>
+          <div className="bg-white border shadow-sm overflow-hidden" style={{ height: '600px' }}>
             <div className="flex flex-col h-full">
               <div className="bg-gray-900 text-white p-6">
                 <h2 className="text-2xl font-bold">Ask Dr. Lazuk</h2>
-                <p className="text-sm text-gray-300 mt-1">Get expert skincare advice</p>
               </div>
               <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50">
-                {chatMessages.map((msg, idx) => (
-                  <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[80%] p-4 ${msg.role === 'user' ? 'bg-gray-900 text-white' : 'bg-white border border-gray-300 text-gray-900'}`}>
+                {chatMessages.map((msg, i) => (
+                  <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[80%] p-4 ${msg.role === 'user' ? 'bg-gray-900 text-white' : 'bg-white border text-gray-900'}`}>
                       <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
                     </div>
                   </div>
                 ))}
                 {chatLoading && (
                   <div className="flex justify-start">
-                    <div className="bg-white border border-gray-300 p-4">
-                      <div className="flex gap-1">
-                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                      </div>
+                    <div className="bg-white border p-4">
+                      <Loader className="animate-spin" size={20} />
                     </div>
                   </div>
                 )}
               </div>
-              <div className="border-t border-gray-300 p-4 bg-white">
+              <div className="border-t p-4 bg-white">
                 <div className="flex gap-2">
-                  <input type="textMContinue" value={inputMessage} onChange={(e) => setInputMessage(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && sendMessage()} placeholder="Ask about skin conditions routines products..." className="flex-1 px-4 py-3 border-2 border-gray-300 focus:outline-none focus:border-gray-900" />
-<button onClick={sendMessage} disabled={chatLoading || !inputMessage.trim()} className="px-8 py-3 bg-gray-900 text-white font-bold hover:bg-gray-800 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed">
-<Send size={20} />
-</button>
-</div>
-</div>
-</div>
-</div>
-)}
-    {activeTab === 'education' && (
-      <div className="bg-white border border-gray-200 shadow-sm p-8">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Dr. Lazuk Cosmetics Product Line</h2>
-        <p className="text-gray-600 mb-8">Dermatologist-formulated natural skincare powered by science and botanical ingredients.</p>
-        <div className="grid md:grid-cols-3 gap-6">
-          {drLazukProducts.map((product, idx) => (
-            <div key={idx} className="border-2 border-gray-300 p-6 hover:border-gray-900 transition-all">
-              <div className="mb-4">
-                <span className="inline-block px-3 py-1 bg-gray-900 text-white text-xs uppercase tracking-wider mb-3">{product.category}</span>
-                <h3 className="font-bold text-gray-900 text-lg mb-2">{product.name}</h3>
-                <span className="text-xl font-bold text-gray-900">${product.price}</span>
+                  <input type="text" value={inputMessage} onChange={(e) => setInputMessage(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && sendMessage()} placeholder="Ask a question..." className="flex-1 px-4 py-3 border-2 focus:outline-none focus:border-gray-900" />
+                  <button onClick={sendMessage} disabled={chatLoading} className="px-8 py-3 bg-gray-900 text-white font-bold hover:bg-gray-800 disabled:bg-gray-400">
+                    <Send size={20} />
+                  </button>
+                </div>
               </div>
-              <ul className="space-y-2 mb-5">
-                {product.benefits.map((benefit, bidx) => (
-                  <li key={bidx} className="text-sm text-gray-700 flex items-start">
-                    <span className="text-gray-900 mr-2 font-bold">✓</span>
-                    {benefit}
-                  </li>
-                ))}
-              </ul>
-              <a href={product.url} target="_blank" rel="noopener noreferrer" className="block w-full text-center bg-gray-900 text-white py-3 font-bold hover:bg-gray-800 transition-colors">Learn More</a>
             </div>
-          ))}
+          </div>
+        )}
+
+        {activeTab === 'education' && (
+          <div className="bg-white border shadow-sm p-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">Our Esthetic Services</h2>
+            <div className="grid md:grid-cols-2 gap-6">
+              {estheticServices.map((s, i) => (
+                <div key={i} className="border-2 p-6">
+                  <h3 className="font-bold text-xl text-gray-900 mb-2">{s.name}</h3>
+                  <p className="text-gray-700 mb-4">{s.description}</p>
+                  <div className="mb-4">
+                    <p className="font-bold text-gray-900 mb-2">Benefits:</p>
+                    <ul className="text-sm text-gray-700">
+                      {s.benefits.map((b, j) => <li key={j}>✓ {b}</li>)}
+                    </ul>
+                  </div>
+                  <a href="mailto:contact@skindoctor.ai" className="block text-center bg-gray-900 text-white py-3 font-bold hover:bg-gray-800">Learn More</a>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="bg-gray-900 text-white py-8 mt-12">
+        <div className="max-w-6xl mx-auto px-4 text-center">
+          <p className="text-sm text-gray-400">© 2026 by SkinDoctor AI®</p>
+          <p className="text-sm text-gray-400 mt-2">Dr. Lazuk Cosmetics® | Dr. Lazuk Esthetics® | Contact: contact@skindoctor.ai</p>
         </div>
       </div>
-    )}
-  </div>
-
-  <div className="bg-gray-900 text-white py-8 mt-12">
-    <div className="max-w-6xl mx-auto px-4 text-center">
-      <p className="text-sm text-gray-400">© 2026 by SkinDoctor AI®</p>
-      <p className="text-sm text-gray-400 mt-2">Dr. Lazuk Cosmetics® | Dr. Lazuk Esthetics® | Dr. Lazuk Biotics® | Dr. Lazuk Nutrition®</p>
-      <p className="text-sm text-gray-400 mt-2">Johns Creek Georgia | Alpharetta Georgia | Atlanta Georgia | Cumming Georgia</p>
     </div>
-  </div>
-</div>
-);
+  );
 };
+
 export default DermatologyApp;
