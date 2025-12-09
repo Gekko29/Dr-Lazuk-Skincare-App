@@ -1,7 +1,6 @@
 // api/openai-test.js
 //
 // Simple OpenAI connectivity test using fetch instead of the openai SDK.
-// This avoids ESM/CommonJS issues in the Vercel serverless environment.
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
@@ -19,12 +18,10 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Call OpenAI's chat completions endpoint directly
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        // Your key (including sk-proj- or sk- prefix) goes here via env var
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
