@@ -409,41 +409,44 @@ const DermatologyApp = () => {
     setStep('email');
   };
 
-  const performAnalysis = async () => {
-    setEmailSubmitting(true);
+ const performAnalysis = async () => {
+  setEmailSubmitting(true);
 
-    try {
-      const response = await fetch('/api/generate-report', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: userEmail,
-          ageRange,
-          primaryConcern,
-          visitorQuestion
-        })
-      });
+  try {
+    const response = await fetch('/api/generate-report', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: userEmail,
+        ageRange,
+        primaryConcern,
+        visitorQuestion,
+        photoDataUrl: capturedImage // 👈 NEW
+      })
+    });
 
-      const data = await response.json();
+    const data = await response.json();
 
-      if (!response.ok || !data.ok) {
-        console.error('generate-report error:', data);
-        alert(
-          data.message ||
-            'There was an issue generating your analysis. Please try again in a little while.'
-        );
-        setEmailSubmitting(false);
-        return;
-      }
+    if (!data.ok) {
+      throw new Error(data.error || 'Error generating report');
+    }
 
-      setAnalysisReport({
-        report: data.report,
-        fitzpatrickType: data.fitzpatrickType || null,
-        fitzpatrickSummary: data.fitzpatrickSummary || null,
-        recommendedProducts: getRecommendedProducts(primaryConcern),
-        recommendedServices: getRecommendedServices(primaryConcern)
-      });
+    setAnalysisReport({
+      report: data.report,
+      recommendedProducts: getRecommendedProducts(primaryConcern),
+      recommendedServices: getRecommendedServices(primaryConcern),
+      fitzpatrickType: data.fitzpatrickType || null,      // 👈 NEW
+      fitzpatrickSummary: data.fitzpatrickSummary || null // 👈 NEW
+    });
 
+    setEmailSubmitting(false);
+    setStep('results');
+  } catch (error) {
+    console.error('Analysis error:', error);
+    setEmailSubmitting(false);
+    alert('There was an error. Please try again.');
+  }
+};
       // Here is where you could also send analytics or internal logging if desired.
       console.log('Analysis generated for:', userEmail, ageRange, primaryConcern);
 
