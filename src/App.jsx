@@ -36,7 +36,8 @@ const registerFaceFailure = () => {
     localStorage.setItem('dl_faceLockUntil', String(lockUntil));
     return {
       lockedNow: true,
-      message: "We couldn't detect a face in your photo after two attempts. For accuracy and fairness, you'll be able to try again in 30 days."
+      message:
+        "We couldn't detect a face in your photo after two attempts. For accuracy and fairness, you'll be able to try again in 30 days."
     };
   }
 
@@ -113,7 +114,10 @@ const DermatologyApp = () => {
   const [emailSubmitting, setEmailSubmitting] = useState(false);
 
   const [chatMessages, setChatMessages] = useState([
-    { role: 'assistant', content: 'Hello! I am Dr. Lazuk virtual assistant. How can I help you with your skincare today?' }
+    {
+      role: 'assistant',
+      content: 'Hello! I am Dr. Lazuk virtual assistant. How can I help you with your skincare today?'
+    }
   ]);
   const [inputMessage, setInputMessage] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
@@ -473,30 +477,40 @@ const DermatologyApp = () => {
   const sendMessage = async () => {
     if (!inputMessage.trim()) return;
 
-    const userMsg = inputMessage;
-    setChatMessages((prev) => [...prev, { role: 'user', content: userMsg }]);
+    const userMsg = inputMessage.trim();
+    const newHistory = [...chatMessages, { role: 'user', content: userMsg }];
+
+    setChatMessages(newHistory);
     setInputMessage('');
     setChatLoading(true);
 
     try {
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
+      const res = await fetch('/api/ask-dr-lazuk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 1000,
-          system:
-            'You are Dr. Lazuk virtual assistant. Provide warm expert advice. Mention Dr. Lazuk products when relevant.',
-          messages: [
-            ...chatMessages.map((m) => ({ role: m.role, content: m.content })),
-            { role: 'user', content: userMsg }
-          ]
-        })
+        body: JSON.stringify({ messages: newHistory })
       });
 
-      const data = await response.json();
-      setChatMessages((prev) => [...prev, { role: 'assistant', content: data.content[0].text }]);
+      const data = await res.json();
+
+      if (!res.ok || !data.ok) {
+        console.error('ask-dr-lazuk error:', data);
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            role: 'assistant',
+            content:
+              data.message ||
+              'I’m having trouble connecting right now. Please try again in a moment.'
+          }
+        ]);
+        setChatLoading(false);
+        return;
+      }
+
+      setChatMessages((prev) => [...prev, { role: 'assistant', content: data.reply }]);
     } catch (error) {
+      console.error('Chat error:', error);
       setChatMessages((prev) => [
         ...prev,
         {
@@ -848,9 +862,7 @@ const DermatologyApp = () => {
                   <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                     <div
                       className={`max-w-[80%] p-4 ${
-                        msg.role === 'user'
-                          ? 'bg-gray-900 text-white'
-                          : 'bg-white border text-gray-900'
+                        msg.role === 'user' ? 'bg-gray-900 text-white' : 'bg-white border text-gray-900'
                       }`}
                     >
                       <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
@@ -930,7 +942,3 @@ const DermatologyApp = () => {
 };
 
 export default DermatologyApp;
-
-
-export default DermatologyApp;
-
