@@ -447,18 +447,6 @@ const DermatologyApp = () => {
     alert('There was an error. Please try again.');
   }
 };
-      // Here is where you could also send analytics or internal logging if desired.
-      console.log('Analysis generated for:', userEmail, ageRange, primaryConcern);
-
-      setEmailSubmitting(false);
-      setStep('results');
-    } catch (error) {
-      console.error('Analysis error:', error);
-      setEmailSubmitting(false);
-      alert('There was an error. Please try again.');
-    }
-  };
-
   const handleEmailSubmit = async () => {
     if (!userEmail || !userEmail.includes('@')) {
       alert('Please enter a valid email address');
