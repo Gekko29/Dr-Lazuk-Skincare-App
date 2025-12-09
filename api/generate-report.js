@@ -5,6 +5,41 @@ const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
+// Helper to send email using Resend
+async function sendEmailWithResend({ to, subject, html }) {
+  const apiKey = process.env.RESEND_API_KEY;
+  const fromEmail =
+    process.env.RESEND_FROM_EMAIL || 'Dr. Lazuk Esthetics <no-reply@example.com>';
+
+  if (!apiKey) {
+    console.error('RESEND_API_KEY is not set; skipping email send.');
+    return;
+  }
+
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: fromEmail,
+        to,
+        subject,
+        html
+      })
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      console.error('Resend email error:', res.status, body);
+    }
+  } catch (err) {
+    console.error('Resend email exception:', err);
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
@@ -163,7 +198,9 @@ Please infer a plausible Fitzpatrick type based on typical patterns for this age
       reportText = reportText.replace(typeMatch[0], '');
     }
 
-    const summaryMatch = full.match(/FITZPATRICK_SUMMARY:\s*([\s\S]*?)(\n\s*\n|$)/i);
+    const summaryMatch = full.match(
+      /FITZPATRICK_SUMMARY:\s*([\s\S]*?)(\n\s*\n|$)/i
+    );
     if (summaryMatch) {
       fitzpatrickSummary = summaryMatch[1].trim();
       reportText = reportText.replace(summaryMatch[0], '');
@@ -171,6 +208,111 @@ Please infer a plausible Fitzpatrick type based on typical patterns for this age
 
     reportText = reportText.trim();
 
+    // ---------- NEW: Email sending via Resend ----------
+
+    const safeConcern = primaryConcern || 'Not specified';
+
+    const visitorHtml = `
+      <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111827; line-height: 1.5;">
+        <h1 style="font-size: 20px; font-weight: 700; margin-bottom: 8px;">Your Dr. Lazuk Virtual Skin Analysis</h1>
+        <p style="font-size: 13px; color: #4B5563; margin-bottom: 16px;">
+          This cosmetic analysis is for entertainment and educational purposes only and is not medical advice.
+        </p>
+
+        ${
+          fitzpatrickType || fitzpatrickSummary
+            ? `
+        <div style="border: 1px solid #FCD34D; background-color: #FFFBEB; padding: 12px 16px; margin-bottom: 16px;">
+          <h2 style="font-size: 14px; font-weight: 700; color: #92400E; margin: 0 0 4px 0;">
+            Fitzpatrick Skin Type (Cosmetic Estimate)
+          </h2>
+          ${
+            fitzpatrickType
+              ? `<p style="font-size: 13px; font-weight: 600; color: #92400E; margin: 0 0 4px 0;">
+              Type ${fitzpatrickType}
+            </p>`
+              : ''
+          }
+          ${
+            fitzpatrickSummary
+              ? `<p style="font-size: 13px; color: #92400E; margin: 0;">${fitzpatrickSummary}</p>`
+              : ''
+          }
+          <p style="font-size: 11px; color: #92400E; margin-top: 8px;">
+            This is a visual, cosmetic estimate only and is not a medical diagnosis.
+          </p>
+        </div>
+        `
+            : ''
+        }
+
+        <pre style="white-space: pre-wrap; font-size: 13px; margin-top: 8px; color: #111827;">
+${reportText}
+        </pre>
+
+        <hr style="border-top: 1px solid #E5E7EB; margin: 24px 0;" />
+
+        <p style="font-size: 12px; color: #6B7280; margin-bottom: 4px;">
+          If you have any medical concerns or skin conditions, please see a qualified in-person professional.
+        </p>
+        <p style="font-size: 12px; color: #6B7280;">
+          With care,<br/>
+          Dr. Lazuk Esthetics® &amp; Dr. Lazuk Cosmetics®<br/>
+          <a href="mailto:contact@skindoctor.ai" style="color: #111827; text-decoration: underline;">
+            contact@skindoctor.ai
+          </a>
+        </p>
+      </div>
+    `;
+
+    const clinicEmail =
+      process.env.RESEND_CLINIC_EMAIL || 'contact@skindoctor.ai';
+
+    const clinicHtml = `
+      <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111827; line-height: 1.5;">
+        <h1 style="font-size: 18px; font-weight: 700; margin-bottom: 4px;">
+          New Virtual Skin Analysis – Cosmetic Report
+        </h1>
+        <p style="font-size: 13px; color: #4B5563; margin-bottom: 8px;">
+          A visitor completed the Dr. Lazuk virtual skin analysis.
+        </p>
+        <ul style="font-size: 13px; color: #374151; margin-bottom: 12px;">
+          <li><strong>Email:</strong> ${email}</li>
+          <li><strong>Age Range:</strong> ${ageRange}</li>
+          <li><strong>Primary Concern:</strong> ${safeConcern}</li>
+          ${
+            fitzpatrickType
+              ? `<li><strong>Fitzpatrick Estimate:</strong> Type ${fitzpatrickType}</li>`
+              : ''
+          }
+        </ul>
+        ${
+          fitzpatrickSummary
+            ? `<p style="font-size: 13px; margin-bottom: 12px;"><strong>Fitzpatrick Summary:</strong> ${fitzpatrickSummary}</p>`
+            : ''
+        }
+        <hr style="border-top: 1px solid #E5E7EB; margin: 16px 0;" />
+        <pre style="white-space: pre-wrap; font-size: 13px; color: #111827;">
+${reportText}
+        </pre>
+      </div>
+    `;
+
+    // Send visitor + clinic emails (non-blocking from UX perspective)
+    await Promise.all([
+      sendEmailWithResend({
+        to: email,
+        subject: 'Your Dr. Lazuk Virtual Skin Analysis Report',
+        html: visitorHtml
+      }),
+      sendEmailWithResend({
+        to: clinicEmail,
+        subject: 'New Skincare Analysis Guest',
+        html: clinicHtml
+      })
+    ]);
+
+    // Original JSON response to the frontend
     return res.status(200).json({
       ok: true,
       report: reportText,
@@ -186,4 +328,3 @@ Please infer a plausible Fitzpatrick type based on typical patterns for this age
     });
   }
 }
-
