@@ -1,11 +1,12 @@
-// api/openai-test.js
-import OpenAI from "openai";
+// api/openai-test.js (CommonJS version)
+
+const OpenAI = require("openai");
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-export default async function handler(req, res) {
+module.exports = async (req, res) => {
   if (req.method !== "GET") {
     res.setHeader("Allow", ["GET"]);
     return res.status(405).json({ error: "Method not allowed" });
@@ -13,7 +14,7 @@ export default async function handler(req, res) {
 
   try {
     const completion = await client.chat.completions.create({
-      model: "gpt-4.1-mini", // or another model you prefer
+      model: "gpt-4.1-mini",
       messages: [
         {
           role: "user",
@@ -23,7 +24,12 @@ export default async function handler(req, res) {
       max_tokens: 10,
     });
 
-    const text = completion.choices?.[0]?.message?.content ?? "";
+    const text =
+      (completion.choices &&
+        completion.choices[0] &&
+        completion.choices[0].message &&
+        completion.choices[0].message.content) ||
+      "";
 
     return res.status(200).json({ ok: true, result: text });
   } catch (error) {
@@ -31,8 +37,8 @@ export default async function handler(req, res) {
     return res.status(500).json({
       ok: false,
       error: "OpenAI request failed",
-      // You can temporarily uncomment this line to see the raw error in the browser:
+      // You can temporarily uncomment this line if you really need to see details in the browser:
       // details: String(error?.message || error)
     });
   }
-}
+};
