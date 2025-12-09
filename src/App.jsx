@@ -1,11 +1,23 @@
+// src/App.jsx
 import React, { useState, useRef, useEffect } from 'react';
-import { Camera, MessageCircle, BookOpen, Upload, X, Send, Info, Mail, Sparkles, Loader } from 'lucide-react';
+import {
+  Camera,
+  MessageCircle,
+  BookOpen,
+  Upload,
+  Send,
+  Info,
+  Mail,
+  Sparkles,
+  Loader
+} from 'lucide-react';
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
 // Helper: check if user is locked out due to repeated non-face attempts
 const getFaceLockStatus = () => {
-  const lockUntilStr = typeof window !== 'undefined' ? localStorage.getItem('dl_faceLockUntil') : null;
+  const lockUntilStr =
+    typeof window !== 'undefined' ? localStorage.getItem('dl_faceLockUntil') : null;
   if (!lockUntilStr) return { locked: false };
 
   const lockUntil = Number(lockUntilStr);
@@ -25,15 +37,20 @@ const getFaceLockStatus = () => {
 
 // Helper: register a non-face attempt and possibly lock for 30 days
 const registerFaceFailure = () => {
-  const failStr = typeof window !== 'undefined' ? localStorage.getItem('dl_faceFailCount') : null;
+  const failStr =
+    typeof window !== 'undefined' ? localStorage.getItem('dl_faceFailCount') : null;
   const currentFails = failStr ? Number(failStr) || 0 : 0;
   const newFails = currentFails + 1;
 
-  localStorage.setItem('dl_faceFailCount', String(newFails));
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('dl_faceFailCount', String(newFails));
+  }
 
   if (newFails >= 2) {
     const lockUntil = Date.now() + THIRTY_DAYS_MS;
-    localStorage.setItem('dl_faceLockUntil', String(lockUntil));
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('dl_faceLockUntil', String(lockUntil));
+    }
     return {
       lockedNow: true,
       message:
@@ -44,7 +61,7 @@ const registerFaceFailure = () => {
   return {
     lockedNow: false,
     message:
-      "We couldn't detect a face in this photo. Please upload a clear, front-facing photo of your face with good lighting and minimal obstructions."
+      'We could not detect a face in this photo. Please upload a clear, front-facing photo of your face with good lighting and minimal obstructions.'
   };
 };
 
@@ -68,8 +85,7 @@ const detectFaceInImageElement = async (imgEl) => {
       return false;
     }
   } else {
-    // Fallback: if FaceDetector isn't supported, be lenient so the app still works
-    // If you want to be strict, change this to "return false;"
+    // If FaceDetector is not supported, allow the image so the experience still works
     return true;
   }
 };
@@ -78,7 +94,6 @@ const detectFaceInImageElement = async (imgEl) => {
 const detectFaceFromDataUrl = (dataUrl) => {
   return new Promise((resolve) => {
     if (!('FaceDetector' in window)) {
-      // Fallback behavior if FaceDetector is unavailable
       resolve(true);
       return;
     }
@@ -116,7 +131,8 @@ const DermatologyApp = () => {
   const [chatMessages, setChatMessages] = useState([
     {
       role: 'assistant',
-      content: 'Hello! I am Dr. Lazuk virtual assistant. How can I help you with your skincare today?'
+      content:
+        'Hello! I am your Dr. Lazuk virtual assistant. I can help you think through your skincare in a cosmetic, educational way—but this chat is not medical advice.'
     }
   ]);
   const [inputMessage, setInputMessage] = useState('');
@@ -298,7 +314,6 @@ const DermatologyApp = () => {
   };
 
   const startCamera = async () => {
-    // Check 30-day lock before allowing a new attempt
     const lock = getFaceLockStatus();
     if (lock.locked) {
       alert(lock.message);
@@ -328,7 +343,6 @@ const DermatologyApp = () => {
   };
 
   const capturePhoto = async () => {
-    // Check 30-day lock before capturing
     const lock = getFaceLockStatus();
     if (lock.locked) {
       alert(lock.message);
@@ -343,7 +357,6 @@ const DermatologyApp = () => {
       const ctx = canvas.getContext('2d');
       ctx.drawImage(video, 0, 0);
 
-      // Face detection on the captured frame
       const faceFound = await detectFaceInImageElement(canvas);
       if (!faceFound) {
         const result = registerFaceFailure();
@@ -352,9 +365,7 @@ const DermatologyApp = () => {
         return;
       }
 
-      // Face is valid -> clear fail count
       clearFaceFailures();
-
       const imageData = canvas.toDataURL('image/jpeg');
       setCapturedImage(imageData);
       stopCamera();
@@ -366,7 +377,6 @@ const DermatologyApp = () => {
     const file = e.target.files[0];
     if (!file) return;
 
-    // Check 30-day lock before new attempt
     const lock = getFaceLockStatus();
     if (lock.locked) {
       alert(lock.message);
@@ -384,7 +394,6 @@ const DermatologyApp = () => {
         return;
       }
 
-      // Face is valid
       clearFaceFailures();
       setCapturedImage(dataUrl);
       setStep('questions');
@@ -404,7 +413,7 @@ const DermatologyApp = () => {
     setEmailSubmitting(true);
 
     try {
-      const res = await fetch('/api/generate-report', {
+      const response = await fetch('/api/generate-report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -415,24 +424,28 @@ const DermatologyApp = () => {
         })
       });
 
-      const data = await res.json();
+      const data = await response.json();
 
-      if (!res.ok || !data.ok) {
+      if (!response.ok || !data.ok) {
         console.error('generate-report error:', data);
-        alert(data.message || 'There was an error generating your analysis. Please try again.');
+        alert(
+          data.message ||
+            'There was an issue generating your analysis. Please try again in a little while.'
+        );
         setEmailSubmitting(false);
         return;
       }
 
-      const reportContent = data.report;
-
       setAnalysisReport({
-        report: reportContent,
+        report: data.report,
+        fitzpatrickType: data.fitzpatrickType || null,
+        fitzpatrickSummary: data.fitzpatrickSummary || null,
         recommendedProducts: getRecommendedProducts(primaryConcern),
         recommendedServices: getRecommendedServices(primaryConcern)
       });
 
-      console.log('Analysis generated for:', userEmail, 'Age:', ageRange, 'Concern:', primaryConcern);
+      // Here is where you could also send analytics or internal logging if desired.
+      console.log('Analysis generated for:', userEmail, ageRange, primaryConcern);
 
       setEmailSubmitting(false);
       setStep('results');
@@ -448,38 +461,13 @@ const DermatologyApp = () => {
       alert('Please enter a valid email address');
       return;
     }
-
-    // Simple 30-day limit per browser for full analysis
-    const lastRunStr =
-      typeof window !== 'undefined' ? localStorage.getItem('dl_lastFullAnalysisAt') : null;
-
-    if (lastRunStr) {
-      const lastRun = Number(lastRunStr);
-      if (!Number.isNaN(lastRun)) {
-        const diff = Date.now() - lastRun;
-        if (diff < THIRTY_DAYS_MS) {
-          const daysLeft = Math.ceil((THIRTY_DAYS_MS - diff) / (24 * 60 * 60 * 1000));
-          alert(
-            `You recently completed a full Dr. Lazuk facial skincare analysis. To allow your skin changes to mature, you can run a new report in about ${daysLeft} day(s).`
-          );
-          return;
-        }
-      }
-    }
-
     await performAnalysis();
-
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('dl_lastFullAnalysisAt', String(Date.now()));
-    }
   };
 
   const sendMessage = async () => {
     if (!inputMessage.trim()) return;
 
     const userMsg = inputMessage.trim();
-
-    // This is the full history that we send to the API
     const newHistory = [...chatMessages, { role: 'user', content: userMsg }];
 
     setChatMessages(newHistory);
@@ -492,8 +480,6 @@ const DermatologyApp = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: newHistory,
-          // First real AI reply happens when the only previous message
-          // was the initial assistant greeting.
           isFirstReply: chatMessages.length <= 1
         })
       });
@@ -526,8 +512,10 @@ const DermatologyApp = () => {
         }
       ]);
     }
+
     setChatLoading(false);
   };
+
   const resetAnalysis = () => {
     setCapturedImage(null);
     setAnalysisReport(null);
@@ -553,10 +541,14 @@ const DermatologyApp = () => {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold tracking-tight">DR. LAZUK</h1>
-              <p className="text-sm mt-1 text-gray-300">ESTHETICS | COSMETICS | BIOTICS | NUTRITION</p>
+              <p className="text-sm mt-1 text-gray-300">
+                ESTHETICS | COSMETICS | BIOTICS | NUTRITION
+              </p>
             </div>
             <div className="text-right">
-              <p className="text-xs text-gray-400 uppercase tracking-wider">Virtual Facial Skincare Analysis</p>
+              <p className="text-xs text-gray-400 uppercase tracking-wider">
+                Virtual Skincare Analysis
+              </p>
               <p className="text-sm text-gray-300 mt-1">Enhancing the Beautiful You, Naturally</p>
             </div>
           </div>
@@ -569,7 +561,9 @@ const DermatologyApp = () => {
             <button
               onClick={() => setActiveTab('home')}
               className={`flex items-center gap-2 px-6 py-3 font-medium transition-all ${
-                activeTab === 'home' ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-200'
+                activeTab === 'home'
+                  ? 'bg-gray-900 text-white'
+                  : 'text-gray-700 hover:bg-gray-200'
               }`}
             >
               <Camera size={18} />
@@ -578,7 +572,9 @@ const DermatologyApp = () => {
             <button
               onClick={() => setActiveTab('chat')}
               className={`flex items-center gap-2 px-6 py-3 font-medium transition-all ${
-                activeTab === 'chat' ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-200'
+                activeTab === 'chat'
+                  ? 'bg-gray-900 text-white'
+                  : 'text-gray-700 hover:bg-gray-200'
               }`}
             >
               <MessageCircle size={18} />
@@ -587,7 +583,9 @@ const DermatologyApp = () => {
             <button
               onClick={() => setActiveTab('education')}
               className={`flex items-center gap-2 px-6 py-3 font-medium transition-all ${
-                activeTab === 'education' ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-200'
+                activeTab === 'education'
+                  ? 'bg-gray-900 text-white'
+                  : 'text-gray-700 hover:bg-gray-200'
               }`}
             >
               <BookOpen size={18} />
@@ -604,24 +602,25 @@ const DermatologyApp = () => {
               <>
                 <div className="flex items-center gap-3 mb-6">
                   <Sparkles className="text-gray-900" size={28} />
-                  <h2 className="text-2xl font-bold text-gray-900">Virtual Facial Skin Analysis</h2>
+                  <h2 className="text-2xl font-bold text-gray-900">Virtual Skin Analysis</h2>
                 </div>
 
-                {/* DISCLAIMER - entertainment only, not medical advice */}
+                {/* Disclaimer – entertainment only, no medical advice */}
                 <div className="bg-gray-100 border border-gray-300 p-4 mb-4 flex items-start gap-3">
                   <Info className="text-gray-700 flex-shrink-0 mt-0.5" size={20} />
                   <p className="text-sm text-gray-800">
-                    <strong>Disclaimer:</strong> This interactive facial skin analysis is intended{' '}
-                    <strong>for entertainment purposes only</strong> and is{' '}
+                    <strong>Disclaimer:</strong> This interactive skin analysis is intended{' '}
+                    <strong>for entertainment and cosmetic education only</strong> and is{' '}
                     <strong>not medical advice</strong>. No medical conditions will be evaluated,
-                    diagnosed, or addressed during this comprehensive analysis.
+                    diagnosed, or treated during this analysis.
                   </p>
                 </div>
 
                 <div className="bg-gray-50 border border-gray-300 p-4 mb-8 flex items-start gap-3">
                   <Info className="text-gray-700 flex-shrink-0 mt-0.5" size={20} />
                   <p className="text-sm text-gray-700">
-                    Take or upload a well-lit photo. Your complete report will be emailed to you.
+                    Take or upload a well-lit photo of your face. Your complete cosmetic report will
+                    be emailed to you.
                   </p>
                 </div>
 
@@ -678,14 +677,20 @@ const DermatologyApp = () => {
             {step === 'questions' && capturedImage && (
               <div className="space-y-6">
                 <div className="relative max-w-md mx-auto">
-                  <img src={capturedImage} alt="Your photo" className="w-full border border-gray-300" />
+                  <img
+                    src={capturedImage}
+                    alt="Your photo"
+                    className="w-full border border-gray-300"
+                  />
                 </div>
                 <div className="max-w-2xl mx-auto space-y-6">
                   <div className="bg-gray-50 border border-gray-300 p-6">
                     <h3 className="font-bold text-gray-900 mb-4 text-lg">Tell Us About Your Skin</h3>
                     <div className="space-y-4">
                       <div>
-                        <label className="block text-sm font-bold text-gray-900 mb-2">Age Range *</label>
+                        <label className="block text-sm font-bold text-gray-900 mb-2">
+                          Age Range *
+                        </label>
                         <select
                           value={ageRange}
                           onChange={(e) => setAgeRange(e.target.value)}
@@ -702,7 +707,9 @@ const DermatologyApp = () => {
                         </select>
                       </div>
                       <div>
-                        <label className="block text-sm font-bold text-gray-900 mb-2">Primary Concern *</label>
+                        <label className="block text-sm font-bold text-gray-900 mb-2">
+                          Primary Concern *
+                        </label>
                         <select
                           value={primaryConcern}
                           onChange={(e) => setPrimaryConcern(e.target.value)}
@@ -719,7 +726,9 @@ const DermatologyApp = () => {
                         </select>
                       </div>
                       <div>
-                        <label className="block text-sm font-bold text-gray-900 mb-2">Question (Optional)</label>
+                        <label className="block text-sm font-bold text-gray-900 mb-2">
+                          Question (Optional)
+                        </label>
                         <textarea
                           value={visitorQuestion}
                           onChange={(e) => setVisitorQuestion(e.target.value)}
@@ -755,7 +764,8 @@ const DermatologyApp = () => {
                     <h3 className="text-2xl font-bold">Get Your Analysis</h3>
                   </div>
                   <p className="text-gray-300 mb-6">
-                    Enter your email to receive your complete report with product and treatment recommendations.
+                    Enter your email to receive your complete cosmetic report with product and
+                    treatment recommendations. A copy will also be sent to our clinic team.
                   </p>
                   <div className="space-y-4">
                     <input
@@ -796,11 +806,35 @@ const DermatologyApp = () => {
                     New Analysis
                   </button>
                 </div>
+
+                {/* Fitzpatrick Card */}
+                {(analysisReport.fitzpatrickType || analysisReport.fitzpatrickSummary) && (
+                  <div className="bg-amber-50 border-2 border-amber-200 p-6">
+                    <h4 className="text-lg font-bold text-amber-900 mb-2">
+                      Fitzpatrick Skin Type (Cosmetic Estimate)
+                    </h4>
+                    {analysisReport.fitzpatrickType && (
+                      <p className="font-semibold text-amber-900 mb-1">
+                        Type {analysisReport.fitzpatrickType}
+                      </p>
+                    )}
+                    {analysisReport.fitzpatrickSummary && (
+                      <p className="text-sm text-amber-900 whitespace-pre-wrap">
+                        {analysisReport.fitzpatrickSummary}
+                      </p>
+                    )}
+                    <p className="mt-3 text-xs text-amber-800">
+                      This is a visual, cosmetic estimate only and is not a medical diagnosis.
+                    </p>
+                  </div>
+                )}
+
                 <div className="bg-white border-2 border-gray-900 p-8">
                   <div className="prose prose-sm max-w-none text-gray-700 whitespace-pre-wrap">
                     {analysisReport.report}
                   </div>
                 </div>
+
                 <div className="bg-white border-2 border-gray-900 p-8">
                   <h4 className="font-bold text-gray-900 mb-4 text-2xl">Recommended Products</h4>
                   <div className="grid md:grid-cols-3 gap-4 mb-8">
@@ -824,13 +858,18 @@ const DermatologyApp = () => {
                       </div>
                     ))}
                   </div>
-                  <h4 className="font-bold text-gray-900 mb-4 text-2xl">Recommended Treatments</h4>
+
+                  <h4 className="font-bold text-gray-900 mb-4 text-2xl">
+                    Recommended Treatments
+                  </h4>
                   <div className="grid md:grid-cols-2 gap-4">
                     {analysisReport.recommendedServices.map((s, i) => (
                       <div key={i} className="bg-blue-50 border-2 border-blue-200 p-5">
                         <h5 className="font-bold text-blue-900 mb-2 text-lg">{s.name}</h5>
                         <p className="text-sm text-blue-800 mb-3">{s.description}</p>
-                        <p className="text-sm text-blue-900 font-semibold mb-2">Why We Recommend This:</p>
+                        <p className="text-sm text-blue-900 font-semibold mb-2">
+                          Why We Recommend This:
+                        </p>
                         <p className="text-sm text-blue-800 mb-3">{s.whyRecommended}</p>
                         <div className="mb-4">
                           <p className="text-xs font-bold text-blue-900 mb-1">Benefits:</p>
@@ -852,6 +891,7 @@ const DermatologyApp = () => {
                 </div>
               </div>
             )}
+
             <canvas ref={canvasRef} className="hidden" />
           </div>
         )}
@@ -861,13 +901,21 @@ const DermatologyApp = () => {
             <div className="flex flex-col h-full">
               <div className="bg-gray-900 text-white p-6">
                 <h2 className="text-2xl font-bold">Ask Dr. Lazuk</h2>
+                <p className="text-xs text-gray-300 mt-1">
+                  Educational and cosmetic discussion only. This chat is not medical advice.
+                </p>
               </div>
               <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50">
                 {chatMessages.map((msg, i) => (
-                  <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div
+                    key={i}
+                    className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                  >
                     <div
                       className={`max-w-[80%] p-4 ${
-                        msg.role === 'user' ? 'bg-gray-900 text-white' : 'bg-white border text-gray-900'
+                        msg.role === 'user'
+                          ? 'bg-gray-900 text-white'
+                          : 'bg-white border text-gray-900'
                       }`}
                     >
                       <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
@@ -889,7 +937,7 @@ const DermatologyApp = () => {
                     value={inputMessage}
                     onChange={(e) => setInputMessage(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-                    placeholder="Ask a question..."
+                    placeholder="Ask a cosmetic skincare question..."
                     className="flex-1 px-4 py-3 border-2 focus:outline-none focus:border-gray-900"
                   />
                   <button
@@ -947,3 +995,4 @@ const DermatologyApp = () => {
 };
 
 export default DermatologyApp;
+
