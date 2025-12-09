@@ -478,6 +478,8 @@ const DermatologyApp = () => {
     if (!inputMessage.trim()) return;
 
     const userMsg = inputMessage.trim();
+
+    // This is the full history that we send to the API
     const newHistory = [...chatMessages, { role: 'user', content: userMsg }];
 
     setChatMessages(newHistory);
@@ -488,7 +490,12 @@ const DermatologyApp = () => {
       const res = await fetch('/api/ask-dr-lazuk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: newHistory })
+        body: JSON.stringify({
+          messages: newHistory,
+          // First real AI reply happens when the only previous message
+          // was the initial assistant greeting.
+          isFirstReply: chatMessages.length <= 1
+        })
       });
 
       const data = await res.json();
@@ -519,10 +526,8 @@ const DermatologyApp = () => {
         }
       ]);
     }
-
     setChatLoading(false);
   };
-
   const resetAnalysis = () => {
     setCapturedImage(null);
     setAnalysisReport(null);
