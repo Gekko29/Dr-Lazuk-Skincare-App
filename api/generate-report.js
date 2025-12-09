@@ -63,7 +63,13 @@ export default async function handler(req, res) {
     });
   }
 
-  const { email, ageRange, primaryConcern, visitorQuestion } = req.body || {};
+  const {
+    email,
+    ageRange,
+    primaryConcern,
+    visitorQuestion,
+    photoDataUrl
+  } = req.body || {};
 
   if (!email || typeof email !== 'string' || !email.includes('@')) {
     return res.status(400).json({ ok: false, error: 'invalid_email' });
@@ -76,6 +82,12 @@ export default async function handler(req, res) {
       message: 'Age range and primary concern are required.'
     });
   }
+
+  // Only allow image data URLs for the photo
+  const safePhotoDataUrl =
+    typeof photoDataUrl === 'string' && photoDataUrl.startsWith('data:image')
+      ? photoDataUrl
+      : null;
 
   // Context for products and services so the model stays on-brand
   const productList = `
@@ -208,10 +220,51 @@ Please infer a plausible Fitzpatrick type based on typical patterns for this age
 
     reportText = reportText.trim();
 
-    // ---------- NEW: Email sending via Resend ----------
-
     const safeConcern = primaryConcern || 'Not specified';
 
+    // Normalize type and build Fitzpatrick scale HTML
+    const normalizedType = fitzpatrickType
+      ? fitzpatrickType.toString().toUpperCase().replace(/[^IVX\d]/g, '')
+      : null;
+
+    const fpBoxes = ['I', 'II', 'III', 'IV', 'V', 'VI'];
+
+    let fitzScaleHtml = '';
+    if (normalizedType) {
+      fitzScaleHtml = `
+        <div style="display:flex; gap:4px; margin-top:8px;">
+          ${fpBoxes
+            .map((t) => {
+              const active = normalizedType === t;
+              const bg = active ? '#F59E0B' : '#F9FAFB';
+              const color = active ? '#FEFCE8' : '#374151';
+              const border = active ? '#D97706' : '#E5E7EB';
+              const fontWeight = active ? '700' : '500';
+              return `
+                <div style="
+                  flex:1;
+                  text-align:center;
+                  font-size:11px;
+                  padding:4px 0;
+                  border:1px solid ${border};
+                  border-radius:999px;
+                  background-color:${bg};
+                  color:${color};
+                  font-weight:${fontWeight};
+                ">
+                  ${t}
+                </div>
+              `;
+            })
+            .join('')}
+        </div>
+        <p style="font-size:11px; color:#92400E; margin-top:6px;">
+          Type I is very fair and tends to burn easily; Type VI is deeply pigmented and rarely burns. This is a cosmetic estimate only, not a medical classification.
+        </p>
+      `;
+    }
+
+    // Visitor email HTML (with selfie + Fitz scale)
     const visitorHtml = `
       <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111827; line-height: 1.5;">
         <h1 style="font-size: 20px; font-weight: 700; margin-bottom: 8px;">Your Dr. Lazuk Virtual Skin Analysis</h1>
@@ -220,27 +273,42 @@ Please infer a plausible Fitzpatrick type based on typical patterns for this age
         </p>
 
         ${
-          fitzpatrickType || fitzpatrickSummary
+          safePhotoDataUrl
+            ? `
+        <div style="margin: 12px 0 20px 0;">
+          <p style="font-size: 11px; color:#6B7280; margin: 0 0 4px 0;">
+            The photo you shared for this cosmetic analysis:
+          </p>
+          <img
+            src="${safePhotoDataUrl}"
+            alt="Your submitted selfie"
+            style="max-width: 220px; border-radius: 12px; border: 1px solid #E5E7EB;"
+          />
+        </div>
+        `
+            : ''
+        }
+
+        ${
+          normalizedType || fitzpatrickSummary
             ? `
         <div style="border: 1px solid #FCD34D; background-color: #FFFBEB; padding: 12px 16px; margin-bottom: 16px;">
           <h2 style="font-size: 14px; font-weight: 700; color: #92400E; margin: 0 0 4px 0;">
             Fitzpatrick Skin Type (Cosmetic Estimate)
           </h2>
           ${
-            fitzpatrickType
+            normalizedType
               ? `<p style="font-size: 13px; font-weight: 600; color: #92400E; margin: 0 0 4px 0;">
-              Type ${fitzpatrickType}
+              Type ${normalizedType}
             </p>`
               : ''
           }
           ${
             fitzpatrickSummary
-              ? `<p style="font-size: 13px; color: #92400E; margin: 0;">${fitzpatrickSummary}</p>`
+              ? `<p style="font-size: 13px; color: #92400E; margin: 0 0 4px 0;">${fitzpatrickSummary}</p>`
               : ''
           }
-          <p style="font-size: 11px; color: #92400E; margin-top: 8px;">
-            This is a visual, cosmetic estimate only and is not a medical diagnosis.
-          </p>
+          ${fitzScaleHtml}
         </div>
         `
             : ''
@@ -268,6 +336,7 @@ ${reportText}
     const clinicEmail =
       process.env.RESEND_CLINIC_EMAIL || 'contact@skindoctor.ai';
 
+    // Clinic email – includes selfie + basic metadata + full report
     const clinicHtml = `
       <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111827; line-height: 1.5;">
         <h1 style="font-size: 18px; font-weight: 700; margin-bottom: 4px;">
@@ -281,14 +350,30 @@ ${reportText}
           <li><strong>Age Range:</strong> ${ageRange}</li>
           <li><strong>Primary Concern:</strong> ${safeConcern}</li>
           ${
-            fitzpatrickType
-              ? `<li><strong>Fitzpatrick Estimate:</strong> Type ${fitzpatrickType}</li>`
+            normalizedType
+              ? `<li><strong>Fitzpatrick Estimate:</strong> Type ${normalizedType}</li>`
               : ''
           }
         </ul>
         ${
           fitzpatrickSummary
             ? `<p style="font-size: 13px; margin-bottom: 12px;"><strong>Fitzpatrick Summary:</strong> ${fitzpatrickSummary}</p>`
+            : ''
+        }
+        ${
+          safePhotoDataUrl
+            ? `
+        <div style="margin: 12px 0 16px 0;">
+          <p style="font-size: 11px; color:#6B7280; margin: 0 0 4px 0;">
+            Visitor-provided photo (for cosmetic context only):
+          </p>
+          <img
+            src="${safePhotoDataUrl}"
+            alt="Submitted selfie"
+            style="max-width: 180px; border-radius: 10px; border: 1px solid #E5E7EB;"
+          />
+        </div>
+        `
             : ''
         }
         <hr style="border-top: 1px solid #E5E7EB; margin: 16px 0;" />
@@ -312,7 +397,7 @@ ${reportText}
       })
     ]);
 
-    // Original JSON response to the frontend
+    // JSON response to the frontend (unchanged shape, but now also has selfie + Fitz server-side)
     return res.status(200).json({
       ok: true,
       report: reportText,
@@ -328,3 +413,4 @@ ${reportText}
     });
   }
 }
+
