@@ -460,7 +460,7 @@ const DermatologyApp = () => {
         if (diff < THIRTY_DAYS_MS) {
           const daysLeft = Math.ceil((THIRTY_DAYS_MS - diff) / (24 * 60 * 60 * 1000));
           alert(
-            `You recently completed a full Dr. Lazuk skincare analysis. To allow your skin changes to mature, you can run a new report in about ${daysLeft} day(s).`
+            `You recently completed a full Dr. Lazuk facial skincare analysis. To allow your skin changes to mature, you can run a new report in about ${daysLeft} day(s).`
           );
           return;
         }
@@ -556,7 +556,7 @@ const DermatologyApp = () => {
               <p className="text-sm mt-1 text-gray-300">ESTHETICS | COSMETICS | BIOTICS | NUTRITION</p>
             </div>
             <div className="text-right">
-              <p className="text-xs text-gray-400 uppercase tracking-wider">Virtual Skincare Analysis</p>
+              <p className="text-xs text-gray-400 uppercase tracking-wider">Virtual Facial Skincare Analysis</p>
               <p className="text-sm text-gray-300 mt-1">Enhancing the Beautiful You, Naturally</p>
             </div>
           </div>
@@ -604,14 +604,14 @@ const DermatologyApp = () => {
               <>
                 <div className="flex items-center gap-3 mb-6">
                   <Sparkles className="text-gray-900" size={28} />
-                  <h2 className="text-2xl font-bold text-gray-900">Virtual Skin Analysis</h2>
+                  <h2 className="text-2xl font-bold text-gray-900">Virtual Facial Skin Analysis</h2>
                 </div>
 
                 {/* DISCLAIMER - entertainment only, not medical advice */}
                 <div className="bg-gray-100 border border-gray-300 p-4 mb-4 flex items-start gap-3">
                   <Info className="text-gray-700 flex-shrink-0 mt-0.5" size={20} />
                   <p className="text-sm text-gray-800">
-                    <strong>Disclaimer:</strong> This interactive skin analysis is intended{' '}
+                    <strong>Disclaimer:</strong> This interactive facial skin analysis is intended{' '}
                     <strong>for entertainment purposes only</strong> and is{' '}
                     <strong>not medical advice</strong>. No medical conditions will be evaluated,
                     diagnosed, or addressed during this comprehensive analysis.
