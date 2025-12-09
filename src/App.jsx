@@ -931,3 +931,6 @@ const DermatologyApp = () => {
 
 export default DermatologyApp;
 
+
+export default DermatologyApp;
+
