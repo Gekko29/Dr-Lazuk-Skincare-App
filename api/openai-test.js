@@ -1,6 +1,4 @@
 // api/openai-test.js
-//
-// Simple OpenAI connectivity test using fetch instead of the openai SDK.
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
