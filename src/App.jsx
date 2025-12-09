@@ -174,47 +174,106 @@ const DermatologyApp = () => {
     }
   ];
 
-  // NOTE: This list still contains HydraFacial / Chemical Peel / LED etc.
-  // You said you want to adjust services separately; this block is unchanged now
-  // and can be edited to match your "approved" list later.
-  const estheticServices = [
+   const estheticServices = [
     {
-      name: 'HydraFacial',
-      description: 'Medical-grade facial that cleanses, exfoliates, and hydrates',
-      benefits: ['Deep pore cleansing', 'Instant glow', 'No downtime'],
-      recommendFor: ['acne', 'texture', 'dryness'],
-      whyRecommended: 'Perfect for clearing congested pores and achieving immediate radiance'
+      name: 'Luxury Beauty Facial (1.5-Hour Comprehensive)',
+      description:
+        'A deeply restorative facial that includes advanced cleansing, gentle exfoliation, extractions as needed, facial massage, hydration, and LED therapy as part of the treatment—not as a separate service.',
+      benefits: [
+        'Deep pore cleansing',
+        'Improved tone and texture',
+        'Intense hydration and glow',
+        'Relaxation and stress relief'
+      ],
+      recommendFor: ['acne', 'texture', 'dryness', 'aging', 'redness'],
+      whyRecommended:
+        'Ideal when you want a full reset for your skin with multiple steps in a single visit, especially if you feel dull, congested, or dehydrated.'
     },
     {
-      name: 'Chemical Peel',
-      description: 'Professional exfoliation to reveal fresh skin',
-      benefits: ['Reduces pigmentation', 'Improves texture', 'Minimizes fine lines'],
-      recommendFor: ['pigmentation', 'aging', 'texture'],
-      whyRecommended: 'Effectively targets uneven tone and texture at a deeper level'
+      name: 'Roller Massage (Body Sculpt & Lymphatic Support)',
+      description:
+        'Micro-vibration roller therapy that boosts circulation, supports lymphatic drainage, reduces puffiness and the appearance of cellulite, and helps contour the body.',
+      benefits: [
+        'Lymphatic drainage and detox support',
+        'Smoother-looking skin and cellulite reduction',
+        'Improved circulation and lightness in legs',
+        'Post-travel and post-workout recovery'
+      ],
+      recommendFor: ['texture', 'dryness', 'aging'],
+      whyRecommended:
+        'Best when you feel heavy, puffy, or sluggish in the body, or want a non-invasive sculpting and smoothing option with no downtime.'
     },
     {
-      name: 'Microneedling with PRP',
-      description: 'Collagen induction with platelet-rich plasma',
-      benefits: ['Boosts collagen', 'Reduces scars', 'Firms skin'],
-      recommendFor: ['aging', 'texture', 'acne'],
-      whyRecommended: 'Stimulates natural collagen production for long-term improvement'
+      name: 'Candela eMatrix® RF Skin Rejuvenation',
+      description:
+        'Fractional radiofrequency treatment that targets fine lines, acne scars, large pores, and overall skin texture while being safe for many skin tones.',
+      benefits: [
+        'Softening of fine lines and wrinkles',
+        'Improved acne scars and texture',
+        'Smaller-looking pores',
+        'Gradual collagen remodeling'
+      ],
+      recommendFor: ['aging', 'texture', 'acne', 'pigmentation'],
+      whyRecommended:
+        'Recommended when you want more than a facial can offer—especially for long-standing texture, scars, or fine lines—without committing to aggressive lasers.'
     },
     {
-      name: 'Laser Rejuvenation',
-      description: 'Advanced laser for comprehensive skin renewal',
-      benefits: ['Reduces sun damage', 'Evens tone', 'Stimulates collagen'],
-      recommendFor: ['pigmentation', 'aging', 'redness'],
-      whyRecommended: 'Most effective for treating sun damage and pigmentation'
+      name: 'PRP Skin Rejuvenation',
+      description:
+        'Platelet-rich plasma (PRP) from your own blood is used to stimulate collagen, improve texture, and rejuvenate delicate areas such as under the eyes.',
+      benefits: [
+        'Boosts collagen and elasticity',
+        'Improves under-eye crepiness and dullness',
+        'Softens acne scars and fine lines',
+        'Longer-term regenerative benefits'
+      ],
+      recommendFor: ['aging', 'texture', 'pigmentation'],
+      whyRecommended:
+        'Ideal when you prefer a regenerative, “from your own body” approach to aging and texture, especially around the eyes and areas that look thin or tired.'
     },
     {
-      name: 'LED Light Therapy',
-      description: 'Non-invasive light treatment',
-      benefits: ['Reduces inflammation', 'Kills bacteria', 'Promotes healing'],
-      recommendFor: ['acne', 'redness'],
-      whyRecommended: 'Gentle yet effective for calming inflammation and preventing breakouts'
+      name: 'PRP Hair Restoration',
+      description:
+        'PRP injections into the scalp to support hair follicles, improve hair density, and slow shedding in early to moderate thinning.',
+      benefits: [
+        'Supports hair follicle health',
+        'Improves hair density over time',
+        'Can reduce shedding in early thinning',
+        'Natural option using your own plasma'
+      ],
+      recommendFor: ['aging'],
+      whyRecommended:
+        'Suggested if you are noticing early hair thinning or widening part lines and want to intervene before the hair loss becomes advanced.'
+    },
+    {
+      name: 'HIEMT (High-Intensity Electromagnetic Therapy)',
+      description:
+        'Non-invasive treatment that contracts muscles thousands of times per session to improve core strength, tone, and body contour in areas like the abdomen and buttocks.',
+      benefits: [
+        'Improved muscle tone and strength',
+        'More defined core or glute area',
+        'Helps with posture and support',
+        'Pairs well with lifestyle changes'
+      ],
+      recommendFor: ['aging', 'texture', 'dryness'],
+      whyRecommended:
+        'Recommended when you want a stronger, more sculpted look in combination with healthy movement, without surgery or downtime.'
+    },
+    {
+      name: 'Beauty Injectables (Botox®, JUVÉDERM® Fillers, PRP)',
+      description:
+        'Customized injectable treatments to soften expression lines, restore volume, and enhance facial balance using Botox®, JUVÉDERM® fillers, and/or PRP.',
+      benefits: [
+        'Softens frown lines and crow’s feet',
+        'Restores or enhances cheek and lip volume',
+        'Improves facial harmony and balance',
+        'Can look very natural when done conservatively'
+      ],
+      recommendFor: ['aging', 'texture', 'pigmentation'],
+      whyRecommended:
+        'Best when lines and volume loss are becoming visible and you want targeted, long-lasting improvements with a medical, artistic approach.'
     }
   ];
-
   const getRecommendedProducts = (concern) => {
     const recs = {
       acne: [0, 4, 5],
