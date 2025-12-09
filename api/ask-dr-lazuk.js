@@ -14,7 +14,7 @@ export default async function handler(req, res) {
     });
   }
 
-  const { messages } = req.body || {};
+const { messages, isFirstReply } = req.body || {};
   if (!Array.isArray(messages)) {
     return res.status(400).json({
       ok: false,
@@ -88,14 +88,22 @@ If a user’s question sounds urgent or serious (sudden changes, severe pain, bl
     }
 
     const data = await response.json();
-    const reply =
+    let reply =
       data?.choices?.[0]?.message?.content ||
       "I'm sorry, I wasn’t able to generate a response just now.";
+
+    // On the first AI reply of the chat, explicitly prepend the disclaimer
+    if (isFirstReply) {
+      const disclaimer =
+        'Important: This conversation is for general education and entertainment only and is not medical advice. For any personal or urgent concerns, please see a licensed medical professional.\n\n';
+      reply = disclaimer + reply;
+    }
 
     return res.status(200).json({
       ok: true,
       reply
     });
+
   } catch (error) {
     console.error('ask-dr-lazuk error:', error);
     return res.status(500).json({
