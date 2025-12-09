@@ -42,7 +42,8 @@ const registerFaceFailure = () => {
 
   return {
     lockedNow: false,
-    message: "We couldn't detect a face in this photo. Please upload a clear, front-facing photo of your face with good lighting and minimal obstructions."
+    message:
+      "We couldn't detect a face in this photo. Please upload a clear, front-facing photo of your face with good lighting and minimal obstructions."
   };
 };
 
@@ -174,7 +175,7 @@ const DermatologyApp = () => {
     }
   ];
 
-   const estheticServices = [
+  const estheticServices = [
     {
       name: 'Luxury Beauty Facial (1.5-Hour Comprehensive)',
       description:
@@ -274,6 +275,7 @@ const DermatologyApp = () => {
         'Best when lines and volume loss are becoming visible and you want targeted, long-lasting improvements with a medical, artistic approach.'
     }
   ];
+
   const getRecommendedProducts = (concern) => {
     const recs = {
       acne: [0, 4, 5],
@@ -284,11 +286,11 @@ const DermatologyApp = () => {
       dryness: [1, 3, 2]
     };
     const indices = recs[concern] || [0, 2, 5];
-    return indices.map(i => drLazukProducts[i]).filter(Boolean);
+    return indices.map((i) => drLazukProducts[i]).filter(Boolean);
   };
 
   const getRecommendedServices = (concern) => {
-    return estheticServices.filter(s => s.recommendFor.includes(concern)).slice(0, 2);
+    return estheticServices.filter((s) => s.recommendFor.includes(concern)).slice(0, 2);
   };
 
   const startCamera = async () => {
@@ -315,7 +317,7 @@ const DermatologyApp = () => {
 
   const stopCamera = () => {
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
     setCameraActive(false);
@@ -398,30 +400,27 @@ const DermatologyApp = () => {
     setEmailSubmitting(true);
 
     try {
-      const productList = drLazukProducts.map(p => `${p.name} ($${p.price})`).join(', ');
-      const serviceList = estheticServices.map(s => `${s.name}: ${s.description}`).join('; ');
-
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
+      const res = await fetch('/api/generate-report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 4000,
-          system: `You are Dr. Iryna Lazuk. Generate a skincare report with: Initial Analysis, Aging Prognosis, Esthetic Deep-Dive, Future Roadmap, Daily Skincare Plan, and Important Notice. Be warm, expert, non-diagnostic.
-
-Products: ${productList}
-Services: ${serviceList}
-
-Recommend appropriate products AND in-clinic services. For services, explain what they do and why they help.`,
-          messages: [{
-            role: 'user',
-            content: `Age ${ageRange}, Concern ${primaryConcern}, Question ${visitorQuestion || 'none'}`
-          }]
+          email: userEmail,
+          ageRange,
+          primaryConcern,
+          visitorQuestion
         })
       });
 
-      const data = await response.json();
-      const reportContent = data.content[0].text;
+      const data = await res.json();
+
+      if (!res.ok || !data.ok) {
+        console.error('generate-report error:', data);
+        alert(data.message || 'There was an error generating your analysis. Please try again.');
+        setEmailSubmitting(false);
+        return;
+      }
+
+      const reportContent = data.report;
 
       setAnalysisReport({
         report: reportContent,
@@ -429,8 +428,7 @@ Recommend appropriate products AND in-clinic services. For services, explain wha
         recommendedServices: getRecommendedServices(primaryConcern)
       });
 
-      console.log('Email to contact@skindoctor.ai');
-      console.log('User:', userEmail, 'Age:', ageRange, 'Concern:', primaryConcern);
+      console.log('Analysis generated for:', userEmail, 'Age:', ageRange, 'Concern:', primaryConcern);
 
       setEmailSubmitting(false);
       setStep('results');
@@ -446,14 +444,37 @@ Recommend appropriate products AND in-clinic services. For services, explain wha
       alert('Please enter a valid email address');
       return;
     }
+
+    // Simple 30-day limit per browser for full analysis
+    const lastRunStr =
+      typeof window !== 'undefined' ? localStorage.getItem('dl_lastFullAnalysisAt') : null;
+
+    if (lastRunStr) {
+      const lastRun = Number(lastRunStr);
+      if (!Number.isNaN(lastRun)) {
+        const diff = Date.now() - lastRun;
+        if (diff < THIRTY_DAYS_MS) {
+          const daysLeft = Math.ceil((THIRTY_DAYS_MS - diff) / (24 * 60 * 60 * 1000));
+          alert(
+            `You recently completed a full Dr. Lazuk skincare analysis. To allow your skin changes to mature, you can run a new report in about ${daysLeft} day(s).`
+          );
+          return;
+        }
+      }
+    }
+
     await performAnalysis();
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('dl_lastFullAnalysisAt', String(Date.now()));
+    }
   };
 
   const sendMessage = async () => {
     if (!inputMessage.trim()) return;
 
     const userMsg = inputMessage;
-    setChatMessages(prev => [...prev, { role: 'user', content: userMsg }]);
+    setChatMessages((prev) => [...prev, { role: 'user', content: userMsg }]);
     setInputMessage('');
     setChatLoading(true);
 
@@ -464,21 +485,25 @@ Recommend appropriate products AND in-clinic services. For services, explain wha
         body: JSON.stringify({
           model: 'claude-sonnet-4-20250514',
           max_tokens: 1000,
-          system: 'You are Dr. Lazuk virtual assistant. Provide warm expert advice. Mention Dr. Lazuk products when relevant.',
+          system:
+            'You are Dr. Lazuk virtual assistant. Provide warm expert advice. Mention Dr. Lazuk products when relevant.',
           messages: [
-            ...chatMessages.map(m => ({ role: m.role, content: m.content })),
+            ...chatMessages.map((m) => ({ role: m.role, content: m.content })),
             { role: 'user', content: userMsg }
           ]
         })
       });
 
       const data = await response.json();
-      setChatMessages(prev => [...prev, { role: 'assistant', content: data.content[0].text }]);
+      setChatMessages((prev) => [...prev, { role: 'assistant', content: data.content[0].text }]);
     } catch (error) {
-      setChatMessages(prev => [...prev, {
-        role: 'assistant',
-        content: 'I apologize but I am having trouble connecting. Please try again.'
-      }]);
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: 'I apologize but I am having trouble connecting. Please try again.'
+        }
+      ]);
     }
 
     setChatLoading(false);
@@ -497,7 +522,7 @@ Recommend appropriate products AND in-clinic services. For services, explain wha
   useEffect(() => {
     return () => {
       if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current.getTracks().forEach((track) => track.stop());
       }
     };
   }, []);
@@ -524,21 +549,27 @@ Recommend appropriate products AND in-clinic services. For services, explain wha
           <div className="flex gap-2">
             <button
               onClick={() => setActiveTab('home')}
-              className={`flex items-center gap-2 px-6 py-3 font-medium transition-all ${activeTab === 'home' ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-200'}`}
+              className={`flex items-center gap-2 px-6 py-3 font-medium transition-all ${
+                activeTab === 'home' ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-200'
+              }`}
             >
               <Camera size={18} />
               <span>Skin Analysis</span>
             </button>
             <button
               onClick={() => setActiveTab('chat')}
-              className={`flex items-center gap-2 px-6 py-3 font-medium transition-all ${activeTab === 'chat' ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-200'}`}
+              className={`flex items-center gap-2 px-6 py-3 font-medium transition-all ${
+                activeTab === 'chat' ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-200'
+              }`}
             >
               <MessageCircle size={18} />
               <span>Ask Dr. Lazuk</span>
             </button>
             <button
               onClick={() => setActiveTab('education')}
-              className={`flex items-center gap-2 px-6 py-3 font-medium transition-all ${activeTab === 'education' ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-200'}`}
+              className={`flex items-center gap-2 px-6 py-3 font-medium transition-all ${
+                activeTab === 'education' ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-200'
+              }`}
             >
               <BookOpen size={18} />
               <span>Services</span>
@@ -570,7 +601,9 @@ Recommend appropriate products AND in-clinic services. For services, explain wha
 
                 <div className="bg-gray-50 border border-gray-300 p-4 mb-8 flex items-start gap-3">
                   <Info className="text-gray-700 flex-shrink-0 mt-0.5" size={20} />
-                  <p className="text-sm text-gray-700">Take or upload a well-lit photo. Your complete report will be emailed to you.</p>
+                  <p className="text-sm text-gray-700">
+                    Take or upload a well-lit photo. Your complete report will be emailed to you.
+                  </p>
                 </div>
 
                 {!capturedImage && !cameraActive && (
@@ -812,10 +845,7 @@ Recommend appropriate products AND in-clinic services. For services, explain wha
               </div>
               <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50">
                 {chatMessages.map((msg, i) => (
-                  <div
-                    key={i}
-                    className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                  >
+                  <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                     <div
                       className={`max-w-[80%] p-4 ${
                         msg.role === 'user'
@@ -900,3 +930,4 @@ Recommend appropriate products AND in-clinic services. For services, explain wha
 };
 
 export default DermatologyApp;
+
