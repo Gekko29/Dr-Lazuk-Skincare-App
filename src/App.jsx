@@ -409,44 +409,48 @@ const DermatologyApp = () => {
     setStep('email');
   };
 
- const performAnalysis = async () => {
-  setEmailSubmitting(true);
+  const performAnalysis = async () => {
+    setEmailSubmitting(true);
 
-  try {
-    const response = await fetch('/api/generate-report', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: userEmail,
-        ageRange,
-        primaryConcern,
-        visitorQuestion,
-        photoDataUrl: capturedImage // 👈 NEW
-      })
-    });
+    try {
+      const response = await fetch('/api/generate-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: userEmail,
+          ageRange,
+          primaryConcern,
+          visitorQuestion,
+          photoDataUrl: capturedImage
+        })
+      });
 
-    const data = await response.json();
+      const data = await response.json();
 
-    if (!data.ok) {
-      throw new Error(data.error || 'Error generating report');
+      if (!data.ok) {
+        throw new Error(data.error || 'Error generating report');
+      }
+
+      setAnalysisReport({
+        report: data.report,
+        recommendedProducts: getRecommendedProducts(primaryConcern),
+        recommendedServices: getRecommendedServices(primaryConcern),
+        fitzpatrickType: data.fitzpatrickType || null,
+        fitzpatrickSummary: data.fitzpatrickSummary || null
+      });
+
+      // Optional: internal logging / analytics
+      console.log('Analysis generated for:', userEmail, ageRange, primaryConcern);
+
+      setStep('results');
+    } catch (error) {
+      console.error('Analysis error:', error);
+      alert('There was an error. Please try again.');
+    } finally {
+      setEmailSubmitting(false);
     }
+  };
 
-    setAnalysisReport({
-      report: data.report,
-      recommendedProducts: getRecommendedProducts(primaryConcern),
-      recommendedServices: getRecommendedServices(primaryConcern),
-      fitzpatrickType: data.fitzpatrickType || null,      // 👈 NEW
-      fitzpatrickSummary: data.fitzpatrickSummary || null // 👈 NEW
-    });
-
-    setEmailSubmitting(false);
-    setStep('results');
-  } catch (error) {
-    console.error('Analysis error:', error);
-    setEmailSubmitting(false);
-    alert('There was an error. Please try again.');
-  }
-};
   const handleEmailSubmit = async () => {
     if (!userEmail || !userEmail.includes('@')) {
       alert('Please enter a valid email address');
@@ -540,7 +544,9 @@ const DermatologyApp = () => {
               <p className="text-xs text-gray-400 uppercase tracking-wider">
                 Virtual Skincare Analysis
               </p>
-              <p className="text-sm text-gray-300 mt-1">Enhancing the Beautiful You, Naturally</p>
+              <p className="text-sm text-gray-300 mt-1">
+                Enhancing the Beautiful You, Naturally
+              </p>
             </div>
           </div>
         </div>
