@@ -1,7 +1,6 @@
 // api/analyzeImage.js
 // Image analysis stub: accepts an image + optional notes and returns
-// a structured analysis object suitable for the /api/chat analysis mode,
-// plus an inferred Fitzpatrick skin type for the UI.
+// a structured analysis object + Fitzpatrick type for UI display.
 
 function mapRawAnalysisToTemplate(raw = {}) {
   const {
@@ -98,25 +97,20 @@ function mapRawAnalysisToTemplate(raw = {}) {
   };
 }
 
-// Very simple heuristic Fitzpatrick classifier based on free-text notes.
-// This is just a stub so the UI has something meaningful to display.
+// Very simple stub that guesses Fitzpatrick type from notes.
+// In the future, you’ll replace this with real model output.
 function inferFitzpatrickTypeFromNotes(notes = "") {
-  const text = notes.toLowerCase();
+  const n = notes.toLowerCase();
 
-  // Hard signals
-  if (text.includes("always burns") || text.includes("never tans")) return 1;
-  if (text.includes("very fair") || text.includes("pale")) return 1;
-  if (text.includes("fair skin") || text.includes("usually burns")) return 2;
-  if (text.includes("sometimes burns") || text.includes("light tan"))
-    return 3;
-  if (text.includes("olive skin") || text.includes("rarely burns")) return 4;
-  if (text.includes("brown skin") || text.includes("very rarely burns"))
-    return 5;
-  if (text.includes("deeply pigmented") || text.includes("dark brown"))
-    return 6;
+  if (n.includes("type i") || n.includes("very fair")) return 1;
+  if (n.includes("type ii") || n.includes("fair")) return 2;
+  if (n.includes("type iii") || n.includes("medium")) return 3;
+  if (n.includes("type iv") || n.includes("olive")) return 4;
+  if (n.includes("type v") || n.includes("brown skin")) return 5;
+  if (n.includes("type vi") || n.includes("very dark")) return 6;
 
-  // Soft default if nothing specific is mentioned
-  return 3; // Type III is the statistical “middle”
+  // Default: III as a middle-ground assumption if nothing is specified.
+  return 3;
 }
 
 export default async function handler(req, res) {
@@ -191,4 +185,5 @@ export default async function handler(req, res) {
     });
   }
 }
+
 
