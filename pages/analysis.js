@@ -33,15 +33,17 @@ export default function AnalysisPage() {
     try {
       let mergedAnalysis = { ...analysisValues };
 
+      // 1) If an image is uploaded, call /api/analyzeImage to get auto-analysis
       if (imageBase64) {
         const analyzeRes = await fetch("/api/analyzeImage", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             imageBase64,
-            notes: "",
+            notes: "", // optional hints if you ever want to add them
           }),
         });
+
         const analyzeData = await analyzeRes.json();
         if (analyzeRes.ok && analyzeData.analysis) {
           mergedAnalysis = {
@@ -52,6 +54,7 @@ export default function AnalysisPage() {
         }
       }
 
+      // 2) Call /api/chat in "analysis" mode to build the full letter
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -65,6 +68,7 @@ export default function AnalysisPage() {
       if (!response.ok) {
         throw new Error(data.error || "Unexpected error");
       }
+
       setOutput(data.output || "");
     } catch (err) {
       console.error(err);
@@ -138,3 +142,4 @@ export default function AnalysisPage() {
     </div>
   );
 }
+
