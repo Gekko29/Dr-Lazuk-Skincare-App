@@ -68,7 +68,7 @@ export default async function handler(req, res) {
     ageRange,
     primaryConcern,
     visitorQuestion,
-    photoDataUrl // 👈 NEW: selfie from frontend
+    photoDataUrl
   } = req.body || {};
 
   if (!email || typeof email !== 'string' || !email.includes('@')) {
@@ -110,7 +110,7 @@ You are Dr. Iryna Lazuk, a dermatologist and founder of Dr. Lazuk Esthetics® an
 Your job is to create a LONG, warm, detailed, COSMETIC-ONLY virtual skincare analysis report.
 
 TONE & VOICE (VERY IMPORTANT):
-- Write in the first person as **“I”** (Dr. Lazuk), speaking directly to **“you”** (the guest).
+- Write in the first person as **"I"** (Dr. Lazuk), speaking directly to **"you"** (the guest).
 - Be warm, encouraging, and human. Imagine this is a first consultation where you want to make an excellent first impression.
 - Sound like a caring, highly skilled dermatologist who genuinely wants to simplify things, not overwhelm.
 - Be clear that this is **cosmetic guidance and entertainment only**, not medical advice or diagnosis.
@@ -120,7 +120,7 @@ STRICT SAFETY RULES:
 - This is for ENTERTAINMENT and general cosmetic education only.
 - DO NOT diagnose, treat, or name medical diseases or conditions.
 - DO NOT mention specific medical diagnoses (like rosacea, eczema, melasma, psoriasis, etc.).
-- Focus on appearance-based, cosmetic language only: “redness,” “visible spots,” “uneven tone,” “fine lines,” etc.
+- Focus on appearance-based, cosmetic language only: "redness", "visible spots", "uneven tone", "fine lines", etc.
 - If the user’s concern sounds medical, respond gently that true diagnosis needs an in-person professional.
 
 PRODUCTS YOU MAY RECOMMEND (ONLY these specific items when naming products):
@@ -145,14 +145,14 @@ FITZPATRICK_SUMMARY: <2–4 sentences explaining what this type typically means 
 
 [Section 1] Welcome & Important Notice
 - 1 short, warm paragraph.
-- Personally welcome them (“Hi, I’m Dr. Lazuk…”).
+- Personally welcome them ("Hi, I’m Dr. Lazuk…").
 - Clearly say this is a **cosmetic, entertainment-only analysis** and **not medical advice or diagnosis**.
 - Reassure them that their skin is workable and they’re not alone.
 
 [Section 2] Initial Visual Impression
 - Based on age range and concern, describe likely patterns in texture, tone, hydration, and glow in a **gentle, non-judgmental way**.
 - Do NOT say you examined them clinically; make it clear this is based on typical patterns, not a medical exam.
-- Emphasize what already looks promising or strong (e.g., “a very workable starting point”).
+- Emphasize what already looks promising or strong (e.g., "a very workable starting point").
 
 [Section 3] Fitzpatrick Skin Type – Cosmetic Perspective
 - Briefly restate the estimated type in friendly language.
@@ -160,7 +160,7 @@ FITZPATRICK_SUMMARY: <2–4 sentences explaining what this type typically means 
   - Sun response
   - Tanning vs burning tendencies
   - Pigmentation and post-inflammatory dark mark risk
-- Keep it clearly “cosmetic estimate only, not diagnosis.”
+- Keep it clearly "cosmetic estimate only, not diagnosis."
 
 [Section 4] Aging Prognosis (Cosmetic Only)
 - Describe how their skin is likely to change **cosmetically** over time given their age range and concern.
@@ -169,7 +169,7 @@ FITZPATRICK_SUMMARY: <2–4 sentences explaining what this type typically means 
 
 [Section 5] Deep Dive on Your Main Concern
 - Explain what may be happening cosmetically with their MAIN concern (acne / aging / pigmentation / redness / texture / dryness).
-- Use reassuring, shame-free language (“common,” “very treatable cosmetically,” etc.).
+- Use reassuring, shame-free language ("common", "very workable cosmetically", etc.).
 - If they asked a question, address it here in a broad, non-medical way.
 - Emphasize what we can realistically improve vs. what may simply be part of natural skin variation.
 
@@ -198,21 +198,21 @@ FITZPATRICK_SUMMARY: <2–4 sentences explaining what this type typically means 
   - What each service does.
   - Why it matches their concern and Fitzpatrick type.
   - What kinds of cosmetic improvements they might notice (e.g., smoother texture, more glow, softer lines).
-- Give a gentle “timeline” expectation (for example: “over 3–6 months of consistent care…”).
+- Give a gentle “timeline” expectation (for example: "over 3–6 months of consistent care…").
 
 [Section 8] Lifestyle & Skin Habit Coaching
 - Offer simple, practical habits:
   - Sleep, stress, gentle cleansing, not over-exfoliating, sunscreen consistency, not picking, etc.
-- Tie advice to their concern and Fitzpatrick type (e.g., “because your skin leans toward post-inflammatory marks, SPF and not picking are especially powerful for you”).
+- Tie advice to their concern and Fitzpatrick type (e.g., "because your skin leans toward post-inflammatory marks, SPF and not picking are especially powerful for you").
 
 [Section 9] Important Reminder & Next Steps
 - Reiterate clearly that this analysis is cosmetic, educational, and for entertainment only—not medical care.
 - Encourage them to seek an in-person professional for any true medical questions.
 - Warmly invite them to connect with Dr. Lazuk Esthetics® in Georgia if they’d like customized, in-person guidance.
 - End with a short, signature-style line such as:
-  “May your skin glow as brightly as your heart.  
+  "May your skin glow as brightly as your heart.  
    With care,  
-   Dr. Lazuk”
+   Dr. Lazuk"
 
 Do NOT output JSON. Follow the format exactly: the two FITZPATRICK header lines, blank line, then narrative sections.
 `.trim();
@@ -263,58 +263,22 @@ Please infer a plausible Fitzpatrick type based on typical patterns for this age
 
     const safeConcern = primaryConcern || 'Not specified';
 
-    // 👉 Fitzpatrick scale visual (replace URL with your real hosted asset)
-    const fitzScaleUrl =
-      process.env.FITZPATRICK_SCALE_URL ||
-      'https://www.skindoctor.ai/static/fitzpatrick-scale-example.png';
-
-    // ---------- VISITOR EMAIL HTML ----------
+    // ---------- VISITOR EMAIL HTML (with selfie + Fitz card) ----------
     const visitorHtml = `
       <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111827; line-height: 1.5;">
         <h1 style="font-size: 20px; font-weight: 700; margin-bottom: 8px;">Your Dr. Lazuk Virtual Skin Analysis</h1>
-        <p style="font-size: 13px; color: #4B5563; margin-bottom: 16px;">
+        <p style="font-size: 13px; color: #4B5563; margin-bottom: 10px;">
           This cosmetic analysis is for entertainment and educational purposes only and is not medical advice.
         </p>
 
         ${
           photoDataUrl
             ? `
-        <div style="margin-bottom: 16px; display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap;">
-          <div style="flex: 0 0 160px;">
-            <p style="font-size: 12px; color: #4B5563; margin: 0 0 4px 0;">Your uploaded photo:</p>
-            <div style="border-radius: 9999px; overflow: hidden; width: 140px; height: 140px; border: 2px solid #E5E7EB;">
-              <img src="${photoDataUrl}" alt="Your uploaded selfie" style="width: 100%; height: 100%; object-fit: cover;" />
-            </div>
-          </div>
-          <div style="flex: 1; min-width: 220px;">
-            ${
-              fitzScaleUrl
-                ? `
-            <p style="font-size: 12px; color: #4B5563; margin: 0 0 4px 0;">
-              Cosmetic Fitzpatrick scale reference (for general understanding only):
-            </p>
-            <img
-              src="${fitzScaleUrl}"
-              alt="Fitzpatrick skin type scale illustration"
-              style="max-width: 100%; border-radius: 8px; border: 1px solid #E5E7EB;"
-            />
-            `
-                : ''
-            }
-          </div>
-        </div>
-        `
-            : fitzScaleUrl
-            ? `
-        <div style="margin-bottom: 16px;">
-          <p style="font-size: 12px; color: #4B5563; margin: 0 0 4px 0;">
-            Cosmetic Fitzpatrick scale reference (for general understanding only):
+        <div style="margin-bottom: 16px; text-align: left;">
+          <p style="font-size: 12px; color: #6B7280; margin: 0 0 6px 0;">
+            The selfie you shared for your cosmetic analysis:
           </p>
-          <img
-            src="${fitzScaleUrl}"
-            alt="Fitzpatrick skin type scale illustration"
-            style="max-width: 100%; border-radius: 8px; border: 1px solid #E5E7EB;"
-          />
+          <img src="${photoDataUrl}" alt="Uploaded selfie" style="max-width: 240px; border-radius: 8px; border: 1px solid #D1D5DB;" />
         </div>
         `
             : ''
@@ -336,9 +300,33 @@ Please infer a plausible Fitzpatrick type based on typical patterns for this age
           }
           ${
             fitzpatrickSummary
-              ? `<p style="font-size: 13px; color: #92400E; margin: 0;">${fitzpatrickSummary}</p>`
+              ? `<p style="font-size: 13px; color: #92400E; margin: 0 0 8px 0;">${fitzpatrickSummary}</p>`
               : ''
           }
+
+          <p style="font-size: 12px; color: #92400E; margin: 4px 0 6px 0;">
+            Where this usually sits on the 1–6 Fitzpatrick scale (I = very fair, VI = deepest tones):
+          </p>
+          <div style="display: inline-flex; gap: 4px; margin-bottom: 4px;">
+            ${['I', 'II', 'III', 'IV', 'V', 'VI']
+              .map((t) => {
+                const isActive = (fitzpatrickType || '').toUpperCase() === t;
+                return `
+                <span style="
+                  font-size: 11px;
+                  padding: 4px 8px;
+                  border-radius: 9999px;
+                  border: 1px solid ${isActive ? '#92400E' : '#D1D5DB'};
+                  background-color: ${isActive ? '#92400E' : '#F9FAFB'};
+                  color: ${isActive ? '#FEF3C7' : '#374151'};
+                ">
+                  ${t}
+                </span>
+                `;
+              })
+              .join('')}
+          </div>
+
           <p style="font-size: 11px; color: #92400E; margin-top: 8px;">
             This is a visual, cosmetic estimate only and is not a medical diagnosis.
           </p>
@@ -356,6 +344,9 @@ ${reportText}
         <p style="font-size: 12px; color: #6B7280; margin-bottom: 4px;">
           If you have any medical concerns or skin conditions, please see a qualified in-person professional.
         </p>
+        <p style="font-size: 12px; color: #6B7280; margin-bottom: 8px;">
+          If you’d like in-person guidance, my team and I would love to see you at Dr. Lazuk Esthetics® in Georgia.
+        </p>
         <p style="font-size: 12px; color: #6B7280;">
           With care,<br/>
           Dr. Lazuk Esthetics® &amp; Dr. Lazuk Cosmetics®<br/>
@@ -369,7 +360,6 @@ ${reportText}
     const clinicEmail =
       process.env.RESEND_CLINIC_EMAIL || 'contact@skindoctor.ai';
 
-    // ---------- CLINIC EMAIL HTML ----------
     const clinicHtml = `
       <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111827; line-height: 1.5;">
         <h1 style="font-size: 18px; font-weight: 700; margin-bottom: 4px;">
@@ -378,7 +368,7 @@ ${reportText}
         <p style="font-size: 13px; color: #4B5563; margin-bottom: 8px;">
           A visitor completed the Dr. Lazuk virtual skin analysis.
         </p>
-        <ul style="font-size: 13px; color: #374151; margin-bottom: 12px; padding-left: 18px;">
+        <ul style="font-size: 13px; color: #374151; margin-bottom: 12px; padding-left: 16px;">
           <li><strong>Email:</strong> ${email}</li>
           <li><strong>Age Range:</strong> ${ageRange}</li>
           <li><strong>Primary Concern:</strong> ${safeConcern}</li>
@@ -388,44 +378,21 @@ ${reportText}
               : ''
           }
         </ul>
-
-        ${
-          photoDataUrl
-            ? `
-        <div style="margin-bottom: 16px; display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap;">
-          <div style="flex: 0 0 140px;">
-            <p style="font-size: 12px; color: #4B5563; margin: 0 0 4px 0;">Uploaded photo:</p>
-            <div style="border-radius: 9999px; overflow: hidden; width: 120px; height: 120px; border: 2px solid #E5E7EB;">
-              <img src="${photoDataUrl}" alt="Visitor uploaded selfie" style="width: 100%; height: 100%; object-fit: cover;" />
-            </div>
-          </div>
-          <div style="flex: 1; min-width: 220px;">
-            ${
-              fitzScaleUrl
-                ? `
-            <p style="font-size: 12px; color: #4B5563; margin: 0 0 4px 0;">
-              Cosmetic Fitzpatrick scale reference:
-            </p>
-            <img
-              src="${fitzScaleUrl}"
-              alt="Fitzpatrick skin type scale illustration"
-              style="max-width: 100%; border-radius: 8px; border: 1px solid #E5E7EB;"
-            />
-            `
-                : ''
-            }
-          </div>
-        </div>
-        `
-            : ''
-        }
-
         ${
           fitzpatrickSummary
             ? `<p style="font-size: 13px; margin-bottom: 12px;"><strong>Fitzpatrick Summary:</strong> ${fitzpatrickSummary}</p>`
             : ''
         }
-
+        ${
+          photoDataUrl
+            ? `
+        <div style="margin-bottom: 16px;">
+          <p style="font-size: 12px; color: #6B7280; margin: 0 0 6px 0;">Visitor selfie used for this cosmetic analysis:</p>
+          <img src="${photoDataUrl}" alt="Visitor selfie" style="max-width: 240px; border-radius: 8px; border: 1px solid #D1D5DB;" />
+        </div>
+        `
+            : ''
+        }
         <hr style="border-top: 1px solid #E5E7EB; margin: 16px 0;" />
         <pre style="white-space: pre-wrap; font-size: 13px; color: #111827;">
 ${reportText}
@@ -433,7 +400,7 @@ ${reportText}
       </div>
     `;
 
-    // Send visitor + clinic emails
+    // Send visitor + clinic emails (non-blocking from UX perspective)
     await Promise.all([
       sendEmailWithResend({
         to: email,
@@ -447,7 +414,7 @@ ${reportText}
       })
     ]);
 
-    // JSON response to the frontend
+    // Response to the frontend
     return res.status(200).json({
       ok: true,
       report: reportText,
