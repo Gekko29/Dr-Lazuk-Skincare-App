@@ -1,9 +1,10 @@
 // api/chat.js
 // Unified endpoint for:
 // 1) Personalized skin analysis letter ("analysis" mode – no OpenAI call)
-// 2) Optional Q&A mode ("qa" mode – uses OpenAI, WITHOUT forced sign-off)
+// 2) Ask-Dr-Lazuk Q&A ("qa" mode – uses OpenAI)
 
 import OpenAI from "openai";
+import { checkRateLimit } from "./check-rate-limit";
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -31,8 +32,6 @@ When answering questions:
 - Do NOT sound robotic or generic.
 - Do NOT make diagnoses; instead, speak in terms of likelihoods and guidance.
 - Do NOT mention that you are an AI or language model.
-
-You may close warmly when it feels natural, but do NOT repeat the exact same closing line in every single answer.
 `.trim();
 
 /**
@@ -40,19 +39,6 @@ You may close warmly when it feels natural, but do NOT repeat the exact same clo
  * the conversational Dr. Lazuk letter we designed.
  *
  * This is pure template logic (no OpenAI call).
- *
- * Expected body.analysis structure:
- * {
- *   complimentFeatures?: string,
- *   skinFindings?: string,
- *   texture?: string,
- *   poreBehavior?: string,
- *   pigment?: string,
- *   fineLinesAreas?: string,
- *   elasticity?: string,
- *   eveningActive?: string,
- *   estheticRecommendations?: string
- * }
  */
 function buildAnalysisLetter(analysis = {}) {
   const {
@@ -64,7 +50,7 @@ function buildAnalysisLetter(analysis = {}) {
     fineLinesAreas = "around your eyes and perhaps softly across your forehead",
     elasticity = "a hint of loosened bounce in certain areas that tells me collagen wants more support",
     eveningActive = "a gentle, low-strength retinoid used a few nights a week, or a mild mandelic acid serum if your skin is very sensitive",
-    estheticRecommendations = "HydraFacials for clarity and glow, and microneedling or PRP if you ever wish to focus more deeply on collagen and firmness"
+    estheticRecommendations = "HydraFacials for clarity and glow, and microneedling or PRP if you ever wish to focus more deeply on collagen and firmness",
   } = analysis;
 
   return `
@@ -122,6 +108,29 @@ export default async function handler(req, res) {
   try {
     const body = req.body || {};
 
+    // Basic rate limiting (by IP) to prevent abuse
+    const ip =
+      req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
+      req.socket?.remoteAddress ||
+      "unknown";
+
+    const { allowed, remaining, resetInMs } = checkRateLimit({
+      identifier: `chat:${ip}`,
+      windowMs: 60_000, // 1 minute window
+      maxRequests: 10, // adjust as desired
+    });
+
+    if (!allowed) {
+      res.setHeader("Retry-After", Math.ceil(resetInMs / 1000));
+      return res.status(429).json({
+        error: "rate_limited",
+        message:
+          "You’ve reached the current limit for this skincare tool. Please wait a bit and try again.",
+      });
+    }
+
+    res.setHeader("X-RateLimit-Remaining", String(remaining));
+
     const explicitMode = body.mode;
     const inferredMode =
       explicitMode ||
@@ -134,14 +143,12 @@ export default async function handler(req, res) {
       });
     }
 
-    // ANALYSIS → local template only
     if (inferredMode === "analysis") {
       const analysis = body.analysis || {};
       const letter = buildAnalysisLetter(analysis);
       return res.status(200).json({ mode: "analysis", output: letter });
     }
 
-    // QA → optional usage; no forced sign-off
     if (inferredMode === "qa") {
       const question = body.question;
       const messages = body.messages;
@@ -188,5 +195,6 @@ export default async function handler(req, res) {
     });
   }
 }
+
 
 
