@@ -439,15 +439,14 @@ const DermatologyApp = () => {
         fitzpatrickSummary: data.fitzpatrickSummary || null
       });
 
-      // Optional: internal logging / analytics
       console.log('Analysis generated for:', userEmail, ageRange, primaryConcern);
 
+      setEmailSubmitting(false);
       setStep('results');
     } catch (error) {
       console.error('Analysis error:', error);
-      alert('There was an error. Please try again.');
-    } finally {
       setEmailSubmitting(false);
+      alert('There was an error. Please try again.');
     }
   };
 
@@ -544,9 +543,7 @@ const DermatologyApp = () => {
               <p className="text-xs text-gray-400 uppercase tracking-wider">
                 Virtual Skincare Analysis
               </p>
-              <p className="text-sm text-gray-300 mt-1">
-                Enhancing the Beautiful You, Naturally
-              </p>
+              <p className="text-sm text-gray-300 mt-1">Enhancing the Beautiful You, Naturally</p>
             </div>
           </div>
         </div>
@@ -992,4 +989,5 @@ const DermatologyApp = () => {
 };
 
 export default DermatologyApp;
+
 
