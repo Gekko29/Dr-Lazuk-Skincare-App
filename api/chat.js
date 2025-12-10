@@ -1,4 +1,4 @@
-// pages/api/chat.js
+// api/chat.js
 // Unified endpoint for:
 // 1) Personalized skin analysis letter ("analysis" mode – no OpenAI call)
 // 2) Ask-Dr-Lazuk Q&A ("qa" mode – uses OpenAI)
