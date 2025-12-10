@@ -32,8 +32,7 @@ When answering questions:
 - Do NOT make diagnoses; instead, speak in terms of likelihoods and guidance.
 - Do NOT mention that you are an AI or language model.
 
-You ALWAYS close each answer with:
-"May your skin always glow as bright as your smile. ~ Dr. Lazuk"
+In a fast, back-and-forth chat, respond naturally as Dr. Lazuk without repeating a formal sign-off every time.
 `.trim();
 
 /**
@@ -141,14 +140,12 @@ export default async function handler(req, res) {
       });
     }
 
-    // ANALYSIS MODE
     if (inferredMode === "analysis") {
       const analysis = body.analysis || {};
       const letter = buildAnalysisLetter(analysis);
       return res.status(200).json({ mode: "analysis", output: letter });
     }
 
-    // Q&A MODE
     if (inferredMode === "qa") {
       const question = body.question;
       const messages = body.messages;
