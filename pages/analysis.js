@@ -1,5 +1,5 @@
 // pages/analysis.js
-// Dedicated page for the personalized analysis letter flow.
+// Dedicated page for the personalized analysis letter flow + Fitzpatrick UI.
 
 import { useState } from "react";
 import { AnalysisForm } from "../components/AnalysisForm";
@@ -22,6 +22,7 @@ export default function AnalysisPage() {
 
   const [imageBase64, setImageBase64] = useState(null);
   const [fitzpatrickType, setFitzpatrickType] = useState(null);
+
   const [output, setOutput] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
@@ -34,32 +35,46 @@ export default function AnalysisPage() {
 
     try {
       let mergedAnalysis = { ...analysisValues };
+      let detectedFitz = fitzpatrickType;
 
+      // 1) If an image is uploaded, call analyzeImage to auto-fill fields + Fitzpatrick
       if (imageBase64) {
         const analyzeRes = await fetch("/api/analyzeImage", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             imageBase64,
-            notes: "", // optional: you can later send descriptive notes from frontend
+            notes: "", // optional text hints; you can wire UI to send them later
           }),
         });
+
         const analyzeData = await analyzeRes.json();
-        if (analyzeRes.ok && analyzeData.analysis) {
+
+        if (!analyzeRes.ok) {
+          throw new Error(
+            analyzeData.error ||
+              "Something went wrong while analyzing the image."
+          );
+        }
+
+        if (analyzeData.analysis) {
           mergedAnalysis = {
             ...mergedAnalysis,
             ...analyzeData.analysis,
           };
-          setAnalysisValues((prev) => ({ ...prev, ...analyzeData.analysis }));
+          setAnalysisValues((prev) => ({
+            ...prev,
+            ...analyzeData.analysis,
+          }));
+        }
 
-          if (analyzeData.fitzpatrickType) {
-            setFitzpatrickType(analyzeData.fitzpatrickType);
-          }
-        } else if (!analyzeRes.ok) {
-          throw new Error(analyzeData.error || "Image analysis failed.");
+        if (analyzeData.fitzpatrickType) {
+          detectedFitz = analyzeData.fitzpatrickType;
+          setFitzpatrickType(analyzeData.fitzpatrickType);
         }
       }
 
+      // 2) Call /api/chat in "analysis" mode to generate the full report
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -71,8 +86,9 @@ export default function AnalysisPage() {
 
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.error || "Unexpected error");
+        throw new Error(data.error || "Unexpected error while generating report.");
       }
+
       setOutput(data.output || "");
     } catch (err) {
       console.error(err);
@@ -116,24 +132,21 @@ export default function AnalysisPage() {
           Personalized Skin Analysis
         </h1>
         <p style={{ color: "#666", marginBottom: "20px" }}>
-          Upload a photo (optional), let the system estimate your Fitzpatrick
-          type, fine-tune the analysis fields, and generate a full Dr. Lazuk
-          letter.
+          Upload a photo (optional), allow the app to auto-detect your skin
+          profile, and generate a full, conversational letter from Dr. Lazuk.
         </p>
 
         <ImageUploader onImageSelected={setImageBase64} />
 
-        {/* Fitzpatrick autodetection UI */}
+        {/* Fitzpatrick display (only when detected) */}
         <FitzpatrickDetector type={fitzpatrickType} />
 
-        <div style={{ marginTop: "20px" }}>
-          <AnalysisForm
-            values={analysisValues}
-            onChange={setAnalysisValues}
-            onSubmit={handleGenerate}
-            loading={loading}
-          />
-        </div>
+        <AnalysisForm
+          values={analysisValues}
+          onChange={setAnalysisValues}
+          onSubmit={handleGenerate}
+          loading={loading}
+        />
 
         {errorMsg && (
           <p
