@@ -1,11 +1,7 @@
 // api/analyzeImage.js
-// Serverless function to convert an image + optional notes
-// into a structured analysis object for the Dr. Lazuk letter.
-//
-// Deployed on Vercel at: /api/analyzeImage
+// Image analysis stub: accepts an image + optional notes and returns
+// a structured analysis object suitable for /api/chat analysis mode.
 
-// Map raw interpreted data into the fields expected by your
-// /api/generate-report or /api/chat-like narrative builder.
 function mapRawAnalysisToTemplate(raw = {}) {
   const {
     eyeColor,
@@ -20,7 +16,6 @@ function mapRawAnalysisToTemplate(raw = {}) {
     lifestyleFlags,
   } = raw;
 
-  // Compliment / feature highlight
   let complimentFeatures =
     "there is a softness in the way your features come together that feels very natural and kind";
 
@@ -45,7 +40,6 @@ function mapRawAnalysisToTemplate(raw = {}) {
       "the soft pink you’re wearing brings a lovely warmth to your complexion and feels very harmonious with your features";
   }
 
-  // High-level skin findings
   const skinFindings =
     globalTexture ||
     "gentle signs of dehydration and a bit of uneven tone that is very common";
@@ -76,7 +70,6 @@ function mapRawAnalysisToTemplate(raw = {}) {
         : "a generally good level of firmness with just a touch of early relaxation in certain areas"
       : "a hint of loosened bounce in certain areas that tells me collagen wants more support";
 
-  // Evening actives suggestion
   let eveningActive =
     "a gentle, low-strength retinoid used a few nights a week, or a mild mandelic acid serum if your skin is very sensitive";
 
@@ -116,12 +109,10 @@ export default async function handler(req, res) {
     if (!imageBase64 && !notes) {
       return res.status(400).json({
         error:
-          "Please provide at least 'imageBase64' or 'notes' in the request body.",
+          "Please provide at least 'imageBase64' or 'notes' for analysis.",
       });
     }
 
-    // Right now this is a *stub* interpretation.
-    // You can later plug in real vision analysis here.
     const lowerNotes = (notes || "").toLowerCase();
 
     const raw = {
@@ -165,14 +156,12 @@ export default async function handler(req, res) {
     const analysis = mapRawAnalysisToTemplate(raw);
 
     return res.status(200).json({
-      success: true,
       raw,
       analysis,
     });
   } catch (error) {
     console.error("Error in /api/analyzeImage:", error);
     return res.status(500).json({
-      success: false,
       error:
         "I’m having trouble analyzing the image right now. Please try again in a moment.",
     });
