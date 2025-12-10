@@ -1,6 +1,6 @@
 // pages/api/chat.js
 // Unified endpoint for:
-// 1) Personalized skin analysis letter ("analysis" mode – no model call required)
+// 1) Personalized skin analysis letter ("analysis" mode – no OpenAI call)
 // 2) Ask-Dr-Lazuk Q&A ("qa" mode – uses OpenAI)
 
 import OpenAI from "openai";
@@ -193,3 +193,4 @@ export default async function handler(req, res) {
     });
   }
 }
+
