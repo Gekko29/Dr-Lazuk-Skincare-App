@@ -1,6 +1,6 @@
-// pages/api/analyzeImage.js
+// api/analyzeImage.js
 // Image analysis stub: accepts an image + optional notes and returns
-// a structured analysis object suitable for /api/chat analysis mode.
+// a structured analysis object + Fitzpatrick type for UI display.
 
 function mapRawAnalysisToTemplate(raw = {}) {
   const {
@@ -16,7 +16,6 @@ function mapRawAnalysisToTemplate(raw = {}) {
     lifestyleFlags,
   } = raw;
 
-  // Compliment
   let complimentFeatures =
     "there is a softness in the way your features come together that feels very natural and kind";
 
@@ -41,7 +40,6 @@ function mapRawAnalysisToTemplate(raw = {}) {
       "the soft pink you’re wearing brings a lovely warmth to your complexion and feels very harmonious with your features";
   }
 
-  // Skin findings (high-level)
   const skinFindings =
     globalTexture ||
     "gentle signs of dehydration and a bit of uneven tone that is very common";
@@ -72,7 +70,6 @@ function mapRawAnalysisToTemplate(raw = {}) {
         : "a generally good level of firmness with just a touch of early relaxation in certain areas"
       : "a hint of loosened bounce in certain areas that tells me collagen wants more support";
 
-  // Evening actives
   let eveningActive =
     "a gentle, low-strength retinoid used a few nights a week, or a mild mandelic acid serum if your skin is very sensitive";
 
@@ -98,6 +95,22 @@ function mapRawAnalysisToTemplate(raw = {}) {
     eveningActive,
     estheticRecommendations,
   };
+}
+
+// Very simple stub that guesses Fitzpatrick type from notes.
+// In the future, you’ll replace this with real model output.
+function inferFitzpatrickTypeFromNotes(notes = "") {
+  const n = notes.toLowerCase();
+
+  if (n.includes("type i") || n.includes("very fair")) return 1;
+  if (n.includes("type ii") || n.includes("fair")) return 2;
+  if (n.includes("type iii") || n.includes("medium")) return 3;
+  if (n.includes("type iv") || n.includes("olive")) return 4;
+  if (n.includes("type v") || n.includes("brown skin")) return 5;
+  if (n.includes("type vi") || n.includes("very dark")) return 6;
+
+  // Default: III as a middle-ground assumption if nothing is specified.
+  return 3;
 }
 
 export default async function handler(req, res) {
@@ -157,10 +170,12 @@ export default async function handler(req, res) {
     };
 
     const analysis = mapRawAnalysisToTemplate(raw);
+    const fitzpatrickType = inferFitzpatrickTypeFromNotes(notes || "");
 
     return res.status(200).json({
       raw,
       analysis,
+      fitzpatrickType,
     });
   } catch (error) {
     console.error("Error in /api/analyzeImage:", error);
