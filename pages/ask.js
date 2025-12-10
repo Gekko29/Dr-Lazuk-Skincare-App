@@ -31,6 +31,7 @@ export default function AskPage() {
       if (!response.ok) {
         throw new Error(data.error || "Unexpected error");
       }
+
       setOutput(data.output || "");
     } catch (err) {
       console.error(err);
