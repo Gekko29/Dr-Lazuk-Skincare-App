@@ -1,7 +1,7 @@
 // api/chat.js
 // Unified endpoint for:
 // 1) Personalized skin analysis letter ("analysis" mode – no OpenAI call)
-// 2) Ask-Dr-Lazuk Q&A ("qa" mode – uses OpenAI)
+// 2) Optional Q&A mode ("qa" mode – uses OpenAI, WITHOUT forced sign-off)
 
 import OpenAI from "openai";
 
@@ -21,7 +21,7 @@ Your tone is:
 - Uplifting
 - Deeply personal
 
-You speak to clients as if they are sitting in your treatment chair,
+You speak to clients as if they are sitting in your treatment chair, 
 and you see the emotional story behind their skin.
 
 When answering questions:
@@ -32,8 +32,7 @@ When answering questions:
 - Do NOT make diagnoses; instead, speak in terms of likelihoods and guidance.
 - Do NOT mention that you are an AI or language model.
 
-You may sometimes close longer, reflective responses with a warm sign-off in your own words,
-but you do not need to repeat the same sign-off on every single short answer.
+You may close warmly when it feels natural, but do NOT repeat the exact same closing line in every single answer.
 `.trim();
 
 /**
@@ -123,12 +122,6 @@ export default async function handler(req, res) {
   try {
     const body = req.body || {};
 
-    // mode: "analysis" → build narrative locally
-    // mode: "qa"       → Ask Dr Lazuk (OpenAI)
-    //
-    // Backwards compatibility:
-    // - If body.analysis exists → analysis
-    // - Else if question/messages exist → qa
     const explicitMode = body.mode;
     const inferredMode =
       explicitMode ||
@@ -141,12 +134,14 @@ export default async function handler(req, res) {
       });
     }
 
+    // ANALYSIS → local template only
     if (inferredMode === "analysis") {
       const analysis = body.analysis || {};
       const letter = buildAnalysisLetter(analysis);
       return res.status(200).json({ mode: "analysis", output: letter });
     }
 
+    // QA → optional usage; no forced sign-off
     if (inferredMode === "qa") {
       const question = body.question;
       const messages = body.messages;
@@ -193,4 +188,5 @@ export default async function handler(req, res) {
     });
   }
 }
+
 
