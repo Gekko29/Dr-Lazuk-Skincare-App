@@ -1,5 +1,6 @@
 // pages/ask.js
-// Dedicated page for the Ask-Dr-Lazuk Q&A feature.
+// Dedicated page for the Ask-Dr-Lazuk Q&A feature,
+// wired to api/ask-dr-lazuk.js
 
 import { useState } from "react";
 import { QAForm } from "../components/QAForm";
@@ -11,6 +12,7 @@ export default function AskPage() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
+  // For now this is a simple one-shot Q&A, not a multi-turn chat.
   async function handleAsk(e) {
     e.preventDefault();
     setLoading(true);
@@ -18,23 +20,34 @@ export default function AskPage() {
     setOutput("");
 
     try {
-      const response = await fetch("/api/chat", {
+      const response = await fetch("/api/ask-dr-lazuk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          mode: "qa",
-          question,
+          // Your backend expects: { messages, isFirstReply }
+          messages: [
+            {
+              role: "user",
+              content: question,
+            },
+          ],
+          isFirstReply: true,
         }),
       });
 
       const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Unexpected error");
+
+      if (!response.ok || !data.ok) {
+        throw new Error(
+          data?.message ||
+            data?.error ||
+            "Unexpected error while asking Dr. Lazuk."
+        );
       }
 
-      setOutput(data.output || "");
+      setOutput(data.reply || "");
     } catch (err) {
-      console.error(err);
+      console.error("Ask Dr Lazuk error:", err);
       setErrorMsg(
         err.message || "Something went wrong while asking Dr. Lazuk."
       );
@@ -75,7 +88,7 @@ export default function AskPage() {
         </h1>
         <p style={{ color: "#666", marginBottom: "20px" }}>
           Ask any skincare or esthetic question and receive a personalized
-          response in Dr. Lazuk’s voice.
+          response in her voice.
         </p>
 
         <QAForm
@@ -102,3 +115,4 @@ export default function AskPage() {
     </div>
   );
 }
+
