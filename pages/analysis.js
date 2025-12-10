@@ -5,6 +5,7 @@ import { useState } from "react";
 import { AnalysisForm } from "../components/AnalysisForm";
 import { OutputCard } from "../components/OutputCard";
 import { ImageUploader } from "../components/ImageUploader";
+import { FitzpatrickDetector } from "../components/FitzpatrickDetector";
 
 export default function AnalysisPage() {
   const [analysisValues, setAnalysisValues] = useState({
@@ -20,6 +21,7 @@ export default function AnalysisPage() {
   });
 
   const [imageBase64, setImageBase64] = useState(null);
+  const [fitzpatrickType, setFitzpatrickType] = useState(null);
   const [output, setOutput] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
@@ -33,17 +35,15 @@ export default function AnalysisPage() {
     try {
       let mergedAnalysis = { ...analysisValues };
 
-      // 1) If an image is uploaded, call /api/analyzeImage to get auto-analysis
       if (imageBase64) {
         const analyzeRes = await fetch("/api/analyzeImage", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             imageBase64,
-            notes: "", // optional hints if you ever want to add them
+            notes: "", // optional: you can later send descriptive notes from frontend
           }),
         });
-
         const analyzeData = await analyzeRes.json();
         if (analyzeRes.ok && analyzeData.analysis) {
           mergedAnalysis = {
@@ -51,10 +51,15 @@ export default function AnalysisPage() {
             ...analyzeData.analysis,
           };
           setAnalysisValues((prev) => ({ ...prev, ...analyzeData.analysis }));
+
+          if (analyzeData.fitzpatrickType) {
+            setFitzpatrickType(analyzeData.fitzpatrickType);
+          }
+        } else if (!analyzeRes.ok) {
+          throw new Error(analyzeData.error || "Image analysis failed.");
         }
       }
 
-      // 2) Call /api/chat in "analysis" mode to build the full letter
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -68,7 +73,6 @@ export default function AnalysisPage() {
       if (!response.ok) {
         throw new Error(data.error || "Unexpected error");
       }
-
       setOutput(data.output || "");
     } catch (err) {
       console.error(err);
@@ -112,18 +116,24 @@ export default function AnalysisPage() {
           Personalized Skin Analysis
         </h1>
         <p style={{ color: "#666", marginBottom: "20px" }}>
-          Upload a photo (optional), fine-tune the analysis fields, and
-          generate a full Dr. Lazuk letter.
+          Upload a photo (optional), let the system estimate your Fitzpatrick
+          type, fine-tune the analysis fields, and generate a full Dr. Lazuk
+          letter.
         </p>
 
         <ImageUploader onImageSelected={setImageBase64} />
 
-        <AnalysisForm
-          values={analysisValues}
-          onChange={setAnalysisValues}
-          onSubmit={handleGenerate}
-          loading={loading}
-        />
+        {/* Fitzpatrick autodetection UI */}
+        <FitzpatrickDetector type={fitzpatrickType} />
+
+        <div style={{ marginTop: "20px" }}>
+          <AnalysisForm
+            values={analysisValues}
+            onChange={setAnalysisValues}
+            onSubmit={handleGenerate}
+            loading={loading}
+          />
+        </div>
 
         {errorMsg && (
           <p
