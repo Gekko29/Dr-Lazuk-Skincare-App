@@ -2,13 +2,68 @@
 // Unified endpoint for:
 // 1) Personalized skin analysis letter ("analysis" mode – no OpenAI call)
 // 2) Ask-Dr-Lazuk Q&A ("qa" mode – uses OpenAI)
+// Now includes simple in-memory rate limiting per client.
 
 import OpenAI from "openai";
-import { checkRateLimit } from "./check-rate-limit";
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
+
+// ---------- RATE LIMITING ----------
+
+// e.g. max 20 requests per 10 minutes per client
+const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
+const RATE_LIMIT_MAX_REQUESTS = 20;
+
+// Map<clientId, { count: number, start: number }>
+const rateLimitStore = new Map();
+
+function getClientId(req) {
+  // Try to derive a reasonably stable client identifier
+  const headerIp =
+    req.headers["x-real-ip"] ||
+    (Array.isArray(req.headers["x-real-ip"]) ? req.headers["x-real-ip"][0] : null) ||
+    req.headers["x-forwarded-for"] ||
+    (Array.isArray(req.headers["x-forwarded-for"])
+      ? req.headers["x-forwarded-for"][0]
+      : null);
+
+  const ip = (headerIp || "").toString().split(",")[0].trim() || "unknown_ip";
+
+  // Optional: allow a custom header to help distinguish users behind same IP
+  const userKey =
+    (req.headers["x-user-key"] &&
+      req.headers["x-user-key"].toString().trim()) ||
+    "";
+
+  return userKey ? `${ip}:${userKey}` : ip;
+}
+
+function isRateLimited(clientId) {
+  const now = Date.now();
+  const existing = rateLimitStore.get(clientId);
+
+  if (!existing) {
+    rateLimitStore.set(clientId, { count: 1, start: now });
+    return false;
+  }
+
+  if (now - existing.start > RATE_LIMIT_WINDOW_MS) {
+    // Window expired → reset
+    rateLimitStore.set(clientId, { count: 1, start: now });
+    return false;
+  }
+
+  existing.count += 1;
+  if (existing.count > RATE_LIMIT_MAX_REQUESTS) {
+    return true;
+  }
+
+  return false;
+}
+
+// ---------- DR LAZUK PROMPTS / ANALYSIS BUILDER ----------
 
 const DR_LAZUK_QA_SYSTEM_PROMPT = `
 You are Dr. Iryna Lazuk — a board-certified dermatologist, founder, educator, 
@@ -39,6 +94,19 @@ When answering questions:
  * the conversational Dr. Lazuk letter we designed.
  *
  * This is pure template logic (no OpenAI call).
+ *
+ * Expected body.analysis structure:
+ * {
+ *   complimentFeatures?: string,
+ *   skinFindings?: string,
+ *   texture?: string,
+ *   poreBehavior?: string,
+ *   pigment?: string,
+ *   fineLinesAreas?: string,
+ *   elasticity?: string,
+ *   eveningActive?: string,
+ *   estheticRecommendations?: string
+ * }
  */
 function buildAnalysisLetter(analysis = {}) {
   const {
@@ -50,7 +118,7 @@ function buildAnalysisLetter(analysis = {}) {
     fineLinesAreas = "around your eyes and perhaps softly across your forehead",
     elasticity = "a hint of loosened bounce in certain areas that tells me collagen wants more support",
     eveningActive = "a gentle, low-strength retinoid used a few nights a week, or a mild mandelic acid serum if your skin is very sensitive",
-    estheticRecommendations = "HydraFacials for clarity and glow, and microneedling or PRP if you ever wish to focus more deeply on collagen and firmness",
+    estheticRecommendations = "HydraFacials for clarity and glow, and microneedling or PRP if you ever wish to focus more deeply on collagen and firmness"
   } = analysis;
 
   return `
@@ -99,42 +167,41 @@ May your skin always glow as bright as your smile. ~ Dr. Lazuk
   `.trim();
 }
 
+// ---------- HANDLER ----------
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", ["POST"]);
     return res.status(405).json({ error: "Method not allowed. Use POST." });
   }
 
+  // RATE LIMIT CHECK
+  const clientId = getClientId(req);
+  if (isRateLimited(clientId)) {
+    return res.status(429).json({
+      error: "rate_limited",
+      message:
+        "You’ve reached the current request limit. Please wait a few minutes before trying again.",
+    });
+  }
+
   try {
     const body = req.body || {};
 
-    // Basic rate limiting (by IP) to prevent abuse
-    const ip =
-      req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
-      req.socket?.remoteAddress ||
-      "unknown";
-
-    const { allowed, remaining, resetInMs } = checkRateLimit({
-      identifier: `chat:${ip}`,
-      windowMs: 60_000, // 1 minute window
-      maxRequests: 10, // adjust as desired
-    });
-
-    if (!allowed) {
-      res.setHeader("Retry-After", Math.ceil(resetInMs / 1000));
-      return res.status(429).json({
-        error: "rate_limited",
-        message:
-          "You’ve reached the current limit for this skincare tool. Please wait a bit and try again.",
-      });
-    }
-
-    res.setHeader("X-RateLimit-Remaining", String(remaining));
-
+    // mode: "analysis" → build narrative locally
+    // mode: "qa"       → Ask Dr Lazuk (OpenAI)
+    //
+    // Backwards compatibility:
+    // - If body.analysis exists → analysis
+    // - Else if question/messages exist → qa
     const explicitMode = body.mode;
     const inferredMode =
       explicitMode ||
-      (body.analysis ? "analysis" : body.question || body.messages ? "qa" : null);
+      (body.analysis
+        ? "analysis"
+        : body.question || body.messages
+        ? "qa"
+        : null);
 
     if (!inferredMode) {
       return res.status(400).json({
@@ -195,6 +262,4 @@ export default async function handler(req, res) {
     });
   }
 }
-
-
 
