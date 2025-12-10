@@ -1,48 +1,81 @@
 // components/FitzpatrickDetector.js
-// Fitzpatrick skin type display with color scale and description.
+// Fitzpatrick skin type display with color bar + friendly description.
 
 import React from "react";
 
-const TYPE_INFO = {
+const TYPES = {
   1: {
     label: "Type I",
-    desc: "Very fair skin, always burns, never tans. Needs extreme sun protection.",
-    color: "#ffe5d9",
+    description:
+      "Very fair skin, always burns, never tans. Needs very high, consistent sun protection and gentle actives.",
   },
   2: {
     label: "Type II",
-    desc: "Fair skin, usually burns, tans minimally. Requires consistent SPF and hats.",
-    color: "#ffd7ba",
+    description:
+      "Fair skin, usually burns, tans minimally. Daily broad-spectrum SPF is essential, plus cautious use of peels and lasers.",
   },
   3: {
     label: "Type III",
-    desc: "Medium/light skin, sometimes burns, gradually tans. Still prone to sun damage.",
-    color: "#fec89a",
+    description:
+      "Medium/light skin, sometimes burns, gradually tans. Can usually tolerate more active treatments with proper protection.",
   },
   4: {
     label: "Type IV",
-    desc: "Olive/light brown skin, rarely burns, tans easily. Risk of hyperpigmentation with sun or inflammation.",
-    color: "#e0a96d",
+    description:
+      "Olive/light brown skin, rarely burns, tans easily. Great candidate for many esthetic procedures with careful pigment management.",
   },
   5: {
     label: "Type V",
-    desc: "Brown skin, very rarely burns, tans very easily. Higher risk of dark spots and PIH after irritation.",
-    color: "#b5835a",
+    description:
+      "Brown skin, very rarely burns, tans very easily. Needs special attention to pigmentary risks with lasers, peels, and heat-based treatments.",
   },
   6: {
     label: "Type VI",
-    desc: "Deeply pigmented dark brown to black skin, almost never burns. Needs careful protection against dark spots, uneven tone, and scarring.",
-    color: "#6b4f3f",
+    description:
+      "Deeply pigmented dark brown to black skin, almost never burns. High priority on pigment-safe parameters for all energy devices.",
   },
 };
 
-const SCALE_ORDER = [1, 2, 3, 4, 5, 6];
+// Simple gradient from very fair → very deep
+const BAR_COLORS = [
+  "#ffe5e0", // I
+  "#ffd2b3", // II
+  "#ffecb3", // III
+  "#e0ffb3", // IV
+  "#b3ffd9", // V
+  "#80c7ff", // VI
+];
 
-export function FitzpatrickDetector({ type }) {
+export function FitzpatrickDetector({ type, detectedBy = "auto" }) {
   if (!type) return null;
 
   const numeric = Number(type);
-  const info = TYPE_INFO[numeric] || TYPE_INFO[3];
+  const info = TYPES[numeric];
+
+  if (!info) {
+    return (
+      <div
+        style={{
+          marginTop: "16px",
+          padding: "12px 14px",
+          borderRadius: "10px",
+          background: "#f5f0f0",
+          border: "1px solid #e2d6d6",
+          fontSize: "0.9rem",
+        }}
+      >
+        <strong>Fitzpatrick Skin Type:</strong>{" "}
+        <span style={{ color: "#555" }}>Unknown</span>
+      </div>
+    );
+  }
+
+  const detectedLabel =
+    detectedBy === "auto"
+      ? "Detected automatically based on your photo."
+      : detectedBy === "manual"
+      ? "Selected based on your answers."
+      : null;
 
   return (
     <div
@@ -50,79 +83,91 @@ export function FitzpatrickDetector({ type }) {
         marginTop: "20px",
         padding: "14px 16px",
         borderRadius: "12px",
-        background: "#f8f3f3",
+        background: "#faf5f5",
         border: "1px solid #e4d5d5",
       }}
     >
-      <div style={{ marginBottom: "8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <strong>Fitzpatrick Skin Type: {info.label}</strong>
-        <span
-          style={{
-            fontSize: "0.8rem",
-            padding: "2px 8px",
-            borderRadius: "999px",
-            background: "#efe2ff",
-            color: "#6b3fad",
-          }}
-        >
-          Auto-detected
-        </span>
-      </div>
-
-      {/* Color scale */}
       <div
         style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(6, 1fr)",
-          gap: "4px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "baseline",
           marginBottom: "10px",
         }}
       >
-        {SCALE_ORDER.map((t) => {
-          const item = TYPE_INFO[t];
-          const isActive = t === numeric;
-          return (
-            <div
-              key={t}
-              style={{
-                height: "20px",
-                borderRadius: "8px",
-                background: item.color,
-                border: isActive ? "2px solid #222" : "1px solid rgba(0,0,0,0.1)",
-                boxShadow: isActive ? "0 0 0 2px rgba(0,0,0,0.15)" : "none",
-                position: "relative",
-              }}
-              title={item.label}
-            >
-              {isActive && (
-                <span
-                  style={{
-                    position: "absolute",
-                    top: "-18px",
-                    left: "50%",
-                    transform: "translateX(-50%)",
-                    fontSize: "0.7rem",
-                    fontWeight: 600,
-                    background: "#fff",
-                    padding: "1px 6px",
-                    borderRadius: "999px",
-                    border: "1px solid #ddd",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {item.label}
-                </span>
-              )}
-            </div>
-          );
-        })}
+        <strong>Fitzpatrick Skin Type</strong>
+        <span
+          style={{
+            fontWeight: 600,
+            fontSize: "0.95rem",
+            color: "#444",
+          }}
+        >
+          {info.label} (Type {numeric})
+        </span>
       </div>
 
-      <p style={{ margin: 0, fontSize: "0.9rem", color: "#555" }}>
-        {info.desc}
+      {/* Color bar */}
+      <div style={{ marginBottom: "10px" }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(6, 1fr)",
+            borderRadius: "999px",
+            overflow: "hidden",
+            border: "1px solid #e0d0d0",
+          }}
+        >
+          {BAR_COLORS.map((color, index) => {
+            const segmentType = index + 1;
+            const isActive = segmentType === numeric;
+            return (
+              <div
+                key={segmentType}
+                style={{
+                  height: "10px",
+                  background: color,
+                  opacity: isActive ? 1 : 0.5,
+                  boxShadow: isActive
+                    ? "0 0 0 2px rgba(0,0,0,0.12) inset"
+                    : "none",
+                }}
+              />
+            );
+          })}
+        </div>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            fontSize: "0.75rem",
+            marginTop: "4px",
+            color: "#777",
+          }}
+        >
+          <span>Type I</span>
+          <span>Type VI</span>
+        </div>
+      </div>
+
+      <p style={{ margin: "0 0 4px", fontSize: "0.9rem", color: "#555" }}>
+        {info.description}
       </p>
+
+      {detectedLabel && (
+        <p
+          style={{
+            margin: 0,
+            fontSize: "0.8rem",
+            color: "#888",
+          }}
+        >
+          {detectedLabel}
+        </p>
+      )}
     </div>
   );
 }
+
 
 
