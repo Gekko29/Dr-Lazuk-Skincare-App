@@ -1,6 +1,7 @@
 // api/analyzeImage.js
 // Image analysis stub: accepts an image + optional notes and returns
-// a structured analysis object suitable for /api/chat analysis mode.
+// a structured analysis object suitable for the /api/chat analysis mode,
+// plus an inferred Fitzpatrick skin type for the UI.
 
 function mapRawAnalysisToTemplate(raw = {}) {
   const {
@@ -97,6 +98,27 @@ function mapRawAnalysisToTemplate(raw = {}) {
   };
 }
 
+// Very simple heuristic Fitzpatrick classifier based on free-text notes.
+// This is just a stub so the UI has something meaningful to display.
+function inferFitzpatrickTypeFromNotes(notes = "") {
+  const text = notes.toLowerCase();
+
+  // Hard signals
+  if (text.includes("always burns") || text.includes("never tans")) return 1;
+  if (text.includes("very fair") || text.includes("pale")) return 1;
+  if (text.includes("fair skin") || text.includes("usually burns")) return 2;
+  if (text.includes("sometimes burns") || text.includes("light tan"))
+    return 3;
+  if (text.includes("olive skin") || text.includes("rarely burns")) return 4;
+  if (text.includes("brown skin") || text.includes("very rarely burns"))
+    return 5;
+  if (text.includes("deeply pigmented") || text.includes("dark brown"))
+    return 6;
+
+  // Soft default if nothing specific is mentioned
+  return 3; // Type III is the statistical “middle”
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", ["POST"]);
@@ -154,10 +176,12 @@ export default async function handler(req, res) {
     };
 
     const analysis = mapRawAnalysisToTemplate(raw);
+    const fitzpatrickType = inferFitzpatrickTypeFromNotes(notes || "");
 
     return res.status(200).json({
       raw,
       analysis,
+      fitzpatrickType,
     });
   } catch (error) {
     console.error("Error in /api/analyzeImage:", error);
@@ -167,3 +191,4 @@ export default async function handler(req, res) {
     });
   }
 }
+
