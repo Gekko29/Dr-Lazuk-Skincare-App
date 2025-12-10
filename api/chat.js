@@ -65,7 +65,7 @@ function buildAnalysisLetter(analysis = {}) {
     fineLinesAreas = "around your eyes and perhaps softly across your forehead",
     elasticity = "a hint of loosened bounce in certain areas that tells me collagen wants more support",
     eveningActive = "a gentle, low-strength retinoid used a few nights a week, or a mild mandelic acid serum if your skin is very sensitive",
-    estheticRecommendations = "HydraFacials for clarity and glow, and microneedling or PRP if you ever wish to focus more deeply on collagen and firmness"
+    estheticRecommendations = "HydraFacials for clarity and glow, and microneedling or PRP if you ever wish to focus more deeply on collagen and firmness",
   } = analysis;
 
   return `
@@ -192,3 +192,5 @@ export default async function handler(req, res) {
         "I’m having trouble connecting right now. Please try again in a moment.",
     });
   }
+}
+
