@@ -457,6 +457,9 @@ Please infer a plausible Fitzpatrick type based on typical patterns for this age
 
     reportText = reportText.trim();
 
+    // ✅ Strip "[Section N]" markers so the email/JSON reads like a continuous letter
+    const cleanedReportText = reportText.replace(/\[Section\s+\d+\]\s*/g, '').trim();
+
     const safeConcern = primaryConcern || 'Not specified';
 
     // 🔮 Generate the 4 aging preview images (may gracefully return nulls)
@@ -593,7 +596,7 @@ Please infer a plausible Fitzpatrick type based on typical patterns for this age
           ${agingPreviewHtml}
 
           <pre style="white-space: pre-wrap; font-size: 13px; margin-top: 16px; color: #111827;">
-${reportText}
+${cleanedReportText}
           </pre>
 
           <hr style="border-top: 1px solid #E5E7EB; margin: 24px 0;" />
@@ -659,7 +662,7 @@ ${reportText}
 
           <hr style="border-top: 1px solid #E5E7EB; margin: 16px 0;" />
           <pre style="white-space: pre-wrap; font-size: 13px; color: #111827;">
-${reportText}
+${cleanedReportText}
           </pre>
         </div>
       </div>
@@ -682,7 +685,7 @@ ${reportText}
     // Response to the frontend
     return res.status(200).json({
       ok: true,
-      report: reportText,
+      report: cleanedReportText,
       fitzpatrickType: fitzpatrickType || null,
       fitzpatrickSummary: fitzpatrickSummary || null,
       agingPreviewImages
@@ -696,6 +699,7 @@ ${reportText}
     });
   }
 }
+
 
 
 
