@@ -23,7 +23,8 @@ function renderFitzpatrickScaleHtml(type) {
 async function sendEmailWithResend({ to, subject, html }) {
   const apiKey = process.env.RESEND_API_KEY;
   const fromEmail =
-    process.env.RESEND_FROM_EMAIL || 'Dr. Lazuk Esthetics <no-reply@example.com>';
+    process.env.RESEND_FROM_EMAIL ||
+    'Dr. Lazuk Esthetics <no-reply@drlazuk.com>'; // ✅ default to verified domain
 
   if (!apiKey) {
     console.error('RESEND_API_KEY is not set; skipping email send.');
@@ -86,7 +87,7 @@ async function generateAgingPreviewImages({ ageRange, primaryConcern, fitzpatric
   };
 
   try {
-    const size = '512x512';
+    const size = '1024x1024'; // ✅ OpenAI-supported size
 
     const [imgNo10, imgNo20, imgCare10, imgCare20] = await Promise.all([
       client.images.generate({
@@ -128,6 +129,80 @@ async function generateAgingPreviewImages({ ageRange, primaryConcern, fitzpatric
   }
 }
 
+// Helper: map imageAnalysis (from /api/analyzeImage) into the shape lib/analysis.js expects
+function buildAnalysisContext({ ageRange, primaryConcern, visitorQuestion, photoDataUrl, imageAnalysis }) {
+  const ia = imageAnalysis || {};
+  const raw = ia.raw || {};
+  const vision = ia.analysis || {};
+
+  // Map numeric Fitzpatrick (1–6) to Roman "I"–"VI" if present
+  let fitzRoman = null;
+  if (typeof ia.fitzpatrickType === 'number') {
+    const romans = ['I', 'II', 'III', 'IV', 'V', 'VI'];
+    fitzRoman = romans[ia.fitzpatrickType - 1] || null;
+  } else if (typeof ia.fitzpatrickType === 'string') {
+    const up = ia.fitzpatrickType.toUpperCase();
+    if (['I', 'II', 'III', 'IV', 'V', 'VI'].includes(up)) {
+      fitzRoman = up;
+    }
+  }
+
+  // Build tags for the selfie compliment engine
+  const tags = [];
+  if (raw.wearingGlasses) tags.push('glasses');
+  if (raw.eyeColor) tags.push(`${raw.eyeColor} eyes`);
+  if (raw.clothingColor) tags.push(`${raw.clothingColor} top`);
+
+  const selfieMeta = {
+    url: photoDataUrl || null,
+    tags,
+    dominantColor: raw.clothingColor === 'pink' ? 'soft pink' : null,
+    eyeColor: raw.eyeColor || null,
+    hairColor: raw.hairColor || null
+  };
+
+  const visionSummary = {
+    issues: [],
+    strengths: [],
+    texture: vision.texture || raw.globalTexture || null,
+    overallGlow: vision.overallGlow || null
+  };
+
+  if (raw.globalTexture) {
+    visionSummary.issues.push('texture irregularities');
+  }
+  if (raw.tZonePores) {
+    visionSummary.issues.push('visible T-zone pores');
+  }
+  if (raw.pigmentType) {
+    visionSummary.issues.push('pigment irregularities');
+  }
+  if (raw.fineLinesRegions) {
+    visionSummary.issues.push('fine lines');
+  }
+
+  // Form data for lib/analysis.js
+  const form = {
+    firstName: null,
+    age: null,
+    skinType: ia.skinType || null,
+    fitzpatrickType: fitzRoman,
+    primaryConcerns: primaryConcern ? [primaryConcern] : [],
+    secondaryConcerns: [],
+    routineLevel: ia.routineLevel || 'standard',
+    budgetLevel: ia.budgetLevel || 'mid-range',
+    currentRoutine: visitorQuestion || null,
+    lifestyle: ia.lifestyle || null,
+    ageRange: ageRange || null // not used directly, but harmless
+  };
+
+  return buildAnalysis({
+    form,
+    selfie: selfieMeta,
+    vision: visionSummary
+  });
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
@@ -156,8 +231,8 @@ export default async function handler(req, res) {
     ageRange,
     primaryConcern,
     visitorQuestion,
-    photoDataUrl,   // selfie from the front-end (data URL)
-    imageAnalysis   // OPTIONAL: result from /api/analyzeImage
+    photoDataUrl, // selfie from the front-end (data URL)
+    imageAnalysis // OPTIONAL: result from /api/analyzeImage
   } = req.body || {};
 
   if (!email || typeof email !== 'string' || !email.includes('@')) {
@@ -172,11 +247,12 @@ export default async function handler(req, res) {
     });
   }
 
-  // Build structured context (form + optional image analysis)
-  const analysisContext = buildAnalysis({
+  // Build structured context (form + selfie + vision) from imageAnalysis
+  const analysisContext = buildAnalysisContext({
     ageRange,
     primaryConcern,
     visitorQuestion,
+    photoDataUrl,
     imageAnalysis
   });
 
@@ -231,14 +307,15 @@ IN-CLINIC ESTHETIC SERVICES (ONLY use these when recommending services):
 ${serviceList}
 
 HOW TO USE THE STRUCTURED ANALYSIS CONTEXT (IMPORTANT):
-You will receive a JSON "Structured analysis context" in the user message. It contains:
-- demographics.ageRange, demographics.primaryConcern, demographics.visitorQuestion
-- selfie.compliment: a selfie-based compliment sentence generated from the actual image
-- selfie.fitzpatrickEstimateNumeric / selfie.fitzpatrickEstimateRoman (cosmetic estimate from the image)
-- skinSummary.keyFindingsText: concise cosmetic findings (texture, tone, pigment, pores, etc.)
-- skinSummary.activesHint: a suggested approach for evening actives
-- skinSummary.inClinicHint: suggested esthetic treatments
-- timeline.days_1_7 / days_8_30 / days_31_90: a 0–90 day scaffold with themes, goals, and notes
+You will receive a JSON "Structured analysis context" in the user message. It contains, among other things:
+- user: name/age/location if provided
+- selfie: a selfie-based compliment source (compliment field is pre-built for you)
+- fitzpatrick: cosmetic Fitzpatrick info (type, description, riskNotes)
+- skinProfile: declaredType (skin type), inferredTexture, overallGlow, strengths, visibleIssues
+- priorities: a sorted list of concerns with priority and rationale
+- lifestyle: routineLevel, budgetLevel, currentRoutine, lifestyleNotes
+- timeline: days_1_7 / days_8_30 / days_31_90 with theme, goal, notes
+- strategy: overall approach and investment level
 
 You MUST incorporate this context so the report feels specific to THIS person:
 - [Section 1] Welcome & Important Notice:
@@ -247,7 +324,8 @@ You MUST incorporate this context so the report feels specific to THIS person:
   - Briefly include the education/entertainment-only disclaimer in a warm, human way.
 
 - [Section 2] First Impressions of Your Skin Story:
-  - Use skinSummary.keyFindingsText as the spine of this section.
+  - Use skinProfile.inferredTexture, skinProfile.overallGlow, strengths, and visibleIssues
+    as the spine of this section.
   - Describe what their skin is "telling" you in a kind, narrative way – NOT a checklist.
   - Tie in age range and primary concern so it feels personally observed, not generic.
 
@@ -264,7 +342,7 @@ You MUST incorporate this context so the report feels specific to THIS person:
   - Keep this realistic, hopeful, and never fear-based.
 
 - [Section 5] Deep Dive on Your Primary Concern:
-  - Anchor this section tightly to demographics.primaryConcern and skinSummary.keyFindingsText.
+  - Anchor this section tightly to the primary concern and visibleIssues.
   - Explain what you see that relates to their concern (visually and cosmetically),
     why it behaves the way it does, and what principles help improve it over time.
   - Use warm analogies (e.g., "your barrier is like a gatekeeper") while keeping it grounded.
@@ -272,11 +350,11 @@ You MUST incorporate this context so the report feels specific to THIS person:
 - [Section 6] At-Home Skincare Plan Using Dr. Lazuk Cosmetics:
   - Build a morning and evening plan using ONLY the allowed product list.
   - Make it feel simple and doable (not 20 steps).
-  - Use skinSummary.activesHint to guide how strong/active the evening routine should be.
+  - Let lifestyle.routineLevel and strategy.approach guide how advanced the routine can be.
   - Explain *why* each step is there in human language, not just product stacking.
 
 - [Section 7] In-Clinic Esthetic Treatment Roadmap:
-  - Use skinSummary.inClinicHint and the service list to propose a realistic plan
+  - Use priorities and skinProfile to propose a realistic plan
     (e.g., facials first, then RF/PRP if appropriate).
   - Keep it conservative and respectful of sensitivity and skin barrier.
   - Frame everything as options, not "musts."
@@ -529,8 +607,8 @@ ${reportText}
           <p style="font-size: 12px; color: #6B7280;">
             With care,<br/>
             Dr. Lazuk Esthetics® &amp; Dr. Lazuk Cosmetics®<br/>
-            <a href="mailto:contact@skindoctor.ai" style="color: #111827; text-decoration: underline;">
-              contact@skindoctor.ai
+            <a href="mailto:contact@drlazuk.com" style="color: #111827; text-decoration: underline;">
+              contact@drlazuk.com
             </a>
           </p>
         </div>
@@ -539,7 +617,7 @@ ${reportText}
 
     // ---------- Clinic Email HTML ----------
     const clinicEmail =
-      process.env.RESEND_CLINIC_EMAIL || 'contact@skindoctor.ai';
+      process.env.RESEND_CLINIC_EMAIL || 'contact@drlazuk.com'; // ✅ default to drlazuk.com
 
     const clinicHtml = `
       <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111827; line-height: 1.5; background-color: #F9FAFB; padding: 16px;">
@@ -618,6 +696,7 @@ ${reportText}
     });
   }
 }
+
 
 
 
