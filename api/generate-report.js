@@ -53,6 +53,89 @@ async function sendEmailWithResend({ to, subject, html }) {
   }
 }
 
+/**
+ * Generate 4 AI "future you" images using OpenAI Images:
+ * - 10 years from now, if they don't change much
+ * - 20 years from now, if they don't change much
+ * - 10 years from now, following the recommended routine
+ * - 20 years from now, following the recommended routine
+ *
+ * NOTE: These are conceptual previews, not literal predictions — and
+ * we’ll explain that clearly in the disclaimer.
+ */
+async function generateAgingPreviewImages({ ageRange, primaryConcern, fitzpatrickType }) {
+  // Fail gracefully if no API key
+  if (!process.env.OPENAI_API_KEY) {
+    return {
+      noChange10: null,
+      noChange20: null,
+      withCare10: null,
+      withCare20: null
+    };
+  }
+
+  const baseAgeText = ageRange ? `who is currently in the ${ageRange} age range` : 'adult';
+  const concernText = primaryConcern
+    ? `with a primary cosmetic concern of ${primaryConcern}`
+    : 'with common cosmetic skin concerns';
+  const fitzText = fitzpatrickType
+    ? `with Fitzpatrick type ${fitzpatrickType}`
+    : 'with a realistic skin tone and texture';
+
+  // Core idea: realistic, no "beautification bias"
+  const baseStyle =
+    'ultra-realistic portrait, neutral expression, studio lighting, no makeup, no filters, no beautification, subtle signs of aging rendered honestly but respectfully';
+
+  const prompts = {
+    noChange10: `A ${baseAgeText} ${concernText}, ${fitzText}, imagined about 10 years in the future if they do not meaningfully improve their skincare routine — more pronounced fine lines, duller tone, more visible sun and lifestyle effects, but still treated respectfully as a real human. ${baseStyle}.`,
+    noChange20: `A ${baseAgeText} ${concernText}, ${fitzText}, imagined about 20 years in the future with minimal skincare support — deeper wrinkles, more sagging, more uneven pigment and sun markings, but still dignified and human, no caricature. ${baseStyle}.`,
+    withCare10: `A ${baseAgeText} ${concernText}, ${fitzText}, imagined about 10 years in the future if they follow a gentle, consistent, dermatologist-guided skincare routine with sun protection, hydration, and barrier support — smoother texture, healthier glow, more even tone, realistic aging but clearly well cared-for skin. ${baseStyle}.`,
+    withCare20: `A ${baseAgeText} ${concernText}, ${fitzText}, imagined about 20 years in the future with consistent skincare, sun protection, and healthy lifestyle habits — naturally aged but radiant, balanced skin, softened lines, graceful aging, no unrealistic perfection. ${baseStyle}.`
+  };
+
+  try {
+    const size = '512x512';
+
+    const [imgNo10, imgNo20, imgCare10, imgCare20] = await Promise.all([
+      client.images.generate({
+        model: 'gpt-image-1',
+        prompt: prompts.noChange10,
+        size
+      }),
+      client.images.generate({
+        model: 'gpt-image-1',
+        prompt: prompts.noChange20,
+        size
+      }),
+      client.images.generate({
+        model: 'gpt-image-1',
+        prompt: prompts.withCare10,
+        size
+      }),
+      client.images.generate({
+        model: 'gpt-image-1',
+        prompt: prompts.withCare20,
+        size
+      })
+    ]);
+
+    return {
+      noChange10: imgNo10?.data?.[0]?.url || null,
+      noChange20: imgNo20?.data?.[0]?.url || null,
+      withCare10: imgCare10?.data?.[0]?.url || null,
+      withCare20: imgCare20?.data?.[0]?.url || null
+    };
+  } catch (err) {
+    console.error('Error generating aging preview images:', err);
+    return {
+      noChange10: null,
+      noChange20: null,
+      withCare10: null,
+      withCare20: null
+    };
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
@@ -108,144 +191,71 @@ export default async function handler(req, res) {
 `.trim();
 
   const serviceList = `
-- Luxury Beauty Facial (1.5-Hour Comprehensive): multi-step esthetic facial with cleansing, exfoliation, extractions, massage, hydration, and LED as part of the facial.
+- Luxury Beauty Facial (1.5-Hour Comprehensive): multi-step medical-grade facial with cleansing, exfoliation, extractions, massage, hydration, and LED as part of the facial.
 - Roller Massage (Body Sculpt & Lymphatic Support): micro-vibration therapy for lymphatic drainage, circulation, cellulite smoothing, and body contouring.
-- Candela eMatrix® RF Skin Rejuvenation: fractional radiofrequency for texture, fine lines, cosmetic acne scars, and pore refinement.
-- PRP Skin Rejuvenation: platelet-rich plasma applied to skin for collagen support, texture, and under-eye cosmetic rejuvenation.
-- PRP Hair Restoration: PRP applied to the scalp to support hair fullness in early to moderate thinning.
+- Candela eMatrix® RF Skin Rejuvenation: fractional radiofrequency for texture, fine lines, acne scars, and pore refinement.
+- PRP Skin Rejuvenation: platelet-rich plasma applied to skin for collagen support, texture, and under-eye rejuvenation.
+- PRP Hair Restoration: PRP injections into the scalp to support hair follicles and density in early to moderate thinning.
 - HIEMT (High-Intensity Electromagnetic Therapy): non-invasive muscle stimulation for core and body sculpting.
-- Beauty Injectables (Botox®, JUVÉDERM® fillers, PRP): conservative, natural-looking injectable treatments for expression lines, volume, and facial balance.
+- Beauty Injectables (Botox®, JUVÉDERM® fillers, PRP): conservative, natural-looking injectable treatments for lines, volume, and facial balance.
 `.trim();
 
-  // ************ NEW SYSTEM PROMPT – LETTER STYLE, NO [SECTION] LABELS ************
   const systemPrompt = `
 You are Dr. Iryna Lazuk, a dermatologist and founder of Dr. Lazuk Esthetics® and Dr. Lazuk Cosmetics®.
 
-GOAL:
-Write a single, flowing, personal letter to the guest in my voice, based on their age range and primary cosmetic concern. 
-It should feel exactly like a warm, elegant, human email they could have received directly from me after I looked at their skin photo and intake.
+VOICE & STYLE (VERY IMPORTANT):
+- Warm, elegant, and deeply human.
+- Speak like a real dermatologist who cares, not like a machine.
+- Balance scientific insight with compassion and encouragement.
+- Sound premium but approachable: "luxury-clinical" and conversational.
+- Focus on appearance, glow, texture, tone, and routine—not diseases.
 
-TONE & VOICE (EXTREMELY IMPORTANT):
-- Speak in first person as "I".
-- Warm, elegant, nurturing, slightly philosophical, and deeply human.
-- Luxury-clinical: premium, but never cold or robotic.
-- Conversational, not stiff. No visible "[Section]" labels, no bullet point lists in the main body.
-- Write like a real letter to one individual, not a blog article.
+CRITICAL SAFETY / SCOPE:
+- This is for ENTERTAINMENT and general cosmetic education only.
+- DO NOT diagnose, treat, or name medical diseases or conditions.
+- DO NOT mention words like “rosacea,” “melasma,” “eczema,” “cancer,” etc.
+- Use only cosmetic, appearance-based language (redness, uneven tone, dryness, etc.).
+- Refer to everything as "cosmetic" or "visual" rather than medical.
 
-SAFETY & SCOPE:
-- This is for ENTERTAINMENT and general cosmetic/esthetic education only.
-- Do NOT diagnose diseases. Do NOT name medical conditions like rosacea, melasma, eczema, cancer, etc.
-- Use only cosmetic, appearance-based language: redness, uneven tone, dryness, dullness, visible pores, fine lines, etc.
-- Do NOT give or change prescription medications.
-- Encourage in-person evaluation with a licensed professional if they have medical concerns.
-
-WHAT YOU SHOULD ANALYZE (VISUALLY / COSMETICALLY):
-Even though you do not truly see the image, reason as a dermatologist WOULD when looking at a face. 
-Use the age range + concern to build a realistic, visual analysis, touching many of these areas in natural language:
-
-- Skin type characteristics: oiliness or dryness, shine patterns, pore visibility, hydration level, sensitivity tendencies.
-- Texture & surface quality: smooth vs rough, crepiness, enlarged pores, fine lines vs deeper etched lines, micro-scarring.
-- Pigmentation & color: evenness vs unevenness of tone, visible sun-related spots, general brightness or sallowness.
-- Vascular/redness patterns in a cosmetic sense: flushed cheeks, general pinkness, under-eye darkness, tired look.
-- Acne & congestion: blackheads, whiteheads, clogged pores, inflamed blemishes, post-blemish marks—only if appropriate to the concern.
-- Aging/photoaging signs: expression lines, volume loss, slackening, under-eye changes, general loss of "bounce."
-- Barrier health: signs of over-exfoliation, tightness, dullness vs glow, comfort vs irritation.
-- Structural cosmetic impressions: jawline definition, under-eye hollowness, overall facial balance (only in gentle, encouraging language).
-- Lifestyle reflections: subtle, compassionate hints that stress, sleep, hydration, or nutrition may influence what we're seeing.
-
-MISMATCH LOGIC (VERY IMPORTANT):
-- If the person's stated age range and concern sound clearly out of sync (e.g., “early 20s with severe aging” or “60+ with teenage acne patterns”), 
-  gently, kindly acknowledge that something in their answers and likely appearance may not fully match.
-- Never scold or shame. Use a light, slightly playful tone, like: 
-  "I have a feeling your skin is telling me a slightly different story than the age box you selected."
-
-FITZPATRICK TYPE:
-- You will output a FITZPATRICK_TYPE and FITZPATRICK_SUMMARY in the metadata header (see format below).
-- In the body of the letter, briefly explain what that cosmetic Fitzpatrick type usually means for:
-  - How skin tends to respond to sun (burn vs tan).
-  - How easily dark marks can linger.
-- Always frame this as a visual, cosmetic estimate, not a medical diagnosis.
-
-STRUCTURE OF THE LETTER (NO SECTION LABELS IN BODY):
-Write a single, cohesive letter with natural paragraphs in this approximate flow:
-
-1) WARM WELCOME & NOTICE
-   - Greet them intimately, for example "My beautiful friend," or similar.
-   - Acknowledge the trust they placed in sending their photo.
-   - In friendly, plain language, note that this is a cosmetic, entertainment-only reflection, not medical advice, 
-     and that in-person evaluation is best for medical concerns.
-
-2) FIRST IMPRESSIONS OF THEIR SKIN STORY
-   - Describe what their skin is "whispering" cosmetically: glow, texture, tone, ease or strain in the skin.
-   - Highlight at least one thing you genuinely "love" about how they look (eyes, softness, radiance, expression, etc.).
-   - Introduce early what seems to be going on related to their age range and primary concern in a visual, appearance-based way.
-
-3) TRUE COSMETIC ANALYSIS (DEEP DIVE)
-   - In 2–4 paragraphs, weave in many of the visual analysis points: 
-     texture, pores, lines, pigmentation, volume changes, hydration, barrier, congestion, overall vitality.
-   - Explain what is likely happening under the surface (collagen, barrier strength, inflammation, etc.) 
-     in simple, non-technical language.
-   - If their stated age or concern strongly conflicts with what you’d expect visually, gently call it out with warmth and humor.
-   - Keep this soothing and hopeful. Their skin is not "bad", it is communicating.
-
-4) FITZPATRICK SKIN TYPE – INSIDE THE LETTER
-   - Naturally mention their estimated Fitzpatrick type in a short paragraph.
-   - Explain what that means for:
-     - How diligent they should be with sun protection.
-     - How careful they should be about pigment and post-blemish marks.
-   - Keep it cosmetic and reassuring.
-
-5) AGING & GLOW PROGNOSIS (COSMETIC ONLY)
-   - Explain how their skin is likely to age cosmetically if nothing changes (fine lines deepening, more visible pigment, slackening, etc.).
-   - Then contrast with what is realistically possible if they support their skin with barrier repair, consistency, and lifestyle changes.
-   - This should feel like a gentle "fork in the road": same path vs supported path.
-
-6) AT-HOME ROUTINE USING DR. LAZUK COSMETICS
-   - Give a clear, **narrative** morning and evening routine, using ONLY products from the product list below.
-   - Mention specific products by their full names and what role they play (cleanser, toner pad, emulsion, sunscreen, mask).
-   - The routine should feel like a personalized Glow Routine, not just generic steps.
-   - Include realistic weekly/occasional care (like when to use the Hydrating Face Cloud Mask).
-
-7) IN-STUDIO ESTHETIC TREATMENT SUGGESTIONS
-   - Suggest 1–3 esthetic services from the list below (beauty facial, RF, PRP, roller massage, HIEMT, injectables) 
-     that fit their cosmetic needs and Fitzpatrick type.
-   - Explain each treatment's cosmetic purpose in reassuring, non-medical terms (e.g., "help refine texture and soften the look of fine lines").
-   - Make it clear these are options, not obligations.
-
-8) GLOW TIMELINE (0–90 DAYS)
-   - Describe, in a gentle story way, what someone like them might notice:
-     - In the first 2 weeks.
-     - By 4–6 weeks.
-     - By 8–12 weeks.
-   - Be honest but optimistic. Emphasize consistency over perfection.
-
-9) LIFESTYLE & HABIT COACHING
-   - Weave in 4–7 lifestyle cues about hydration, sleep, stress, movement, and simple food choices.
-   - Do NOT prescribe diets or medical nutrition. Keep it high-level and supportive.
-   - Emphasize that radiant skin starts with a healthy lifestyle, proper diet, plenty of sleep, whole foods, and gentle movement.
-
-10) PERSONAL CLOSING, GRATITUDE, & GIFT
-   - Close with a heartfelt note:
-     - Thank them explicitly for trusting you with something as intimate as their skin.
-     - Tell them you’ll be sending a small thank-you gift in the near future as a token of appreciation.
-   - End the entire letter with this exact line on its own line:
-     "May your skin always glow as bright as your smile. ~ Dr. Lazuk"
+PRODUCT & SERVICE RULES:
+- You may recommend ONLY from the product list and service list below.
+- Be specific with product names and how to use them in a routine.
+- Recommend services gently, explaining what they do and why they fit.
+- Always stay on brand: natural-looking, barrier-supporting, science-backed, no hype.
 
 PRODUCTS (ONLY use these when recommending specific products):
 ${productList}
 
-IN-STUDIO ESTHETIC SERVICES (ONLY use these when recommending services):
+IN-CLINIC ESTHETIC SERVICES (ONLY use these when recommending services):
 ${serviceList}
 
+OVERALL TONE:
+- Imagine this is someone sitting across from you in your clinic for the first time.
+- Acknowledge how overwhelming skincare and trends can feel.
+- Reassure them that their skin is not "bad," it is simply telling a story.
+- Make them feel hopeful, understood, and empowered with a clear plan.
+- Avoid fear-based language or shaming; focus on progress and possibility.
+
 OUTPUT FORMAT (VERY IMPORTANT):
-You MUST start with exactly two metadata lines, then a blank line, then the letter:
+You MUST reply in this exact structure:
 
 FITZPATRICK_TYPE: <I, II, III, IV, V, or VI>
-FITZPATRICK_SUMMARY: <2–4 sentences giving a cosmetic summary of this type, including sun response and pigmentation tendencies>
+FITZPATRICK_SUMMARY: <2–4 sentences explaining what this type typically means cosmetically, including sun response and pigmentation/PIH tendencies>
 
-<blank line>
+<then a blank line>
 
-<full letter in the style described above, NO [Section X] labels, no bullets, just paragraphs>
+[Section 1] Welcome & Important Notice (1 short paragraph)
+[Section 2] First Impressions of Your Skin Story
+[Section 3] Your Fitzpatrick Skin Type – Cosmetic Perspective
+[Section 4] Aging & Glow Prognosis (Cosmetic Only)
+[Section 5] Deep Dive on Your Primary Concern
+[Section 6] At-Home Skincare Plan Using Dr. Lazuk Cosmetics
+[Section 7] In-Clinic Esthetic Treatment Roadmap
+[Section 8] Your Glow Timeline (0–90 Days)
+[Section 9] Lifestyle & Skin Habit Coaching
+[Section 10] A Personal Note from Me
+
+Do NOT output JSON. Follow the format exactly: the two header lines, blank line, then the narrative sections.
 `.trim();
 
   const userPrompt = `
@@ -255,8 +265,7 @@ Person details:
 - Primary cosmetic concern: ${primaryConcern}
 - Visitor question (if any): ${visitorQuestion || 'none provided'}
 
-Write the letter as if you carefully reviewed their photo and intake. 
-If age range and concern feel mismatched for how such skin usually appears, gently mention that with warmth.
+Please infer a plausible Fitzpatrick type based on typical patterns for this age and concern, but emphasize that it is an estimate and cosmetic-only.
 `.trim();
 
   try {
@@ -294,6 +303,86 @@ If age range and concern feel mismatched for how such skin usually appears, gent
     reportText = reportText.trim();
 
     const safeConcern = primaryConcern || 'Not specified';
+
+    // 🔮 Generate the 4 aging preview images (may gracefully return nulls)
+    const agingPreviewImages = await generateAgingPreviewImages({
+      ageRange,
+      primaryConcern,
+      fitzpatrickType
+    });
+
+    // Build the "Your Skin's Future Story — A Preview" HTML block
+    let agingPreviewHtml = '';
+    if (
+      agingPreviewImages.noChange10 ||
+      agingPreviewImages.noChange20 ||
+      agingPreviewImages.withCare10 ||
+      agingPreviewImages.withCare20
+    ) {
+      agingPreviewHtml = `
+        <div style="margin-top: 24px; padding: 16px 16px 18px; border-radius: 10px; border: 1px solid #E5E7EB; background-color: #F9FAFB;">
+          <h2 style="font-size: 15px; font-weight: 700; margin: 0 0 8px;">
+            Your Skin’s Future Story — A Preview
+          </h2>
+          <p style="font-size: 12px; color: #4B5563; margin: 0 0 10px;">
+            These images are AI-generated visualizations created for cosmetic education and entertainment only. 
+            They are not medical predictions and may not reflect your actual future appearance. 
+            Their purpose is simply to show how lifestyle and skincare choices might influence the overall impression of aging over time.
+          </p>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 8px;">
+            ${
+              agingPreviewImages.noChange10
+                ? `
+            <div>
+              <img src="${agingPreviewImages.noChange10}" alt="Approximate 10-year future if routine does not change" style="width: 100%; border-radius: 10px; border: 1px solid #E5E7EB;" />
+              <p style="font-size: 11px; color: #4B5563; margin-top: 4px;">
+                ~10 years from now – minimal skincare changes
+              </p>
+            </div>
+            `
+                : ''
+            }
+            ${
+              agingPreviewImages.noChange20
+                ? `
+            <div>
+              <img src="${agingPreviewImages.noChange20}" alt="Approximate 20-year future if routine does not change" style="width: 100%; border-radius: 10px; border: 1px solid #E5E7EB;" />
+              <p style="font-size: 11px; color: #4B5563; margin-top: 4px;">
+                ~20 years from now – minimal skincare changes
+              </p>
+            </div>
+            `
+                : ''
+            }
+            ${
+              agingPreviewImages.withCare10
+                ? `
+            <div>
+              <img src="${agingPreviewImages.withCare10}" alt="Approximate 10-year future with consistent skincare" style="width: 100%; border-radius: 10px; border: 1px solid #E5E7EB;" />
+              <p style="font-size: 11px; color: #4B5563; margin-top: 4px;">
+                ~10 years from now – with consistent, supportive care
+              </p>
+            </div>
+            `
+                : ''
+            }
+            ${
+              agingPreviewImages.withCare20
+                ? `
+            <div>
+              <img src="${agingPreviewImages.withCare20}" alt="Approximate 20-year future with consistent skincare" style="width: 100%; border-radius: 10px; border: 1px solid #E5E7EB;" />
+              <p style="font-size: 11px; color: #4B5563; margin-top: 4px;">
+                ~20 years from now – with consistent, supportive care
+              </p>
+            </div>
+            `
+                : ''
+            }
+          </div>
+        </div>
+      `;
+    }
 
     // ---------- Visitor Email HTML ----------
     const visitorHtml = `
@@ -346,7 +435,9 @@ If age range and concern feel mismatched for how such skin usually appears, gent
               : ''
           }
 
-          <pre style="white-space: pre-wrap; font-size: 13px; margin-top: 8px; color: #111827;">
+          ${agingPreviewHtml}
+
+          <pre style="white-space: pre-wrap; font-size: 13px; margin-top: 16px; color: #111827;">
 ${reportText}
           </pre>
 
@@ -356,7 +447,7 @@ ${reportText}
             If you have any medical concerns or skin conditions, please see a qualified in-person professional.
           </p>
           <p style="font-size: 12px; color: #6B7280; margin-bottom: 8px;">
-            If you’d like in-person, customized esthetic care, our team at Dr. Lazuk Esthetics® in Georgia would be honored to see you.
+            If you’d like in-person, customized care, our team at Dr. Lazuk Esthetics® in Georgia would be honored to see you.
           </p>
           <p style="font-size: 12px; color: #6B7280;">
             With care,<br/>
@@ -409,6 +500,8 @@ ${reportText}
               : ''
           }
 
+          ${agingPreviewHtml}
+
           <hr style="border-top: 1px solid #E5E7EB; margin: 16px 0;" />
           <pre style="white-space: pre-wrap; font-size: 13px; color: #111827;">
 ${reportText}
@@ -417,7 +510,7 @@ ${reportText}
       </div>
     `;
 
-    // Send visitor + clinic emails
+    // Send visitor + clinic emails (fire and forget)
     await Promise.all([
       sendEmailWithResend({
         to: email,
@@ -436,7 +529,8 @@ ${reportText}
       ok: true,
       report: reportText,
       fitzpatrickType: fitzpatrickType || null,
-      fitzpatrickSummary: fitzpatrickSummary || null
+      fitzpatrickSummary: fitzpatrickSummary || null,
+      agingPreviewImages
     });
   } catch (error) {
     console.error('generate-report error:', error);
@@ -447,6 +541,7 @@ ${reportText}
     });
   }
 }
+
 
 
 
