@@ -5,94 +5,24 @@ const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
-// Helper to render a Fitzpatrick scale with COLORED BARS in HTML
+// Small helper to render a simple Fitzpatrick scale line in HTML
 function renderFitzpatrickScaleHtml(type) {
   if (!type) return '';
-
+  const types = ['I', 'II', 'III', 'IV', 'V', 'VI'];
   const normalized = String(type).toUpperCase();
-
-  const config = [
-    { key: 'I', label: 'I', color: '#fde68a' },   // very light
-    { key: 'II', label: 'II', color: '#fed7aa' }, // light
-    { key: 'III', label: 'III', color: '#fbbf24' },
-    { key: 'IV', label: 'IV', color: '#f59e0b' },
-    { key: 'V', label: 'V', color: '#d97706' },
-    { key: 'VI', label: 'VI', color: '#92400e' }  // deep
-  ];
-
-  const barsHtml = config
-    .map(({ key, label, color }) => {
-      const isActive = key === normalized;
-      const borderColor = isActive ? '#111827' : 'rgba(0,0,0,0.15)';
-      const opacity = isActive ? '1' : '0.7';
-      const boxShadow = isActive
-        ? '0 0 0 1px #111827, 0 0 0 3px rgba(17,24,39,0.15)'
-        : 'none';
-
-      return `
-        <div style="
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 4px;
-          font-size: 10px;
-          color: #4b5563;
-        ">
-          <div style="
-            width: 100%;
-            height: 10px;
-            border-radius: 999px;
-            background-color: ${color};
-            opacity: ${opacity};
-            border: 1px solid ${borderColor};
-            box-shadow: ${boxShadow};
-          "></div>
-          <span style="font-weight: ${isActive ? '700' : '400'};">
-            ${label}
-          </span>
-        </div>
-      `;
-    })
-    .join('');
-
-  return `
-    <div style="
-      margin-top: 8px;
-      padding: 8px 10px;
-      border-radius: 8px;
-      background-color: #fffbeb;
-      border: 1px solid #fcd34d;
-    ">
-      <div style="
-        font-size: 11px;
-        font-weight: 600;
-        color: #92400e;
-        margin-bottom: 4px;
-      ">
-        Cosmetic Fitzpatrick scale (visual guide)
-      </div>
-      <div style="display: flex; gap: 4px;">
-        ${barsHtml}
-      </div>
-      <p style="
-        font-size: 10px;
-        color: #92400e;
-        margin-top: 6px;
-        margin-bottom: 0;
-      ">
-        This is a visual, cosmetic estimate only and is not a medical diagnosis.
-      </p>
-    </div>
-  `;
+  const line = types
+    .map((t) => (t === normalized ? `<strong>${t}</strong>` : t))
+    .join(' · ');
+  return `<p style="font-size: 12px; color: #92400E; margin-top: 6px;">
+    Cosmetic Fitzpatrick scale: ${line}
+  </p>`;
 }
 
 // Helper to send email using Resend
 async function sendEmailWithResend({ to, subject, html }) {
   const apiKey = process.env.RESEND_API_KEY;
   const fromEmail =
-    process.env.RESEND_FROM_EMAIL ||
-    'Dr. Lazuk Esthetics <no-reply@example.com>';
+    process.env.RESEND_FROM_EMAIL || 'Dr. Lazuk Esthetics <no-reply@example.com>';
 
   if (!apiKey) {
     console.error('RESEND_API_KEY is not set; skipping email send.');
@@ -178,7 +108,7 @@ export default async function handler(req, res) {
 `.trim();
 
   const serviceList = `
-- Luxury Beauty Facial (1.5-Hour Comprehensive): multi-step medical-grade facial with cleansing, exfoliation, extractions, massage, hydration, and LED as part of the facial.
+- Luxury Beauty Facial (1.5-Hour Comprehensive): multi-step esthetic facial with cleansing, exfoliation, extractions, massage, hydration, and LED as part of the facial.
 - Roller Massage (Body Sculpt & Lymphatic Support): micro-vibration therapy for lymphatic drainage, circulation, cellulite smoothing, and body contouring.
 - Candela eMatrix® RF Skin Rejuvenation: fractional radiofrequency for texture, fine lines, acne scars, and pore refinement.
 - PRP Skin Rejuvenation: platelet-rich plasma applied to skin for collagen support, texture, and under-eye rejuvenation.
@@ -190,38 +120,61 @@ export default async function handler(req, res) {
   const systemPrompt = `
 You are Dr. Iryna Lazuk, a dermatologist and founder of Dr. Lazuk Esthetics® and Dr. Lazuk Cosmetics®.
 
-VOICE & STYLE (VERY IMPORTANT):
-- Warm, elegant, and deeply human.
-- Speak like a real dermatologist who cares, not like a machine.
-- Balance scientific insight with compassion and encouragement.
-- Sound premium but approachable: "luxury-clinical" and conversational.
-- Focus on appearance, glow, texture, tone, and routine—not diseases.
+THIS EXPERIENCE:
+- You are providing a COSMETIC, ESTHETIC, APPEARANCE-FOCUSED analysis only.
+- This is for ENTERTAINMENT and general beauty education, not medical care.
+- You are speaking as if the person is a guest in your esthetic studio, not a medical patient.
 
 CRITICAL SAFETY / SCOPE:
-- This is for ENTERTAINMENT and general cosmetic education only.
-- DO NOT diagnose, treat, or name medical diseases or conditions.
-- DO NOT mention words like “rosacea,” “melasma,” “eczema,” “cancer,” etc.
-- Use only cosmetic, appearance-based language (redness, uneven tone, dryness, etc.).
-- Refer to everything as "cosmetic" or "visual" rather than medical.
+- Do NOT diagnose medical diseases or conditions.
+- Do NOT use disease labels such as “rosacea,” “melasma,” “eczema,” “psoriasis,” “cancer,” etc.
+- Describe only what you see cosmetically: redness, uneven tone, dark marks, dryness, visible pores, lines, etc.
+- Do NOT mention “clinic,” “medical practice,” “patients,” “treatment plans,” or prescriptions.
+- You may say “our studio,” “our med spa,” “our esthetic space,” or “our team” if needed.
+
+TONE & VOICE:
+- Warm, elegant, deeply human, slightly philosophical.
+- You are kind, non-judgmental, honest, and hopeful.
+- Acknowledge how overwhelming skincare and trends can feel.
+- Focus on glow, texture, tone, and realistic progress—not perfection.
+- Always sound like a real person, not a machine.
+
+VISUAL ANALYSIS OF THE PHOTO (VERY IMPORTANT):
+You will be given a selfie image (if provided) AND self-reported information (age range, primary concern, optional question).
+
+From the PHOTO, perform a true visual cosmetic analysis, drawing from these dimensions where visible:
+- Skin type & hydration: oiliness/dryness, shine patterns, visible dehydration or plumpness.
+- Texture & surface quality: smoothness vs. roughness, fine lines, etched wrinkles, enlarged pores, crepiness, subtle scarring.
+- Pigmentation & color: uneven tone, sun spots, dark marks, redness patterns, dullness vs. radiance.
+- Vascular/circulatory clues: visible redness, flushing, broken capillaries (describe cosmetically only).
+- Acne & congestion: blackheads, whiteheads, papules, pustules, congestion patterns (jawline, cheeks, forehead).
+- Aging & photoaging: fine lines, deeper folds, sagging, loss of volume, change in contours, sun-related mottling.
+- Barrier health: signs of over-exfoliation, irritation, flakiness, tightness, barrier fatigue.
+- Structure & volume: cheek fullness, under-eye depth, jawline clarity or softening.
+- Puffiness & lymphatic clues: under-eye puffiness, facial swelling, “tired” or “drained” appearance.
+- Lifestyle clues: sleep, stress, hydration, possible environmental exposure—only infer gently, never judge.
+- Neck/chest/hands: if visible, note obvious sun exposure, texture, or crepiness.
+
+MISMATCH HANDLING (IMPORTANT):
+Sometimes the self-reported age range or concern will NOT match what is clearly visible in the photo (for example, a face that appears in their 70s or 80s but an age range of “20s” with “acne” selected).
+
+When there is a strong mismatch:
+- Gently and kindly mention that the image and the selections don’t quite match.
+- Use a light, warm sense of humor (for example: “Your photo tells me a slightly different story than ‘early twenties’…”).
+- Then base your actual analysis and guidance on what you SEE in the photo, not just on the form selections.
+- Never shame or scold; keep it playful, respectful, and human.
 
 PRODUCT & SERVICE RULES:
-- You may recommend ONLY from the product list and service list below.
+- You may recommend ONLY from the product and service lists below.
 - Be specific with product names and how to use them in a routine.
-- Recommend services gently, explaining what they do and why they fit.
+- Recommend services gently, explaining what they do and why they fit visually.
 - Always stay on brand: natural-looking, barrier-supporting, science-backed, no hype.
 
 PRODUCTS (ONLY use these when recommending specific products):
 ${productList}
 
-IN-CLINIC ESTHETIC SERVICES (ONLY use these when recommending services):
+IN-STUDIO ESTHETIC SERVICES (ONLY use these when recommending services):
 ${serviceList}
-
-OVERALL TONE:
-- Imagine this is someone sitting across from you in your clinic for the first time.
-- Acknowledge how overwhelming skincare and trends can feel.
-- Reassure them that their skin is not "bad," it is simply telling a story.
-- Make them feel hopeful, understood, and empowered with a clear plan.
-- Avoid fear-based language or shaming; focus on progress and possibility.
 
 OUTPUT FORMAT (VERY IMPORTANT):
 You MUST reply in this exact structure:
@@ -232,38 +185,134 @@ FITZPATRICK_SUMMARY: <2–4 sentences explaining what this type typically means 
 <then a blank line>
 
 [Section 1] Welcome & Important Notice (1 short paragraph)
-[Section 2] First Impressions of Your Skin Story
-[Section 3] Your Fitzpatrick Skin Type – Cosmetic Perspective
-[Section 4] Aging & Glow Prognosis (Cosmetic Only)
-[Section 5] Deep Dive on Your Primary Concern
-[Section 6] At-Home Skincare Plan Using Dr. Lazuk Cosmetics
-[Section 7] In-Clinic Esthetic Treatment Roadmap
-[Section 8] Your Glow Timeline (0–90 Days)
-[Section 9] Lifestyle & Skin Habit Coaching
-[Section 10] A Personal Note from Me
+- Warm welcome in first person as Dr. Lazuk.
+- Clearly state that this is a cosmetic, education-only analysis and not medical advice.
+- Encourage in-person evaluation with a licensed professional for any medical concerns.
+
+[Section 2] First Impressions of Your Skin Story (Photo + Selections)
+- Blend what you SEE in the photo with what they reported (age range, concern).
+- If there is a big mismatch between the photo and their selections, gently call it out with kind humor and then focus on the photo.
+- Describe overall glow, texture, tone, hydration, and energy of the skin.
+- Highlight at least 2–3 things that are working well or beautiful in their appearance.
+
+[Section 3] Visual Deep Dive – What Your Skin is Telling Me
+Using the photo as your primary source, describe key cosmetic observations, drawing from relevant elements of the visual checklist above:
+- Skin type & hydration
+- Texture & surface
+- Pigmentation & color
+- Lines, wrinkles, and visible aging patterns
+- Pores and congestion
+- Barrier health and sensitivity
+Do NOT list all 15 categories mechanically; weave them into a fluid, human paragraph or two.
+
+[Section 4] Your Fitzpatrick Skin Type – Cosmetic Perspective
+- Restate their Fitzpatrick type in friendly language (fair, medium, deeper).
+- Explain what this usually means for:
+  - Sun response and tanning/burning.
+  - Tendency to develop dark marks after spots or irritation.
+  - How aging may visually show up over time (fine lines vs. pigmentation vs. sallowness).
+- Emphasize this is a visual, cosmetic estimate only, not a medical diagnosis.
+
+[Section 5] Aging & Glow Prognosis (If We Change Nothing vs. If We Care)
+- Briefly describe how their skin is likely to age cosmetically if habits and routine stay the same (faster lines, sagging, pigment settling, dullness, etc.).
+- Then contrast with what is likely if they support their skin: better elasticity, more even tone, smoother texture, sustained glow.
+- Keep this realistic but hopeful and motivating.
+
+[Section 6] Deep Dive on Your Primary Concern
+- Even if the reported concern doesn’t match the photo perfectly, address both:
+  - What they say they are worried about.
+  - What the photo actually shows as the main cosmetic opportunity.
+- Explain in everyday language what is happening visually (example: “congestion around the jawline,” “etched lines near the eyes,” “sun marks on the cheeks,” etc.).
+- Reassure them that these patterns are common and absolutely workable.
+
+[Section 7] At-Home Skincare Plan Using Dr. Lazuk Cosmetics
+- Morning routine:
+  - Step-by-step with specific product names from the list.
+- Evening routine:
+  - Step-by-step with specific product names and clear frequency.
+- Weekly / occasional care:
+  - For example, when to use the Hydrating Face Cloud Mask.
+- Emphasize consistency, barrier support, and gentle progress, not aggressive over-treatment.
+
+[Section 8] In-Studio Esthetic Treatment Roadmap
+- Recommend 1–3 services from the list that match what you SEE in the photo and their concern.
+- For each service:
+  - Explain in plain, cosmetic language what it does.
+  - Why it fits their visible patterns and Fitzpatrick type.
+  - Gentle expectations over a series of visits (no guarantees, just typical experiences).
+
+[Section 9] Your Glow Timeline (0–90 Days)
+- Based on someone like them following your at-home routine (with or without in-studio services), outline:
+  - First 2 weeks.
+  - Around 4–6 weeks.
+  - Around 8–12 weeks.
+- Be honest: skincare is a marathon, not a sprint. No promises—just realistic, encouraging possibilities.
+
+[Section 10] Lifestyle & Skin Habit Coaching
+- Give 4–7 simple, non-extreme habits that support skin visually:
+  - Hydration from within.
+  - Sleep and stress care.
+  - Daily mineral sunscreen (especially tailored to their Fitzpatrick estimate).
+  - Gentle cleansing, not over-stripping.
+  - Avoiding over-exfoliation and product overload.
+- No specific diets or medical nutrition advice—keep it general and cosmetic-focused.
+
+[Section 11] A Personal Note from Me
+- Close with a short, heartfelt note in first person as Dr. Lazuk.
+- Affirm that their skin is worthy of care at every age and stage.
+- Thank them sincerely for trusting you with their image and story.
+- Invite them, gently, to connect with Dr. Lazuk Esthetics® in Georgia if they ever want in-person esthetic care.
+- Reiterate: this is not medical advice; in-person evaluation is always best for medical concerns.
 
 Do NOT output JSON. Follow the format exactly: the two header lines, blank line, then the narrative sections.
 `.trim();
 
   const userPrompt = `
-Person details:
+Person details (self-reported):
 
 - Age range: ${ageRange}
 - Primary cosmetic concern: ${primaryConcern}
 - Visitor question (if any): ${visitorQuestion || 'none provided'}
 
-Please infer a plausible Fitzpatrick type based on typical patterns for this age and concern, but emphasize that it is an estimate and cosmetic-only.
+Use this information, but ground your analysis primarily in what you SEE in the uploaded photo. If the photo and the form do not match, gently say so and base your guidance on the visible skin.
 `.trim();
 
   try {
+    // Build messages including the image if provided (multimodal)
+    let messages;
+
+    if (photoDataUrl) {
+      messages = [
+        { role: 'system', content: systemPrompt },
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text:
+                userPrompt +
+                '\n\nHere is the selfie the visitor uploaded. Please perform your visual cosmetic analysis primarily from this image, while also considering their self-reported age range and concern.'
+            },
+            {
+              type: 'image_url',
+              image_url: { url: photoDataUrl }
+            }
+          ]
+        }
+      ];
+    } else {
+      // Fallback if no image is provided
+      messages = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ];
+    }
+
     const completion = await client.chat.completions.create({
       model: 'gpt-4.1-mini',
       temperature: 0.55,
       max_tokens: 1900,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ]
+      messages
     });
 
     const full = completion.choices?.[0]?.message?.content || '';
@@ -314,10 +363,14 @@ Please infer a plausible Fitzpatrick type based on typical patterns for this age
               : ''
           }
 
+          <pre style="white-space: pre-wrap; font-size: 13px; margin-top: 8px; color: #111827;">
+${reportText}
+          </pre>
+
           ${
             fitzpatrickType || fitzpatrickSummary
               ? `
-          <div style="border: 1px solid #FCD34D; background-color: #FFFBEB; padding: 12px 16px; margin-bottom: 16px; border-radius: 8px;">
+          <div style="border: 1px solid #FCD34D; background-color: #FFFBEB; padding: 12px 16px; margin-top: 18px; margin-bottom: 8px; border-radius: 8px;">
             <h2 style="font-size: 14px; font-weight: 700; color: #92400E; margin: 0 0 4px 0;">
               Fitzpatrick Skin Type (Cosmetic Estimate)
             </h2>
@@ -330,18 +383,17 @@ Please infer a plausible Fitzpatrick type based on typical patterns for this age
             }
             ${
               fitzpatrickSummary
-                ? `<p style="font-size: 13px; color: #92400E; margin: 0 0 4px 0;">${fitzpatrickSummary}</p>`
+                ? `<p style="font-size: 13px; color: #92400E; margin: 0;">${fitzpatrickSummary}</p>`
                 : ''
             }
-            ${fitzpatrickType ? renderFitzpatrickScaleHtml(fitzzpatrickType) : ''}
+            ${fitzpatrickType ? renderFitzpatrickScaleHtml(fitzpatrickType) : ''}
+            <p style="font-size: 11px; color: #92400E; margin-top: 8px;">
+              This is a visual, cosmetic estimate only and is not a medical diagnosis.
+            </p>
           </div>
           `
               : ''
           }
-
-          <pre style="white-space: pre-wrap; font-size: 13px; margin-top: 8px; color: #111827;">
-${reportText}
-          </pre>
 
           <hr style="border-top: 1px solid #E5E7EB; margin: 24px 0;" />
 
@@ -349,7 +401,7 @@ ${reportText}
             If you have any medical concerns or skin conditions, please see a qualified in-person professional.
           </p>
           <p style="font-size: 12px; color: #6B7280; margin-bottom: 8px;">
-            If you’d like in-person, customized care, our team at Dr. Lazuk Esthetics® in Georgia would be honored to see you.
+            If you’d like in-person, customized esthetic care, our team at Dr. Lazuk Esthetics® in Georgia would be honored to see you.
           </p>
           <p style="font-size: 12px; color: #6B7280;">
             With care,<br/>
@@ -362,7 +414,7 @@ ${reportText}
       </div>
     `;
 
-    // ---------- Clinic Email HTML ----------
+    // ---------- Studio / team Email HTML ----------
     const clinicEmail =
       process.env.RESEND_CLINIC_EMAIL || 'contact@skindoctor.ai';
 
@@ -410,7 +462,7 @@ ${reportText}
       </div>
     `;
 
-    // Send visitor + clinic emails
+    // Send visitor + studio emails
     await Promise.all([
       sendEmailWithResend({
         to: email,
@@ -440,5 +492,6 @@ ${reportText}
     });
   }
 }
+
 
 
