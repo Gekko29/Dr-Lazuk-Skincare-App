@@ -5,24 +5,94 @@ const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
-// Small helper to render a simple Fitzpatrick scale line in HTML
+// Helper to render a Fitzpatrick scale with COLORED BARS in HTML
 function renderFitzpatrickScaleHtml(type) {
   if (!type) return '';
-  const types = ['I', 'II', 'III', 'IV', 'V', 'VI'];
+
   const normalized = String(type).toUpperCase();
-  const line = types
-    .map((t) => (t === normalized ? `<strong>${t}</strong>` : t))
-    .join(' · ');
-  return `<p style="font-size: 12px; color: #92400E; margin-top: 6px;">
-    Cosmetic Fitzpatrick scale: ${line}
-  </p>`;
+
+  const config = [
+    { key: 'I', label: 'I', color: '#fde68a' },   // very light
+    { key: 'II', label: 'II', color: '#fed7aa' }, // light
+    { key: 'III', label: 'III', color: '#fbbf24' },
+    { key: 'IV', label: 'IV', color: '#f59e0b' },
+    { key: 'V', label: 'V', color: '#d97706' },
+    { key: 'VI', label: 'VI', color: '#92400e' }  // deep
+  ];
+
+  const barsHtml = config
+    .map(({ key, label, color }) => {
+      const isActive = key === normalized;
+      const borderColor = isActive ? '#111827' : 'rgba(0,0,0,0.15)';
+      const opacity = isActive ? '1' : '0.7';
+      const boxShadow = isActive
+        ? '0 0 0 1px #111827, 0 0 0 3px rgba(17,24,39,0.15)'
+        : 'none';
+
+      return `
+        <div style="
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 4px;
+          font-size: 10px;
+          color: #4b5563;
+        ">
+          <div style="
+            width: 100%;
+            height: 10px;
+            border-radius: 999px;
+            background-color: ${color};
+            opacity: ${opacity};
+            border: 1px solid ${borderColor};
+            box-shadow: ${boxShadow};
+          "></div>
+          <span style="font-weight: ${isActive ? '700' : '400'};">
+            ${label}
+          </span>
+        </div>
+      `;
+    })
+    .join('');
+
+  return `
+    <div style="
+      margin-top: 8px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background-color: #fffbeb;
+      border: 1px solid #fcd34d;
+    ">
+      <div style="
+        font-size: 11px;
+        font-weight: 600;
+        color: #92400e;
+        margin-bottom: 4px;
+      ">
+        Cosmetic Fitzpatrick scale (visual guide)
+      </div>
+      <div style="display: flex; gap: 4px;">
+        ${barsHtml}
+      </div>
+      <p style="
+        font-size: 10px;
+        color: #92400e;
+        margin-top: 6px;
+        margin-bottom: 0;
+      ">
+        This is a visual, cosmetic estimate only and is not a medical diagnosis.
+      </p>
+    </div>
+  `;
 }
 
 // Helper to send email using Resend
 async function sendEmailWithResend({ to, subject, html }) {
   const apiKey = process.env.RESEND_API_KEY;
   const fromEmail =
-    process.env.RESEND_FROM_EMAIL || 'Dr. Lazuk Esthetics <no-reply@example.com>';
+    process.env.RESEND_FROM_EMAIL ||
+    'Dr. Lazuk Esthetics <no-reply@example.com>';
 
   if (!apiKey) {
     console.error('RESEND_API_KEY is not set; skipping email send.');
@@ -121,20 +191,18 @@ export default async function handler(req, res) {
 You are Dr. Iryna Lazuk, a dermatologist and founder of Dr. Lazuk Esthetics® and Dr. Lazuk Cosmetics®.
 
 VOICE & STYLE (VERY IMPORTANT):
-- Warm, elegant, deeply human, and conversational.
-- Speak like you are writing a personal letter to one patient sitting in front of you.
-- Use first person "I" and second person "you".
+- Warm, elegant, and deeply human.
+- Speak like a real dermatologist who cares, not like a machine.
 - Balance scientific insight with compassion and encouragement.
 - Sound premium but approachable: "luxury-clinical" and conversational.
-- Focus on appearance, glow, texture, tone, and routine — not diseases.
+- Focus on appearance, glow, texture, tone, and routine—not diseases.
 
 CRITICAL SAFETY / SCOPE:
 - This is for ENTERTAINMENT and general cosmetic education only.
 - DO NOT diagnose, treat, or name medical diseases or conditions.
-- DO NOT mention words like “rosacea,” “melasma,” “eczema,” “psoriasis,” “cancer,” etc.
-- Use only cosmetic, appearance-based language (redness, uneven tone, dryness, rough texture, etc.).
+- DO NOT mention words like “rosacea,” “melasma,” “eczema,” “cancer,” etc.
+- Use only cosmetic, appearance-based language (redness, uneven tone, dryness, etc.).
 - Refer to everything as "cosmetic" or "visual" rather than medical.
-- If you mention risk, always keep it gentle and reassuring.
 
 PRODUCT & SERVICE RULES:
 - You may recommend ONLY from the product list and service list below.
@@ -148,48 +216,33 @@ ${productList}
 IN-CLINIC ESTHETIC SERVICES (ONLY use these when recommending services):
 ${serviceList}
 
-LIFESTYLE PHILOSOPHY (MUST INCLUDE):
-- Clearly explain that if someone does NOT change their skincare habits and lifestyle, skin can age faster: lines deepen, pigment settles, skin can look dull, slack, or uneven over time.
-- Do NOT use scary or shaming language — speak softly and compassionately.
-- Emphasize the benefits of hydrating from within: water, mineral-rich fluids, colorful whole foods, healthy fats.
-- Mention sleep, stress management, gentle movement/exercise, and not overdoing harsh products.
-- Make it clear that your approach to radiant skin ALWAYS begins with a healthy lifestyle, proper diet, plenty of sleep, whole foods, and movement — and skincare supports that.
-
-TIMELINE (GLOW JOURNEY):
-- Within the letter, naturally describe a realistic glow timeline:
-  - First 1–2 weeks (comfort, hydration, early softness or less tightness).
-  - Around 4–6 weeks (texture refinement, more even tone, calmer appearance).
-  - Around 3 months (people start noticing, more stable glow).
-  - Around 6–12 months (deeper change in firmness, smoothness, and overall radiance if they stay consistent).
-- Do NOT format these as numbered sections; weave them into the narrative.
-
-DAILY ROUTINE:
-- Recommend a clear at-home routine using ONLY the products above:
-  - Morning: cleanser, toner pad (if appropriate), Rehydrating Face Emulsion, mineral sunscreen.
-  - Evening: cleanser, appropriate active rhythm (gentler for sensitive skin, a bit more for tolerant skin), Rehydrating Face Emulsion, plus Hydrating Face Cloud Mask 1–2x per week.
-- Make this feel personalized to their age range and primary concern.
-
-IN-CLINIC ESTHETIC RECOMMENDATIONS:
-- Suggest 1–3 services from the list that fit their age range, main concern, and probable Fitzpatrick type.
-- Briefly explain each in gentle, cosmetic language (what it helps with, what people often notice).
-
-CLOSING:
-- End with a short, heartfelt personal note of gratitude:
-  - Thank them for trusting you with something as intimate as their skin.
-  - Mention that, as a small token of gratitude, you would love to send them a special thank-you in the near future.
-- ALWAYS close the letter with:
-  "May your skin always glow as bright as your smile. ~ Dr. Lazuk"
+OVERALL TONE:
+- Imagine this is someone sitting across from you in your clinic for the first time.
+- Acknowledge how overwhelming skincare and trends can feel.
+- Reassure them that their skin is not "bad," it is simply telling a story.
+- Make them feel hopeful, understood, and empowered with a clear plan.
+- Avoid fear-based language or shaming; focus on progress and possibility.
 
 OUTPUT FORMAT (VERY IMPORTANT):
-1) First line:  FITZPATRICK_TYPE: <I, II, III, IV, V, or VI>
-2) Second line: FITZPATRICK_SUMMARY: <2–4 sentences explaining what this type typically means cosmetically, including sun response and pigmentation/PIH tendencies>
-3) Then a blank line.
-4) Then a SINGLE, continuous, conversational letter with natural paragraphs.
-   - DO NOT label sections as [Section 1], [Section 2], etc.
-   - Just write the letter beginning with a warm greeting such as "My beautiful friend," or similar.
-   - Within that letter, naturally cover: first impressions, Fitzpatrick explanation, "if nothing changes" aging path, lifestyle and hydration philosophy, at-home routine, in-clinic options, glow timeline, and a closing note of gratitude + the exact final line.
+You MUST reply in this exact structure:
 
-Do NOT output JSON.
+FITZPATRICK_TYPE: <I, II, III, IV, V, or VI>
+FITZPATRICK_SUMMARY: <2–4 sentences explaining what this type typically means cosmetically, including sun response and pigmentation/PIH tendencies>
+
+<then a blank line>
+
+[Section 1] Welcome & Important Notice (1 short paragraph)
+[Section 2] First Impressions of Your Skin Story
+[Section 3] Your Fitzpatrick Skin Type – Cosmetic Perspective
+[Section 4] Aging & Glow Prognosis (Cosmetic Only)
+[Section 5] Deep Dive on Your Primary Concern
+[Section 6] At-Home Skincare Plan Using Dr. Lazuk Cosmetics
+[Section 7] In-Clinic Esthetic Treatment Roadmap
+[Section 8] Your Glow Timeline (0–90 Days)
+[Section 9] Lifestyle & Skin Habit Coaching
+[Section 10] A Personal Note from Me
+
+Do NOT output JSON. Follow the format exactly: the two header lines, blank line, then the narrative sections.
 `.trim();
 
   const userPrompt = `
@@ -199,7 +252,7 @@ Person details:
 - Primary cosmetic concern: ${primaryConcern}
 - Visitor question (if any): ${visitorQuestion || 'none provided'}
 
-Please infer a plausible Fitzpatrick type based on typical patterns for this age range and concern, and emphasize that it is a cosmetic, visual estimate only.
+Please infer a plausible Fitzpatrick type based on typical patterns for this age and concern, but emphasize that it is an estimate and cosmetic-only.
 `.trim();
 
   try {
@@ -262,7 +315,7 @@ Please infer a plausible Fitzpatrick type based on typical patterns for this age
           }
 
           ${
-            (fitzpatrickType || fitzpatrickSummary)
+            fitzpatrickType || fitzpatrickSummary
               ? `
           <div style="border: 1px solid #FCD34D; background-color: #FFFBEB; padding: 12px 16px; margin-bottom: 16px; border-radius: 8px;">
             <h2 style="font-size: 14px; font-weight: 700; color: #92400E; margin: 0 0 4px 0;">
@@ -277,13 +330,10 @@ Please infer a plausible Fitzpatrick type based on typical patterns for this age
             }
             ${
               fitzpatrickSummary
-                ? `<p style="font-size: 13px; color: #92400E; margin: 0;">${fitzpatrickSummary}</p>`
+                ? `<p style="font-size: 13px; color: #92400E; margin: 0 0 4px 0;">${fitzpatrickSummary}</p>`
                 : ''
             }
-            ${fitzpatrickType ? renderFitzpatrickScaleHtml(fitzpatrickType) : ''}
-            <p style="font-size: 11px; color: #92400E; margin-top: 8px;">
-              This is a visual, cosmetic estimate only and is not a medical diagnosis.
-            </p>
+            ${fitzpatrickType ? renderFitzpatrickScaleHtml(fitzzpatrickType) : ''}
           </div>
           `
               : ''
@@ -390,4 +440,5 @@ ${reportText}
     });
   }
 }
+
 
