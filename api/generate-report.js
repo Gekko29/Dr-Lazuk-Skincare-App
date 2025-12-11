@@ -413,7 +413,7 @@ FITZPATRICK_SUMMARY: <2–4 sentences explaining what this type typically means 
 Do NOT output JSON. Follow the format exactly: the two header lines, blank line, then the narrative sections.
 `.trim();
 
-  const userPrompt = `
+const userPrompt = `
 Person details:
 - Age range: ${ageRange}
 - Primary cosmetic concern: ${primaryConcern}
@@ -422,8 +422,12 @@ Person details:
 Structured analysis context (for your reference only; do NOT print this as JSON, instead weave it into the narrative as described above):
 ${JSON.stringify(analysisContext, null, 2)}
 
+Raw selfie / image analysis data (for additional context; again, do NOT dump this as JSON in the report):
+${JSON.stringify(imageAnalysis || {}, null, 2)}
+
 Please infer a plausible Fitzpatrick type based on typical patterns for this age and concern, while respecting any estimate in the selfie analysis. Emphasize that this is cosmetic-only.
 `.trim();
+
 
   try {
     const completion = await client.chat.completions.create({
