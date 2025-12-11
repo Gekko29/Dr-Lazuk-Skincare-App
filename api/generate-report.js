@@ -457,8 +457,10 @@ Please infer a plausible Fitzpatrick type based on typical patterns for this age
 
     reportText = reportText.trim();
 
-    // ✅ Strip "[Section N]" markers so the email/JSON reads like a continuous letter
-    const cleanedReportText = reportText.replace(/\[Section\s+\d+\]\s*/g, '').trim();
+    // ✅ Strip entire "[Section N] <Title>" lines so the email/JSON reads like a continuous letter
+    const cleanedReportText = reportText
+      .replace(/^\[Section\s+\d+\][^\n]*\n?/gm, '')
+      .trim();
 
     const safeConcern = primaryConcern || 'Not specified';
 
