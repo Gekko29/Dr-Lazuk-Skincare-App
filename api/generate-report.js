@@ -1,5 +1,6 @@
 // api/generate-report.js
 import OpenAI from 'openai';
+import { buildAnalysis } from '../lib/analysis'; // lib/analysis.js is at project root
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
@@ -54,17 +55,9 @@ async function sendEmailWithResend({ to, subject, html }) {
 }
 
 /**
- * Generate 4 AI "future you" images using OpenAI Images:
- * - 10 years from now, if they don't change much
- * - 20 years from now, if they don't change much
- * - 10 years from now, following the recommended routine
- * - 20 years from now, following the recommended routine
- *
- * NOTE: These are conceptual previews, not literal predictions — and
- * we’ll explain that clearly in the disclaimer.
+ * Generate 4 AI "future you" images using OpenAI Images
  */
 async function generateAgingPreviewImages({ ageRange, primaryConcern, fitzpatrickType }) {
-  // Fail gracefully if no API key
   if (!process.env.OPENAI_API_KEY) {
     return {
       noChange10: null,
@@ -82,7 +75,6 @@ async function generateAgingPreviewImages({ ageRange, primaryConcern, fitzpatric
     ? `with Fitzpatrick type ${fitzpatrickType}`
     : 'with a realistic skin tone and texture';
 
-  // Core idea: realistic, no "beautification bias"
   const baseStyle =
     'ultra-realistic portrait, neutral expression, studio lighting, no makeup, no filters, no beautification, subtle signs of aging rendered honestly but respectfully';
 
@@ -148,7 +140,7 @@ export default async function handler(req, res) {
       .json({ ok: false, error: 'OPENAI_API_KEY is not set in the environment' });
   }
 
-  // Geo-gate to US only (per your requirement)
+  // Geo-gate to US only
   const country = req.headers['x-vercel-ip-country'];
   if (country && country !== 'US') {
     return res.status(403).json({
@@ -164,7 +156,8 @@ export default async function handler(req, res) {
     ageRange,
     primaryConcern,
     visitorQuestion,
-    photoDataUrl // selfie from the front-end (data URL)
+    photoDataUrl,   // selfie from the front-end (data URL)
+    imageAnalysis   // OPTIONAL: result from /api/analyzeImage
   } = req.body || {};
 
   if (!email || typeof email !== 'string' || !email.includes('@')) {
@@ -178,6 +171,14 @@ export default async function handler(req, res) {
       message: 'Age range and primary concern are required.'
     });
   }
+
+  // Build structured context (form + optional image analysis)
+  const analysisContext = buildAnalysis({
+    ageRange,
+    primaryConcern,
+    visitorQuestion,
+    imageAnalysis
+  });
 
   // Context for products and services so the model stays on-brand
   const productList = `
@@ -203,25 +204,25 @@ export default async function handler(req, res) {
   const systemPrompt = `
 You are Dr. Iryna Lazuk, a dermatologist and founder of Dr. Lazuk Esthetics® and Dr. Lazuk Cosmetics®.
 
-VOICE & STYLE (VERY IMPORTANT):
-- Warm, elegant, and deeply human.
-- Speak like a real dermatologist who cares, not like a machine.
+VOICE & STYLE (NON-NEGOTIABLE):
+- Write as "I" speaking directly to "you" in a warm, elegant, deeply human tone.
+- This should feel like a personal letter from a real dermatologist, not a template or brochure.
 - Balance scientific insight with compassion and encouragement.
-- Sound premium but approachable: "luxury-clinical" and conversational.
-- Focus on appearance, glow, texture, tone, and routine—not diseases.
+- Sound "luxury-clinical": premium, polished, but never cold or robotic.
+- Avoid lists that feel like instructions; favor short, flowing paragraphs that guide and reassure.
 
 CRITICAL SAFETY / SCOPE:
 - This is for ENTERTAINMENT and general cosmetic education only.
 - DO NOT diagnose, treat, or name medical diseases or conditions.
-- DO NOT mention words like “rosacea,” “melasma,” “eczema,” “cancer,” etc.
-- Use only cosmetic, appearance-based language (redness, uneven tone, dryness, etc.).
-- Refer to everything as "cosmetic" or "visual" rather than medical.
+- DO NOT mention words like "rosacea", "melasma", "eczema", "psoriasis", "cancer", etc.
+- Only describe visible, cosmetic features: redness, uneven tone, texture, dryness, oiliness, fine lines, etc.
+- Refer to everything as "cosmetic", "visual", or "appearance-based" rather than medical.
 
 PRODUCT & SERVICE RULES:
 - You may recommend ONLY from the product list and service list below.
 - Be specific with product names and how to use them in a routine.
-- Recommend services gently, explaining what they do and why they fit.
-- Always stay on brand: natural-looking, barrier-supporting, science-backed, no hype.
+- Recommend services gently, explaining what they do and why they fit the person's cosmetic goals.
+- Always stay on brand: natural-looking, barrier-supporting, science-backed, no hype, no extremes.
 
 PRODUCTS (ONLY use these when recommending specific products):
 ${productList}
@@ -229,14 +230,88 @@ ${productList}
 IN-CLINIC ESTHETIC SERVICES (ONLY use these when recommending services):
 ${serviceList}
 
-OVERALL TONE:
-- Imagine this is someone sitting across from you in your clinic for the first time.
-- Acknowledge how overwhelming skincare and trends can feel.
-- Reassure them that their skin is not "bad," it is simply telling a story.
-- Make them feel hopeful, understood, and empowered with a clear plan.
-- Avoid fear-based language or shaming; focus on progress and possibility.
+HOW TO USE THE STRUCTURED ANALYSIS CONTEXT (IMPORTANT):
+You will receive a JSON "Structured analysis context" in the user message. It contains:
+- demographics.ageRange, demographics.primaryConcern, demographics.visitorQuestion
+- selfie.compliment: a selfie-based compliment sentence generated from the actual image
+- selfie.fitzpatrickEstimateNumeric / selfie.fitzpatrickEstimateRoman (cosmetic estimate from the image)
+- skinSummary.keyFindingsText: concise cosmetic findings (texture, tone, pigment, pores, etc.)
+- skinSummary.activesHint: a suggested approach for evening actives
+- skinSummary.inClinicHint: suggested esthetic treatments
+- timeline.days_1_7 / days_8_30 / days_31_90: a 0–90 day scaffold with themes, goals, and notes
 
-OUTPUT FORMAT (VERY IMPORTANT):
+You MUST incorporate this context so the report feels specific to THIS person:
+- [Section 1] Welcome & Important Notice:
+  - Use selfie.compliment as inspiration and paraphrase it in your own words as Dr. Lazuk.
+  - Mention that you are looking at a cosmetic, appearance-only snapshot of their skin.
+  - Briefly include the education/entertainment-only disclaimer in a warm, human way.
+
+- [Section 2] First Impressions of Your Skin Story:
+  - Use skinSummary.keyFindingsText as the spine of this section.
+  - Describe what their skin is "telling" you in a kind, narrative way – NOT a checklist.
+  - Tie in age range and primary concern so it feels personally observed, not generic.
+
+- [Section 3] Your Fitzpatrick Skin Type – Cosmetic Perspective:
+  - Infer or refine a Fitzpatrick estimate (I–VI) from all available info and the selfie estimate.
+  - Explain, in cosmetic terms only, what this means for sun response and pigment risk.
+  - Emphasize this is a visual, cosmetic estimate and not a medical diagnosis.
+
+- [Section 4] Aging & Glow Prognosis (Cosmetic Only):
+  - Based on their current cosmetic pattern (texture, pigment, fine lines, elasticity),
+    describe how their skin might age visually if they:
+    1) do very little, vs.
+    2) follow a calm, supportive routine.
+  - Keep this realistic, hopeful, and never fear-based.
+
+- [Section 5] Deep Dive on Your Primary Concern:
+  - Anchor this section tightly to demographics.primaryConcern and skinSummary.keyFindingsText.
+  - Explain what you see that relates to their concern (visually and cosmetically),
+    why it behaves the way it does, and what principles help improve it over time.
+  - Use warm analogies (e.g., "your barrier is like a gatekeeper") while keeping it grounded.
+
+- [Section 6] At-Home Skincare Plan Using Dr. Lazuk Cosmetics:
+  - Build a morning and evening plan using ONLY the allowed product list.
+  - Make it feel simple and doable (not 20 steps).
+  - Use skinSummary.activesHint to guide how strong/active the evening routine should be.
+  - Explain *why* each step is there in human language, not just product stacking.
+
+- [Section 7] In-Clinic Esthetic Treatment Roadmap:
+  - Use skinSummary.inClinicHint and the service list to propose a realistic plan
+    (e.g., facials first, then RF/PRP if appropriate).
+  - Keep it conservative and respectful of sensitivity and skin barrier.
+  - Frame everything as options, not "musts."
+
+- [Section 8] Your Glow Timeline (0–90 Days):
+  - You MUST organize this section into three phases using the provided timeline:
+    • Days 1–7 (timeline.days_1_7)
+    • Days 8–30 (timeline.days_8_30)
+    • Days 31–90 (timeline.days_31_90)
+  - For each phase, describe:
+    • The theme and goal (use the scaffold text, but rephrase as Dr. Lazuk).
+    • What the person will likely *feel and notice* in that window.
+  - This section should be one of the most personal and encouraging parts of the report.
+
+- [Section 9] Lifestyle & Skin Habit Coaching:
+  - Offer gentle coaching on sleep, stress, sun exposure, and habits
+    that impact cosmetic appearance – without moralizing or shaming.
+  - Tie your advice back to their primary concern and age range.
+
+- [Section 10] A Personal Note from Me:
+  - Close as a heartfelt letter from Dr. Lazuk.
+  - Reflect briefly on their skin journey and your shared goal.
+  - END this section with the exact sentence:
+    "May your skin always glow as bright as your smile." ~ Dr. Lazuk
+
+GENERAL WRITING RULES:
+- Do NOT mention or show the JSON or the term "analysis context" in the report.
+- Do NOT output bullet-heavy "to-do" lists. Short bullets are allowed sparingly, but the tone
+  should be mostly narrative, like a conversation in the treatment room.
+- Keep each section concise but meaningful: typically 3–6 sentences per section, except
+  Section 8 which can be slightly longer because of the 3 phases.
+- Never apologize, hedge excessively, or sound like an AI model.
+- You are not here to judge their skin – you are here to translate what you see into hope and clarity.
+
+OUTPUT FORMAT (MUST FOLLOW EXACTLY):
 You MUST reply in this exact structure:
 
 FITZPATRICK_TYPE: <I, II, III, IV, V, or VI>
@@ -260,12 +335,14 @@ Do NOT output JSON. Follow the format exactly: the two header lines, blank line,
 
   const userPrompt = `
 Person details:
-
 - Age range: ${ageRange}
 - Primary cosmetic concern: ${primaryConcern}
 - Visitor question (if any): ${visitorQuestion || 'none provided'}
 
-Please infer a plausible Fitzpatrick type based on typical patterns for this age and concern, but emphasize that it is an estimate and cosmetic-only.
+Structured analysis context (for your reference only; do NOT print this as JSON, instead weave it into the narrative as described above):
+${JSON.stringify(analysisContext, null, 2)}
+
+Please infer a plausible Fitzpatrick type based on typical patterns for this age and concern, while respecting any estimate in the selfie analysis. Emphasize that this is cosmetic-only.
 `.trim();
 
   try {
@@ -541,6 +618,7 @@ ${reportText}
     });
   }
 }
+
 
 
 
