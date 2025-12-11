@@ -1,152 +1,32 @@
 // api/analyzeImage.js
-// Image analysis stub: accepts an image + optional notes and returns
-// a structured analysis object + numeric Fitzpatrick type for UI + report logic.
+// Vision-powered image analysis for the virtual skincare report.
 //
-// This route is intentionally lightweight for now: it infers traits
-// from "notes" text (e.g. output from a real vision model or
-// front-end descriptors) and builds:
-//   - raw: low-level parsed flags
-//   - analysis: human-friendly cosmetic description + recommendations
-//   - fitzpatrickType: 1–6 (numeric), used by lib/analysis.js
+// Accepts a face image (as a data URL or base64 URL) + optional notes,
+// calls OpenAI's multimodal model to analyze the selfie, and returns:
+//
+// {
+//   raw: {},                          // reserved for future low-level fields
+//   analysis: {
+//     complimentFeatures: string,
+//     skinFindings: string,
+//     texture: string,
+//     poreBehavior: string,
+//     pigment: string,
+//     fineLinesAreas: string,
+//     elasticity: string,
+//     eveningActive: string,
+//     estheticRecommendations: string
+//   },
+//   fitzpatrickType: number (1–6)
+// }
+//
+// This output is consumed by lib/analysis.js and then by api/generate-report.js.
 
-/**
- * Build a warm, personalized compliment based on detected traits.
- * This is fed into lib/analysis.js as analysis.complimentFeatures.
- */
-function buildComplimentFromRaw(raw = {}) {
-  const { eyeColor, wearingGlasses, clothingColor } = raw;
-  const lines = [];
+import OpenAI from 'openai';
 
-  if (eyeColor === 'blue') {
-    lines.push(
-      'the way your blue eyes catch the light feels so open and confident'
-    );
-  } else if (eyeColor === 'green') {
-    lines.push(
-      'your green eyes have a calm, luminous quality that feels very grounding and elegant'
-    );
-  } else if (eyeColor === 'brown') {
-    lines.push(
-      'your warm brown eyes have a steady, gentle presence that photographs beautifully'
-    );
-  }
-
-  if (wearingGlasses) {
-    lines.push(
-      'your glasses give you such a refined, intelligent elegance — they frame your features beautifully'
-    );
-  }
-
-  if (clothingColor === 'pink') {
-    lines.push(
-      'the soft pink you’re wearing brings a lovely warmth to your complexion and feels very harmonious with your features'
-    );
-  }
-
-  if (!lines.length) {
-    return 'there is a softness in the way your features come together that feels very natural and kind';
-  }
-
-  // Turn fragments into one smooth sentence / paragraph.
-  const first = lines[0];
-  const rest = lines.slice(1);
-
-  if (!rest.length) {
-    return first;
-  }
-
-  return `${first}, and ${rest.join(', and ')}`;
-}
-
-function mapRawAnalysisToTemplate(raw = {}) {
-  const {
-    eyeColor,
-    wearingGlasses,
-    clothingColor,
-    globalTexture,
-    tZonePores,
-    pigmentType,
-    pigmentLocation,
-    fineLinesRegions,
-    elasticityScore,
-    lifestyleFlags
-  } = raw;
-
-  const complimentFeatures = buildComplimentFromRaw(raw);
-
-  const skinFindings =
-    globalTexture ||
-    'gentle signs of dehydration and a bit of uneven tone that is very common';
-
-  const texture =
-    globalTexture ||
-    'subtle areas of roughness that suggest your barrier is asking for more hydration and calm';
-
-  const poreBehavior =
-    tZonePores ||
-    'pores that appear a bit more visible in your central T-zone when your skin is tired or stressed';
-
-  const pigment =
-    pigmentType && pigmentLocation
-      ? `${pigmentType} that has settled around your ${pigmentLocation}`
-      : 'some areas of lingering sun-kissed pigment that have stayed longer than you’d like';
-
-  const fineLinesAreas =
-    fineLinesRegions ||
-    'around your eyes and perhaps softly across your forehead';
-
-  const elasticity =
-    typeof elasticityScore === 'number'
-      ? elasticityScore < 0.4
-        ? 'a more noticeable softening of firmness that tells me your collagen really wants more consistent support'
-        : elasticityScore < 0.7
-        ? 'a slight softening of firmness that hints at early collagen changes'
-        : 'a generally good level of firmness with just a touch of early relaxation in certain areas'
-      : 'a hint of loosened bounce in certain areas that tells me collagen wants more support';
-
-  let eveningActive =
-    'a gentle, low-strength retinoid used a few nights a week, or a mild mandelic acid serum if your skin is very sensitive';
-
-  if (lifestyleFlags?.verySensitive) {
-    eveningActive =
-      'a mandelic acid or polyhydroxy acid serum once or twice a week, with plenty of barrier-repair nights in between';
-  } else if (lifestyleFlags?.toleratesActivesWell) {
-    eveningActive =
-      'a low- to mid-strength retinoid three nights a week, alternating with deeply hydrating, barrier-focused nights';
-  }
-
-  const estheticRecommendations =
-    'HydraFacials for clarity and glow, and microneedling or PRP if you ever wish to focus more deeply on collagen and firmness';
-
-  return {
-    complimentFeatures,
-    skinFindings,
-    texture,
-    poreBehavior,
-    pigment,
-    fineLinesAreas,
-    elasticity,
-    eveningActive,
-    estheticRecommendations
-  };
-}
-
-// Very simple stub that guesses Fitzpatrick type from notes.
-// In the future, you’ll replace this with real model output.
-// Returns a NUMBER from 1–6 to match lib/analysis.js.
-function inferFitzpatrickTypeFromNotes(notes = '') {
-  const n = notes.toLowerCase();
-
-  if (n.includes('type i') || n.includes('very fair')) return 1;
-  if (n.includes('type ii') || n.includes('fair')) return 2;
-  if (n.includes('type iii') || n.includes('medium')) return 3;
-  if (n.includes('type iv') || n.includes('olive')) return 4;
-  if (n.includes('type v') || n.includes('brown skin')) return 5;
-  if (n.includes('type vi') || n.includes('very dark')) return 6;
-
-  // Default: III as a middle-ground assumption if nothing is specified.
-  return 3;
-}
+const client = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -156,65 +36,136 @@ export default async function handler(req, res) {
       .json({ error: 'Method not allowed. Use POST.' });
   }
 
+  if (!process.env.OPENAI_API_KEY) {
+    return res.status(500).json({
+      error: 'OPENAI_API_KEY is not set in the environment'
+    });
+  }
+
   try {
     const { imageBase64, notes } = req.body || {};
 
-    // For now, we only *parse* notes text; imageBase64 is accepted but unused.
-    if (!imageBase64 && !notes) {
+    if (!imageBase64) {
       return res.status(400).json({
-        error:
-          "Please provide at least 'imageBase64' or 'notes' for analysis."
+        error: "Please provide 'imageBase64' (a data URL or image URL) for analysis."
       });
     }
 
-    const lowerNotes = (notes || '').toLowerCase();
+    // We treat imageBase64 as an "image_url" – it can be a real URL or a data URL.
+    const imageUrl = imageBase64;
 
-    // Heuristic extraction from the notes string
-    const raw = {
-      eyeColor: lowerNotes.includes('blue eyes')
-        ? 'blue'
-        : lowerNotes.includes('green eyes')
-        ? 'green'
-        : lowerNotes.includes('brown eyes')
-        ? 'brown'
-        : undefined,
-      wearingGlasses: lowerNotes.includes('glasses'),
-      clothingColor: lowerNotes.includes('pink top') ? 'pink' : undefined,
-      globalTexture: lowerNotes.includes('rough')
-        ? 'noticeable roughness in some areas, especially where the skin feels a bit overworked'
-        : undefined,
-      tZonePores: lowerNotes.includes('oily t-zone')
-        ? 'pores that are more visible and active in your T-zone, especially when your skin is oily or stressed'
-        : undefined,
-      pigmentType: lowerNotes.includes('sun spots')
-        ? 'soft sun-induced spots'
-        : undefined,
-      pigmentLocation: lowerNotes.includes('cheeks')
-        ? 'cheeks'
-        : lowerNotes.includes('forehead')
-        ? 'forehead'
-        : undefined,
-      fineLinesRegions: lowerNotes.includes("crow's feet")
-        ? "around your eyes, especially in the crow's feet area"
-        : undefined,
-      elasticityScore: lowerNotes.includes('loose')
-        ? 0.3
-        : lowerNotes.includes('firm')
-        ? 0.8
-        : undefined,
-      lifestyleFlags: {
-        verySensitive: lowerNotes.includes('sensitive'),
-        toleratesActivesWell: lowerNotes.includes('tolerates actives')
-      }
-    };
+    const systemPrompt = `
+You are a cosmetic-only virtual assistant working alongside a dermatologist.
+You are analyzing a single selfie (face photo) for COSMETIC and APPEARANCE purposes only.
 
-    const analysis = mapRawAnalysisToTemplate(raw);
-    const fitzpatrickType = inferFitzpatrickTypeFromNotes(notes || '');
+STRICT RULES:
+- DO NOT diagnose or name diseases (no "rosacea", "melasma", "eczema", "cancer", etc.).
+- Only talk about cosmetic / visual aspects: redness, uneven tone, dryness, oiliness, texture, fine lines, etc.
+- You are not giving medical advice. You are describing appearance-only patterns.
+
+TASK:
+From the image (and any text notes), infer cosmetic / visual features and return a JSON object
+with the following shape ONLY (no extra keys):
+
+{
+  "analysis": {
+    "complimentFeatures": string,           // Very warm, specific compliment based on what you SEE:
+                                            // e.g., mention eyes, smile, glasses, clothing color, vibe.
+                                            // Example: "Your light blue eyes and gentle smile give you such an open, kind presence,
+                                            // and the soft floral top you’re wearing adds to that elegant, luminous feel."
+
+    "skinFindings": string,                 // 2–4 sentences summarizing what the skin is "telling" you overall:
+                                            // texture, evenness, glow, visible pores, general first impression.
+
+    "texture": string,                      // 1–2 sentences focused on surface: smoothness, roughness, flakiness, etc.
+    "poreBehavior": string,                 // 1–2 sentences about pores (T-zone vs cheeks, visibility, oiliness).
+
+    "pigment": string,                      // 1–3 sentences about uneven tone, spots, freckles, sun-kissed areas,
+                                            // and where they mainly appear (cheeks, forehead, etc.).
+
+    "fineLinesAreas": string,               // 1–2 sentences focused on fine lines: where they show most (eyes, forehead, mouth),
+                                            // and how they look for the age range.
+
+    "elasticity": string,                   // 1–2 sentences about firmness, bounce, and contours:
+                                            // e.g., early softening vs still very firm, subtle lower-face relaxation, etc.
+
+    "eveningActive": string,                // 1–2 sentences recommending COSMETIC evening actives ONLY:
+                                            // e.g., gentle retinoid, mandelic acid, polyhydroxy acids, etc.
+                                            // Must be cautious, barrier-supportive, non-medical.
+
+    "estheticRecommendations": string       // 1–3 sentences suggesting ESTHETIC services that could help:
+                                            // e.g., facials, gentle peels, microneedling, PRP, RF, roller massage.
+                                            // Cosmetic language only, no treatment of diseases.
+  },
+
+  "fitzpatrickType": number                 // 1,2,3,4,5, or 6 as your best estimate based on skin tone
+                                            // and how easily they would likely burn vs tan.
+}
+
+Make the language warm, elegant, and encouraging — similar to a premium, kind, appearance-focused esthetic consultation.
+Do NOT include any explanation text outside the JSON. Respond with valid JSON ONLY.
+`.trim();
+
+    const userText = `
+Please analyze this face photo from a COSMETIC perspective only.
+
+Additional notes (may be empty):
+${notes || 'none provided'}
+`.trim();
+
+    const completion = await client.chat.completions.create({
+      model: 'gpt-4.1-mini',
+      temperature: 0.4,
+      max_tokens: 800,
+      messages: [
+        {
+          role: 'system',
+          content: systemPrompt
+        },
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'input_text',
+              text: userText
+            },
+            {
+              type: 'input_image',
+              image_url: imageUrl
+            }
+          ]
+        }
+      ]
+    });
+
+    const rawContent = completion.choices?.[0]?.message?.content || '';
+
+    let parsed;
+    try {
+      parsed = JSON.parse(rawContent);
+    } catch (err) {
+      console.error('Failed to parse JSON from vision model:', rawContent);
+      return res.status(500).json({
+        error:
+          'Problem interpreting the image analysis. Please try again in a moment.'
+      });
+    }
+
+    const analysis = parsed.analysis || {};
+    let fitzpatrickType = parsed.fitzpatrickType;
+
+    // Ensure fitzpatrickType is a number 1–6, with fallback to 3 if invalid
+    const numericFitz = Number(fitzpatrickType);
+    if (!Number.isFinite(numericFitz) || numericFitz < 1 || numericFitz > 6) {
+      fitzpatrickType = 3;
+    } else {
+      fitzpatrickType = numericFitz;
+    }
 
     return res.status(200).json({
-      raw,
+      raw: {},           // reserved for future use; not needed by lib/analysis.js today
       analysis,
-      fitzpatrickType // numeric 1–6
+      fitzpatrickType    // numeric 1–6
     });
   } catch (error) {
     console.error('Error in /api/analyzeImage:', error);
@@ -224,6 +175,7 @@ export default async function handler(req, res) {
     });
   }
 }
+
 
 
 
