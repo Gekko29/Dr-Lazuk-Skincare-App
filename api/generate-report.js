@@ -129,6 +129,92 @@ async function generateAgingPreviewImages({ ageRange, primaryConcern, fitzpatric
   }
 }
 
+// Helper: map imageAnalysis (from /api/analyzeImage) into the shape lib/analysis.js expects
+function buildAnalysisContext({
+  ageRange,
+  primaryConcern,
+  visitorQuestion,
+  photoDataUrl,
+  imageAnalysis
+}) {
+  const ia = imageAnalysis || {};
+  const raw = ia.raw || {};
+  const vision = ia.analysis || {};
+
+  // Map numeric Fitzpatrick (1–6) to Roman "I"–"VI" if present
+  let fitzRoman = null;
+  if (typeof ia.fitzpatrickType === 'number') {
+    const romans = ['I', 'II', 'III', 'IV', 'V', 'VI'];
+    fitzRoman = romans[ia.fitzpatrickType - 1] || null;
+  } else if (typeof ia.fitzpatrickType === 'string') {
+    const up = ia.fitzpatrickType.toUpperCase();
+    if (['I', 'II', 'III', 'IV', 'V', 'VI'].includes(up)) {
+      fitzRoman = up;
+    }
+  }
+
+  // Build tags for the selfie compliment engine
+  const tags = [];
+  if (raw.wearingGlasses) tags.push('glasses');
+  if (raw.eyeColor) tags.push(`${raw.eyeColor} eyes`);
+  if (raw.clothingColor) tags.push(`${raw.clothingColor} top`);
+
+  const selfieMeta = {
+    url: photoDataUrl || null,
+    tags,
+    dominantColor: raw.clothingColor === 'pink' ? 'soft pink' : null,
+    eyeColor: raw.eyeColor || null,
+    hairColor: raw.hairColor || null,
+    // ⭐ NEW: pass through the vision compliment so the letter can sound specific
+    compliment: vision.complimentFeatures || null
+  };
+
+  // Consolidated vision summary (fixing duplicate declaration)
+  const visionSummary = {
+    issues: [],
+    strengths: [],
+    texture: vision.texture || raw.globalTexture || null,
+    overallGlow: vision.overallGlow || vision.skinFindings || null,
+    pigment: vision.pigment || raw.pigmentType || null,
+    fineLines: vision.fineLinesAreas || raw.fineLinesRegions || null,
+    elasticity: vision.elasticity || null
+  };
+
+  if (vision.poreBehavior || raw.tZonePores) {
+    visionSummary.issues.push('visible pores');
+  }
+  if (vision.pigment || raw.pigmentType) {
+    visionSummary.issues.push('pigment variations');
+  }
+  if (vision.fineLinesAreas || raw.fineLinesRegions) {
+    visionSummary.issues.push('fine lines');
+  }
+  if (raw.globalTexture) {
+    visionSummary.issues.push('texture irregularities');
+  }
+
+  // Form data for lib/analysis.js
+  const form = {
+    firstName: null,
+    age: null,
+    skinType: ia.skinType || null,
+    fitzpatrickType: fitzRoman,
+    primaryConcerns: primaryConcern ? [primaryConcern] : [],
+    secondaryConcerns: [],
+    routineLevel: ia.routineLevel || 'standard',
+    budgetLevel: ia.budgetLevel || 'mid-range',
+    currentRoutine: visitorQuestion || null,
+    lifestyle: ia.lifestyle || null,
+    ageRange: ageRange || null // not used directly, but harmless
+  };
+
+  return buildAnalysis({
+    form,
+    selfie: selfieMeta,
+    vision: visionSummary
+  });
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
@@ -173,11 +259,12 @@ export default async function handler(req, res) {
     });
   }
 
-  // ✅ Build structured context directly using lib/analysis.js
-  const analysisContext = buildAnalysis({
+  // Build structured context (form + selfie + vision) from imageAnalysis
+  const analysisContext = buildAnalysisContext({
     ageRange,
     primaryConcern,
     visitorQuestion,
+    photoDataUrl,
     imageAnalysis
   });
 
@@ -233,51 +320,55 @@ IN-CLINIC ESTHETIC SERVICES (ONLY use these when recommending services):
 ${serviceList}
 
 HOW TO USE THE STRUCTURED ANALYSIS CONTEXT (IMPORTANT):
-You will receive a JSON "Structured analysis context" in the user message. It contains:
-
-- demographics: { ageRange, primaryConcern, visitorQuestion }
-- selfie: { compliment, fitzpatrickEstimateNumeric, fitzpatrickEstimateRoman }
-- skinSummary: { keyFindingsText, activesHint, inClinicHint }
-- timeline: { days_1_7, days_8_30, days_31_90 }
+You will receive a JSON "Structured analysis context" in the user message. It contains, among other things:
+- user: name/age/location if provided
+- selfie: a selfie-based compliment source (selfie.compliment, tags, colors)
+- fitzpatrick: cosmetic Fitzpatrick info (type, description, riskNotes)
+- skinProfile: declaredType (skin type), inferredTexture, overallGlow, strengths, visibleIssues
+- priorities: a sorted list of concerns with priority and rationale
+- lifestyle: routineLevel, budgetLevel, currentRoutine, lifestyleNotes
+- timeline: days_1_7 / days_8_30 / days_31_90 with theme, goal, notes
+- strategy: overall approach and investment level
 
 You MUST incorporate this context so the letter feels specific to THIS person, not generic:
 
 A. OPENING & DISCLAIMER (first 1–2 paragraphs)
-- Use selfie.compliment as inspiration, and paraphrase it in your own words as Dr. Lazuk.
-- Explicitly mention at least ONE concrete visual detail that would naturally fit this compliment and age/concern (for example: their eyes, smile, glasses, hair, clothing color or pattern, bouquet of flowers, or overall vibe). Do not invent wild specifics; stay plausible and kind.
+- If selfie.compliment is present, you MUST paraphrase it in your own words as Dr. Lazuk.
+- Explicitly mention at least ONE concrete visual detail from the selfie (for example: their eyes, smile, glasses, hair, clothing color or pattern, bouquet of flowers, or overall vibe).
 - Mention that you are looking at a cosmetic, appearance-only snapshot of their skin.
 - Briefly include the education/entertainment-only disclaimer in a warm, human way.
 
 B. WHAT THEIR SKIN IS "TELLING" YOU (next 1–2 paragraphs)
-- Use skinSummary.keyFindingsText as the spine of this part.
+- Use skinProfile.inferredTexture, skinProfile.overallGlow, strengths, and visibleIssues
+  as the spine of this part.
 - Describe what their skin is "telling" you in a kind, narrative way – NOT as a checklist.
-- Tie in demographics.ageRange and demographics.primaryConcern so it feels personally observed, not generic.
+- Tie in age range and primary concern so it feels personally observed, not generic.
 
 C. FITZPATRICK COSMETIC PERSPECTIVE (1 short paragraph)
-- Use selfie.fitzpatrickEstimateRoman if present, or your own reasonable estimate, to explain in cosmetic terms only what this type means for sun response and pigment risk.
+- Explain, in cosmetic terms only, what their Fitzpatrick type means for sun response and pigment risk.
 - Emphasize this is a visual, cosmetic estimate and not a medical diagnosis.
 
 D. AGING & GLOW PROGNOSIS (1–2 paragraphs)
-- Based on the skinSummary (texture, pigment, fine lines, elasticity implied in keyFindingsText),
+- Based on their current cosmetic pattern (texture, pigment, fine lines, elasticity),
   describe how their skin might age visually if they:
   1) do very little, vs.
   2) follow a calm, supportive routine.
 - Keep this realistic, hopeful, and never fear-based.
 
 E. DEEP DIVE ON PRIMARY CONCERN (1–2 paragraphs)
-- Anchor this tightly to demographics.primaryConcern and the themes from skinSummary.keyFindingsText.
+- Anchor this tightly to their primary concern and the visibleIssues in the context.
 - Explain what you see that relates to their concern (visually and cosmetically),
   why it behaves the way it does, and what principles help improve it over time.
-- You may use analogies, but vary them so it does not feel copy-pasted.
+- You may use analogies, but vary them from person to person so it does not feel copy-pasted.
 
 F. AT-HOME PLAN WITH DR. LAZUK COSMETICS (2–3 paragraphs)
 - Build a morning and evening plan using ONLY the allowed product list.
 - Make it feel simple and doable (not 20 steps).
+- Let lifestyle.routineLevel and strategy.approach guide how advanced the routine can be.
 - Explain *why* each step is there in human language, not just product stacking.
-- Use skinSummary.activesHint as inspiration for how to introduce any actives.
 
 G. IN-CLINIC ESTHETIC ROADMAP (1–2 paragraphs)
-- Use skinSummary.inClinicHint as inspiration to propose a realistic path
+- Use priorities and skinProfile to propose a realistic path
   (e.g., start with facials, then consider RF/PRP if appropriate).
 - Keep it conservative and respectful of sensitivity and skin barrier.
 - Frame everything as options, not "musts."
@@ -618,3 +709,4 @@ ${cleanedReportText}
     });
   }
 }
+
