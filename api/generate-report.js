@@ -84,17 +84,23 @@ async function generateAgingPreviewImages({ client, ageRange, primaryConcern, fi
     ? `with Fitzpatrick type ${fitzpatrickType}`
     : 'with a realistic skin tone and texture';
 
-  const baseStyle =
-    'ultra-realistic portrait, neutral expression, studio lighting, no makeup, no filters, no beautification, subtle signs of aging rendered honestly but respectfully';
+  // ✅ Bias enforcement (as requested):
+  // - NO-CHANGE = no beautification / no flattering bias (honest rendering)
+  // - WITH-CARE = slight, tasteful beautification bias (still realistic, no "perfect skin")
+  const baseStyleNoChange =
+    'ultra-realistic portrait, neutral expression, studio lighting, no makeup, no filters, no retouching, no beautification, no flattering bias, no skin smoothing, subtle signs of aging rendered honestly but respectfully, realistic pores and texture';
+  const baseStyleWithCare =
+    'ultra-realistic portrait, neutral expression, studio lighting, minimal/no makeup, no heavy filters, tasteful and slight "well-cared-for" bias allowed (subtle, not fake), realistic pores and texture, realistic aging but clearly supported by consistent skincare and sun protection (no plastic-smooth skin)';
 
   const prompts = {
-    noChange10: `A ${baseAgeText} ${concernText}, ${fitzText}, imagined about 10 years in the future if they do not meaningfully improve their skincare routine — more pronounced fine lines, duller tone, more visible sun and lifestyle effects, but still treated respectfully as a real human. ${baseStyle}.`,
-    noChange20: `A ${baseAgeText} ${concernText}, ${fitzText}, imagined about 20 years in the future with minimal skincare support — deeper wrinkles, more sagging, more uneven pigment and sun markings, but still dignified and human, no caricature. ${baseStyle}.`,
-    withCare10: `A ${baseAgeText} ${concernText}, ${fitzText}, imagined about 10 years in the future if they follow a gentle, consistent, dermatologist-guided skincare routine with sun protection, hydration, and barrier support — smoother texture, healthier glow, more even tone, realistic aging but clearly well cared-for skin. ${baseStyle}.`,
-    withCare20: `A ${baseAgeText} ${concernText}, ${fitzText}, imagined about 20 years in the future with consistent skincare, sun protection, and healthy lifestyle habits — naturally aged but radiant, balanced skin, softened lines, graceful aging, no unrealistic perfection. ${baseStyle}.`
+    noChange10: `A ${baseAgeText} ${concernText}, ${fitzText}, imagined about 10 years in the future if they do not meaningfully improve their skincare routine — more pronounced fine lines, duller tone, more visible sun and lifestyle effects, but still treated respectfully as a real human. ${baseStyleNoChange}.`,
+    noChange20: `A ${baseAgeText} ${concernText}, ${fitzText}, imagined about 20 years in the future with minimal skincare support — deeper wrinkles, more sagging, more uneven pigment and sun markings, but still dignified and human, no caricature. ${baseStyleNoChange}.`,
+    withCare10: `A ${baseAgeText} ${concernText}, ${fitzText}, imagined about 10 years in the future if they follow a gentle, consistent, dermatologist-guided skincare routine with sun protection, hydration, and barrier support — smoother texture, healthier glow, more even tone, realistic aging but clearly well cared-for skin. ${baseStyleWithCare}.`,
+    withCare20: `A ${baseAgeText} ${concernText}, ${fitzText}, imagined about 20 years in the future with consistent skincare, sun protection, and healthy lifestyle habits — naturally aged but radiant, balanced skin, softened lines, graceful aging, no unrealistic perfection. ${baseStyleWithCare}.`
   };
 
   try {
+    // ✅ Required image size (per prior error + your requirement)
     const size = '1024x1024';
 
     const [imgNo10, imgNo20, imgCare10, imgCare20] = await Promise.all([
@@ -239,7 +245,14 @@ function mapFitzToRoman(value) {
   return null;
 }
 
-async function buildAnalysisContext({ buildAnalysis, ageRange, primaryConcern, visitorQuestion, photoDataUrl, imageAnalysis }) {
+async function buildAnalysisContext({
+  buildAnalysis,
+  ageRange,
+  primaryConcern,
+  visitorQuestion,
+  photoDataUrl,
+  imageAnalysis
+}) {
   const ia = imageAnalysis || {};
   const raw = ia.raw || {};
   const vision = ia.analysis || {};
@@ -357,6 +370,8 @@ module.exports = async function handler(req, res) {
 
   // 1) Ensure we have strong image analysis
   let imageAnalysis = incomingImageAnalysis || null;
+  let enrichedWithVision = false;
+
   if ((!imageAnalysis || isLikelyWeakImageAnalysis(imageAnalysis)) && photoDataUrl) {
     const visionResult = await analyzeSelfieWithVision({
       client,
@@ -365,7 +380,10 @@ module.exports = async function handler(req, res) {
       primaryConcern
     });
 
-    if (visionResult) imageAnalysis = visionResult;
+    if (visionResult) {
+      imageAnalysis = visionResult;
+      enrichedWithVision = true;
+    }
   }
 
   // 2) Build structured context (your lib/analysis.js + enriched vision payload)
@@ -640,7 +658,7 @@ If still missing, politely mention what you can see (lighting, overall vibe) wit
         <p style="font-size: 12px; color: #6B7280;">
           With care,<br/>
           Dr. Lazuk Esthetics® &amp; Dr. Lazuk Cosmetics®<br/>
-          <a href="mailto:contact@skindoctor.ai" style="color: #111827; text-decoration: underline;">contact@drlazuk.com</a>
+          <a href="mailto:contact@drlazuk.com" style="color: #111827; text-decoration: underline;">contact@drlazuk.com</a>
         </p>
       </div>
     </div>
@@ -704,9 +722,10 @@ If still missing, politely mention what you can see (lighting, overall vibe) wit
     // Helpful for debugging: confirms whether we had/enriched image analysis
     _debug: {
       usedIncomingImageAnalysis: !!incomingImageAnalysis,
-      enrichedWithVision: !isLikelyWeakImageAnalysis(imageAnalysis) && !!photoDataUrl
+      enrichedWithVision
     }
   });
 };
+
 
 
