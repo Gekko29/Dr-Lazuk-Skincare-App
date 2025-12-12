@@ -5,7 +5,16 @@
 // calls OpenAI's multimodal model to analyze the selfie, and returns:
 //
 // {
-//   raw: {},                          // reserved for future low-level fields
+//   raw: {
+//     wearingGlasses: boolean,
+//     eyeColor: string | null,
+//     hairColor: string | null,
+//     clothingColor: string | null,
+//     globalTexture: string | null,
+//     tZonePores: boolean | null,
+//     pigmentType: string | null,
+//     fineLinesRegions: string | null
+//   },
 //   analysis: {
 //     complimentFeatures: string,
 //     skinFindings: string,
@@ -68,6 +77,17 @@ From the image (and any text notes), infer cosmetic / visual features and return
 with the following shape ONLY (no extra keys):
 
 {
+  "raw": {
+    "wearingGlasses": boolean,         // true if glasses clearly visible
+    "eyeColor": string | null,         // e.g., "light blue", "brown", "hazel"
+    "hairColor": string | null,        // e.g., "dark brown", "blonde", "black"
+    "clothingColor": string | null,    // main visible top color: "pink", "white", "black", etc.
+    "globalTexture": string | null,    // short phrase for global texture: "mostly smooth", "mildly uneven", etc.
+    "tZonePores": boolean | null,      // true if T-zone pores visibly more prominent
+    "pigmentType": string | null,      // short descriptor: "freckles", "sun-kissed", "scattered spots", etc.
+    "fineLinesRegions": string | null  // short phrase: "around eyes", "forehead and between brows", etc.
+  },
+
   "analysis": {
     "complimentFeatures": string,           // Very warm, specific compliment based on what you SEE:
                                             // e.g., mention eyes, smile, glasses, clothing color, vibe.
@@ -116,7 +136,7 @@ ${notes || 'none provided'}
     const completion = await client.chat.completions.create({
       model: 'gpt-4.1-mini',
       temperature: 0.4,
-      max_tokens: 800,
+      max_tokens: 900,
       messages: [
         {
           role: 'system',
@@ -126,12 +146,14 @@ ${notes || 'none provided'}
           role: 'user',
           content: [
             {
-              type: 'input_text',
+              type: 'text',
               text: userText
             },
             {
-              type: 'input_image',
-              image_url: imageUrl
+              type: 'image_url',
+              image_url: {
+                url: imageUrl
+              }
             }
           ]
         }
@@ -152,6 +174,7 @@ ${notes || 'none provided'}
     }
 
     const analysis = parsed.analysis || {};
+    const raw = parsed.raw || {};
     let fitzpatrickType = parsed.fitzpatrickType;
 
     // Ensure fitzpatrickType is a number 1–6, with fallback to 3 if invalid
@@ -163,9 +186,9 @@ ${notes || 'none provided'}
     }
 
     return res.status(200).json({
-      raw: {},           // reserved for future use; not needed by lib/analysis.js today
+      raw,
       analysis,
-      fitzpatrickType    // numeric 1–6
+      fitzpatrickType
     });
   } catch (error) {
     console.error('Error in /api/analyzeImage:', error);
@@ -175,7 +198,3 @@ ${notes || 'none provided'}
     });
   }
 }
-
-
-
-
