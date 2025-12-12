@@ -153,14 +153,38 @@ function buildAnalysisContext({ ageRange, primaryConcern, visitorQuestion, photo
   if (raw.eyeColor) tags.push(`${raw.eyeColor} eyes`);
   if (raw.clothingColor) tags.push(`${raw.clothingColor} top`);
 
-const selfieMeta = {
-  url: photoDataUrl || null,
-  tags,
-  compliment: (ia.analysis && ia.analysis.complimentFeatures) || null,
-  dominantColor: raw.clothingColor === 'pink' ? 'soft pink' : null,
-  eyeColor: raw.eyeColor || null,
-  hairColor: raw.hairColor || null
-};
+  const selfieMeta = {
+    url: photoDataUrl || null,
+    tags,
+    dominantColor: raw.clothingColor === 'pink' ? 'soft pink' : null,
+    eyeColor: raw.eyeColor || null,
+    hairColor: raw.hairColor || null,
+    // ⭐ NEW: pass through the vision compliment so the letter can sound specific
+    compliment: vision.complimentFeatures || null
+  };
+
+  const visionSummary = {
+    // ⭐ Use the analysis fields directly
+    issues: [],
+    strengths: [],
+    texture: vision.texture || null,
+    overallGlow: vision.skinFindings || null,
+    pigment: vision.pigment || null,
+    fineLines: vision.fineLinesAreas || null,
+    elasticity: vision.elasticity || null
+  };
+
+  // Optional: if skinFindings/pigment mention specific issues, you can push generic labels
+  if (vision.poreBehavior) {
+    visionSummary.issues.push('visible pores');
+  }
+  if (vision.pigment) {
+    visionSummary.issues.push('pigment variations');
+  }
+  if (vision.fineLinesAreas) {
+    visionSummary.issues.push('fine lines');
+  }
+
 
   const visionSummary = {
     issues: [],
