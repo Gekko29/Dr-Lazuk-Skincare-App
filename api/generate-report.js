@@ -640,7 +640,7 @@ If still missing, politely mention what you can see (lighting, overall vibe) wit
         <p style="font-size: 12px; color: #6B7280;">
           With care,<br/>
           Dr. Lazuk Esthetics® &amp; Dr. Lazuk Cosmetics®<br/>
-          <a href="mailto:contact@drlazuk.com" style="color: #111827; text-decoration: underline;">contact@drlazuk.com</a>
+          <a href="mailto:contact@skindoctor.ai" style="color: #111827; text-decoration: underline;">contact@drlazuk.com</a>
         </p>
       </div>
     </div>
