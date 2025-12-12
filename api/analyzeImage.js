@@ -135,32 +135,32 @@ Additional notes (may be empty):
 ${notes || 'none provided'}
 `.trim();
 
-    const completion = await client.chat.completions.create({
-      model: 'gpt-4.1-mini',
-      temperature: 0.4,
-      max_tokens: 900,
-      messages: [
+const completion = await client.chat.completions.create({
+  model: 'gpt-4.1-mini',
+  temperature: 0.4,
+  max_tokens: 800,
+  messages: [
+    {
+      role: 'system',
+      content: systemPrompt
+    },
+    {
+      role: 'user',
+      content: [
         {
-          role: 'system',
-          content: systemPrompt
+          type: 'text',          // ✅ was: "input_text"
+          text: userText
         },
         {
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: userText
-            },
-            {
-              type: 'image_url',
-              image_url: {
-                url: imageUrl
-              }
-            }
-          ]
+          type: 'image_url',     // ✅ was: "input_image"
+          image_url: {           // ✅ wrap in object
+            url: imageUrl        //    instead of image_url: imageUrl
+          }
         }
       ]
-    });
+    }
+  ]
+});
 
     const rawContent = completion.choices?.[0]?.message?.content || '';
 
