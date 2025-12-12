@@ -1,6 +1,6 @@
 // api/generate-report.js
 import OpenAI from 'openai';
-import { buildAnalysis } from '../lib/analysis'; // lib/analysis.js is at project root
+import { buildAnalysis } from '../lib/analysis'; // lib/analysis.js at project root
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
@@ -24,7 +24,7 @@ async function sendEmailWithResend({ to, subject, html }) {
   const apiKey = process.env.RESEND_API_KEY;
   const fromEmail =
     process.env.RESEND_FROM_EMAIL ||
-    'Dr. Lazuk Esthetics <no-reply@drlazuk.com>'; // ✅ default to verified domain
+    'Dr. Lazuk Esthetics <no-reply@drlazuk.com>'; // default to verified domain
 
   if (!apiKey) {
     console.error('RESEND_API_KEY is not set; skipping email send.');
@@ -87,7 +87,7 @@ async function generateAgingPreviewImages({ ageRange, primaryConcern, fitzpatric
   };
 
   try {
-    const size = '1024x1024'; // ✅ OpenAI-supported size
+    const size = '1024x1024';
 
     const [imgNo10, imgNo20, imgCare10, imgCare20] = await Promise.all([
       client.images.generate({
@@ -127,92 +127,6 @@ async function generateAgingPreviewImages({ ageRange, primaryConcern, fitzpatric
       withCare20: null
     };
   }
-}
-
-// Helper: map imageAnalysis (from /api/analyzeImage) into the shape lib/analysis.js expects
-function buildAnalysisContext({
-  ageRange,
-  primaryConcern,
-  visitorQuestion,
-  photoDataUrl,
-  imageAnalysis
-}) {
-  const ia = imageAnalysis || {};
-  const raw = ia.raw || {};
-  const vision = ia.analysis || {};
-
-  // Map numeric Fitzpatrick (1–6) to Roman "I"–"VI" if present
-  let fitzRoman = null;
-  if (typeof ia.fitzpatrickType === 'number') {
-    const romans = ['I', 'II', 'III', 'IV', 'V', 'VI'];
-    fitzRoman = romans[ia.fitzpatrickType - 1] || null;
-  } else if (typeof ia.fitzpatrickType === 'string') {
-    const up = ia.fitzpatrickType.toUpperCase();
-    if (['I', 'II', 'III', 'IV', 'V', 'VI'].includes(up)) {
-      fitzRoman = up;
-    }
-  }
-
-  // Build tags for the selfie compliment engine
-  const tags = [];
-  if (raw.wearingGlasses) tags.push('glasses');
-  if (raw.eyeColor) tags.push(`${raw.eyeColor} eyes`);
-  if (raw.clothingColor) tags.push(`${raw.clothingColor} top`);
-
-  const selfieMeta = {
-    url: photoDataUrl || null,
-    tags,
-    dominantColor: raw.clothingColor === 'pink' ? 'soft pink' : null,
-    eyeColor: raw.eyeColor || null,
-    hairColor: raw.hairColor || null,
-    // ⭐ NEW: pass through the vision compliment so the letter can sound specific
-    compliment: vision.complimentFeatures || null
-  };
-
-  // Consolidated vision summary (fixing duplicate declaration)
-  const visionSummary = {
-    issues: [],
-    strengths: [],
-    texture: vision.texture || raw.globalTexture || null,
-    overallGlow: vision.overallGlow || vision.skinFindings || null,
-    pigment: vision.pigment || raw.pigmentType || null,
-    fineLines: vision.fineLinesAreas || raw.fineLinesRegions || null,
-    elasticity: vision.elasticity || null
-  };
-
-  if (vision.poreBehavior || raw.tZonePores) {
-    visionSummary.issues.push('visible pores');
-  }
-  if (vision.pigment || raw.pigmentType) {
-    visionSummary.issues.push('pigment variations');
-  }
-  if (vision.fineLinesAreas || raw.fineLinesRegions) {
-    visionSummary.issues.push('fine lines');
-  }
-  if (raw.globalTexture) {
-    visionSummary.issues.push('texture irregularities');
-  }
-
-  // Form data for lib/analysis.js
-  const form = {
-    firstName: null,
-    age: null,
-    skinType: ia.skinType || null,
-    fitzpatrickType: fitzRoman,
-    primaryConcerns: primaryConcern ? [primaryConcern] : [],
-    secondaryConcerns: [],
-    routineLevel: ia.routineLevel || 'standard',
-    budgetLevel: ia.budgetLevel || 'mid-range',
-    currentRoutine: visitorQuestion || null,
-    lifestyle: ia.lifestyle || null,
-    ageRange: ageRange || null // not used directly, but harmless
-  };
-
-  return buildAnalysis({
-    form,
-    selfie: selfieMeta,
-    vision: visionSummary
-  });
 }
 
 export default async function handler(req, res) {
@@ -259,14 +173,16 @@ export default async function handler(req, res) {
     });
   }
 
-  // Build structured context (form + selfie + vision) from imageAnalysis
-  const analysisContext = buildAnalysisContext({
+  // Build structured context using the *new* lib/analysis.js API
+  const analysisContext = buildAnalysis({
     ageRange,
     primaryConcern,
     visitorQuestion,
-    photoDataUrl,
-    imageAnalysis
+    imageAnalysis: imageAnalysis || null
   });
+
+  // (Optional) log for debugging, comment out in production
+  // console.log('ANALYSIS_CONTEXT', JSON.stringify(analysisContext, null, 2));
 
   // Context for products and services so the model stays on-brand
   const productList = `
@@ -298,7 +214,7 @@ VOICE & STYLE (NON-NEGOTIABLE):
 - Balance scientific insight with compassion and encouragement.
 - Sound "luxury-clinical": premium, polished, but never cold or robotic.
 - Avoid lists that feel like instructions; favor short, flowing paragraphs that guide and reassure.
-- Vary your metaphors and wording; do NOT repeat the same images (e.g., "quiet narrative", "gatekeeper") in every letter. Make each letter feel freshly written for this one person.
+- Vary your metaphors and wording; do NOT repeat the same images in every letter. Make each letter feel freshly written for this one person.
 
 CRITICAL SAFETY / SCOPE:
 - This is for ENTERTAINMENT and general cosmetic education only.
@@ -319,87 +235,90 @@ ${productList}
 IN-CLINIC ESTHETIC SERVICES (ONLY use these when recommending services):
 ${serviceList}
 
-HOW TO USE THE STRUCTURED ANALYSIS CONTEXT (IMPORTANT):
-You will receive a JSON "Structured analysis context" in the user message. It contains, among other things:
-- user: name/age/location if provided
-- selfie: a selfie-based compliment source (selfie.compliment, tags, colors)
-- fitzpatrick: cosmetic Fitzpatrick info (type, description, riskNotes)
-- skinProfile: declaredType (skin type), inferredTexture, overallGlow, strengths, visibleIssues
-- priorities: a sorted list of concerns with priority and rationale
-- lifestyle: routineLevel, budgetLevel, currentRoutine, lifestyleNotes
-- timeline: days_1_7 / days_8_30 / days_31_90 with theme, goal, notes
-- strategy: overall approach and investment level
+STRUCTURED ANALYSIS CONTEXT YOU WILL RECEIVE:
+You will receive a JSON "Structured analysis context" with these fields:
+- demographics: { ageRange, primaryConcern, visitorQuestion }
+- selfie: {
+    compliment: a warm, custom compliment phrase,
+    fitzpatrickEstimateNumeric: 1–6 or null,
+    fitzpatrickEstimateRoman: "I"–"VI" or null
+  }
+- skinSummary: {
+    keyFindingsText: a compact narrative of what the image analysis saw,
+    activesHint: guidance on evening actives,
+    inClinicHint: guidance on in-clinic options
+  }
+- timeline: days_1_7 / days_8_30 / days_31_90 each with { theme, goal, notes }
 
-You MUST incorporate this context so the letter feels specific to THIS person, not generic:
+You will ALSO receive the raw selfie / image analysis JSON, which includes:
+- "analysis": high-level cosmetic findings
+- "raw": low-level cues like:
+  - raw.wearingGlasses (boolean)
+  - raw.eyeColor (e.g. "blue", "brown", "green")
+  - raw.clothingColor (e.g. "pink", "black", "white")
+  - raw.holdingFlowers or similar visual tags (if present)
+Use these raw fields to infer at least ONE CONCRETE visual detail in the opening (for example: glasses, eye color, clothing color, bouquet of flowers, or similar).
+
+YOU MUST:
+- Use selfie.compliment (if present) and paraphrase it in your own words.
+- Mention at least ONE specific, concrete visual detail that is plausible from the raw JSON (such as their glasses, eye color, clothing color, or the fact they are holding flowers).
+- Use skinSummary.keyFindingsText as the spine of your description of what their skin is "telling" you.
+- Use the three timeline phases (days_1_7, days_8_30, days_31_90) in natural prose.
+
+LETTER STRUCTURE GUIDANCE:
 
 A. OPENING & DISCLAIMER (first 1–2 paragraphs)
-- If selfie.compliment is present, you MUST paraphrase it in your own words as Dr. Lazuk.
-- Explicitly mention at least ONE concrete visual detail from the selfie (for example: their eyes, smile, glasses, hair, clothing color or pattern, bouquet of flowers, or overall vibe).
-- Mention that you are looking at a cosmetic, appearance-only snapshot of their skin.
-- Briefly include the education/entertainment-only disclaimer in a warm, human way.
+- Paraphrase selfie.compliment.
+- Mention at least one concrete visual detail from the selfie.
+- Clearly state that you are looking at a cosmetic, appearance-only snapshot.
+- Warmly weave in the education/entertainment-only disclaimer.
 
 B. WHAT THEIR SKIN IS "TELLING" YOU (next 1–2 paragraphs)
-- Use skinProfile.inferredTexture, skinProfile.overallGlow, strengths, and visibleIssues
-  as the spine of this part.
-- Describe what their skin is "telling" you in a kind, narrative way – NOT as a checklist.
-- Tie in age range and primary concern so it feels personally observed, not generic.
+- Use skinSummary.keyFindingsText plus the ageRange and primaryConcern to describe the story of their skin.
+- Do this as a kind narrative, not a checklist.
 
 C. FITZPATRICK COSMETIC PERSPECTIVE (1 short paragraph)
-- Explain, in cosmetic terms only, what their Fitzpatrick type means for sun response and pigment risk.
+- Explain what their Fitzpatrick type means cosmetically (sun response and pigment).
 - Emphasize this is a visual, cosmetic estimate and not a medical diagnosis.
 
 D. AGING & GLOW PROGNOSIS (1–2 paragraphs)
-- Based on their current cosmetic pattern (texture, pigment, fine lines, elasticity),
-  describe how their skin might age visually if they:
+- Describe how their skin might visually age if they:
   1) do very little, vs.
   2) follow a calm, supportive routine.
-- Keep this realistic, hopeful, and never fear-based.
+- Be realistic, hopeful, and never fear-based.
 
 E. DEEP DIVE ON PRIMARY CONCERN (1–2 paragraphs)
-- Anchor this tightly to their primary concern and the visibleIssues in the context.
-- Explain what you see that relates to their concern (visually and cosmetically),
-  why it behaves the way it does, and what principles help improve it over time.
-- You may use analogies, but vary them from person to person so it does not feel copy-pasted.
+- Tie this tightly to their primaryConcern.
+- Explain, in cosmetic terms, what is likely happening and what principles help.
 
 F. AT-HOME PLAN WITH DR. LAZUK COSMETICS (2–3 paragraphs)
-- Build a morning and evening plan using ONLY the allowed product list.
-- Make it feel simple and doable (not 20 steps).
-- Let lifestyle.routineLevel and strategy.approach guide how advanced the routine can be.
-- Explain *why* each step is there in human language, not just product stacking.
+- Build a morning and evening plan using ONLY the allowed products.
+- Keep it simple, human, and doable. Explain why steps are there.
 
 G. IN-CLINIC ESTHETIC ROADMAP (1–2 paragraphs)
-- Use priorities and skinProfile to propose a realistic path
-  (e.g., start with facials, then consider RF/PRP if appropriate).
-- Keep it conservative and respectful of sensitivity and skin barrier.
-- Frame everything as options, not "musts."
+- Suggest a conservative, realistic path using the allowed services.
+- Frame everything as options, not requirements.
 
-H. 0–90 DAY GLOW TIMELINE (1–2 paragraphs, woven naturally into the letter)
-- You MUST incorporate the three phases from the timeline:
-  • Days 1–7 (timeline.days_1_7)
-  • Days 8–30 (timeline.days_8_30)
-  • Days 31–90 (timeline.days_31_90)
-- Do NOT label them as sections; instead, write about them in flowing prose:
-  e.g., "In the first week...", "Between days 8 and 30...", "From day 31 to 90..."
-- For each phase, describe what the person will likely *feel and notice* in that window.
+H. 0–90 DAY GLOW TIMELINE (1–2 paragraphs, woven into the letter)
+- Refer explicitly but naturally to:
+  • the first week,
+  • days 8–30,
+  • days 31–90.
+- For each, describe what they may feel and notice if they follow your guidance.
 
 I. LIFESTYLE & HABIT COACHING (1 paragraph)
-- Offer gentle coaching on sleep, stress, sun exposure, and habits
-  that impact cosmetic appearance – without moralizing or shaming.
-- Tie your advice back to their primary concern and age range.
+- Gentle, non-judgmental tips on sleep, stress, sun behavior, etc.
 
 J. CLOSING NOTE (final paragraph)
 - Close as a heartfelt letter from Dr. Lazuk.
-- Reflect briefly on their skin journey and your shared goal.
-- END with the exact sentence:
+- END with exactly:
   "May your skin always glow as bright as your smile." ~ Dr. Lazuk
 
 GENERAL WRITING RULES:
 - Do NOT mention or show the JSON or the term "analysis context" in the letter.
-- Do NOT output bullet-heavy "to-do" lists. Short bullets are allowed sparingly, but the tone
-  should be mostly narrative, like a conversation in the treatment room.
-- Keep each part concise but meaningful; the whole letter should feel like a single, unified message,
-  not ten separate sections.
-- Never apologize, hedge excessively, or sound like an AI model.
+- Do NOT output bullet-heavy "to-do" lists.
+- Keep the letter feeling like one continuous conversation, not rigid sections.
+- Never apologize or sound like an AI model.
 - You are not here to judge their skin – you are here to translate what you see into hope and clarity.
 
 OUTPUT FORMAT (MUST FOLLOW EXACTLY):
@@ -425,7 +344,7 @@ ${JSON.stringify(analysisContext, null, 2)}
 Raw selfie / image analysis data (for additional context; again, do NOT dump this as JSON in the report):
 ${JSON.stringify(imageAnalysis || {}, null, 2)}
 
-Please infer a plausible Fitzpatrick type based on typical patterns for this age and concern, while respecting any estimate in the selfie analysis. Emphasize that this is cosmetic-only.
+Please infer a Fitzpatrick type while respecting any estimate in the selfie analysis. Emphasize that this is cosmetic-only.
 `.trim();
 
   try {
@@ -462,14 +381,14 @@ Please infer a plausible Fitzpatrick type based on typical patterns for this age
 
     reportText = reportText.trim();
 
-    // ✅ Strip entire "[Section N] <Title>" lines so the email/JSON reads like a continuous letter
+    // Strip "[Section N]" lines if the model ever emits them
     const cleanedReportText = reportText
       .replace(/^\[Section\s+\d+\][^\n]*\n?/gm, '')
       .trim();
 
     const safeConcern = primaryConcern || 'Not specified';
 
-    // 🔮 Generate the 4 aging preview images (may gracefully return nulls)
+    // Generate the 4 aging preview images (may gracefully return nulls)
     const agingPreviewImages = await generateAgingPreviewImages({
       ageRange,
       primaryConcern,
@@ -630,7 +549,7 @@ ${cleanedReportText}
 
     // ---------- Clinic Email HTML ----------
     const clinicEmail =
-      process.env.RESEND_CLINIC_EMAIL || 'contact@drlazuk.com'; // ✅ default to drlazuk.com
+      process.env.RESEND_CLINIC_EMAIL || 'contact@drlazuk.com';
 
     const clinicHtml = `
       <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111827; line-height: 1.5; background-color: #F9FAFB; padding: 16px;">
@@ -708,5 +627,7 @@ ${cleanedReportText}
       message: error?.message || 'Unknown error calling OpenAI'
     });
   }
+}
+
 }
 
