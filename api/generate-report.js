@@ -153,13 +153,14 @@ function buildAnalysisContext({ ageRange, primaryConcern, visitorQuestion, photo
   if (raw.eyeColor) tags.push(`${raw.eyeColor} eyes`);
   if (raw.clothingColor) tags.push(`${raw.clothingColor} top`);
 
-  const selfieMeta = {
-    url: photoDataUrl || null,
-    tags,
-    dominantColor: raw.clothingColor === 'pink' ? 'soft pink' : null,
-    eyeColor: raw.eyeColor || null,
-    hairColor: raw.hairColor || null
-  };
+const selfieMeta = {
+  url: photoDataUrl || null,
+  tags,
+  compliment: (ia.analysis && ia.analysis.complimentFeatures) || null,
+  dominantColor: raw.clothingColor === 'pink' ? 'soft pink' : null,
+  eyeColor: raw.eyeColor || null,
+  hairColor: raw.hairColor || null
+};
 
   const visionSummary = {
     issues: [],
