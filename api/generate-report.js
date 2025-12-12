@@ -1,66 +1,44 @@
-// api/generate-report.js (CommonJS-compatible for Vercel)
-// NOTE: We keep this file CJS to match your current runtime.
-// We dynamically import ../lib/analysis.js because it uses ESM "export".
+// api/generate-report.js
+// NOTE: This file intentionally avoids top-level ESM imports so it works in Vercel
+// environments that treat /api as CommonJS by default (no "type":"module" required).
 
-const OpenAIImport = require('openai');
-const OpenAI = OpenAIImport.default ?? OpenAIImport;
+const path = require('path');
+const { pathToFileURL } = require('url');
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
+// -------------------------
+// Helpers: dynamic imports
+// -------------------------
+async function getOpenAIClient() {
+  const mod = await import('openai');
+  const OpenAI = mod?.default || mod;
+  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+}
 
-// --- ESM import helper (for lib/analysis.js) ---
-let _buildAnalysis = null;
 async function getBuildAnalysis() {
-  if (_buildAnalysis) return _buildAnalysis;
-  const mod = await import('../lib/analysis.js');
-  _buildAnalysis = mod.buildAnalysis;
-  return _buildAnalysis;
-}
-async function ensureImageAnalysis({ photoDataUrl, imageAnalysis }) {
-  if (imageAnalysis) return imageAnalysis;
-  if (!photoDataUrl) return null;
-
-  // Call your existing /api/analyzeImage if frontend didn't send imageAnalysis.
-  const base =
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '');
-
-  if (!base) {
-    console.warn('No base URL available to call /api/analyzeImage; returning null imageAnalysis.');
-    return null;
-  }
-
-  try {
-    const r = await fetch(`${base}/api/analyzeImage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ photoDataUrl })
-    });
-
-    if (!r.ok) {
-      console.error('ensureImageAnalysis: analyzeImage failed', r.status, await r.text());
-      return null;
-    }
-    return await r.json();
-  } catch (e) {
-    console.error('ensureImageAnalysis exception:', e);
-    return null;
-  }
+  // Load ../lib/analysis.js (ESM) safely from CJS
+  const fileUrl = pathToFileURL(path.join(__dirname, '..', 'lib', 'analysis.js')).href;
+  const mod = await import(fileUrl);
+  return mod.buildAnalysis;
 }
 
-// Small helper to render a simple Fitzpatrick scale line in HTML
+// -------------------------
+// UI helper: Fitzpatrick line
+// -------------------------
 function renderFitzpatrickScaleHtml(type) {
   if (!type) return '';
   const types = ['I', 'II', 'III', 'IV', 'V', 'VI'];
   const normalized = String(type).toUpperCase();
-  const line = types.map((t) => (t === normalized ? `<strong>${t}</strong>` : t)).join(' · ');
+  const line = types
+    .map((t) => (t === normalized ? `<strong>${t}</strong>` : t))
+    .join(' · ');
   return `<p style="font-size: 12px; color: #92400E; margin-top: 6px;">
     Cosmetic Fitzpatrick scale: ${line}
   </p>`;
 }
 
-// Helper to send email using Resend
+// -------------------------
+// Email (Resend)
+// -------------------------
 async function sendEmailWithResend({ to, subject, html }) {
   const apiKey = process.env.RESEND_API_KEY;
   const fromEmail =
@@ -78,12 +56,7 @@ async function sendEmailWithResend({ to, subject, html }) {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        from: fromEmail,
-        to,
-        subject,
-        html
-      })
+      body: JSON.stringify({ from: fromEmail, to, subject, html })
     });
 
     if (!res.ok) {
@@ -95,17 +68,12 @@ async function sendEmailWithResend({ to, subject, html }) {
   }
 }
 
-/**
- * Generate 4 AI "future you" images using OpenAI Images
- */
-async function generateAgingPreviewImages({ ageRange, primaryConcern, fitzpatrickType }) {
+// -------------------------
+// 4 aging preview images
+// -------------------------
+async function generateAgingPreviewImages({ client, ageRange, primaryConcern, fitzpatrickType }) {
   if (!process.env.OPENAI_API_KEY) {
-    return {
-      noChange10: null,
-      noChange20: null,
-      withCare10: null,
-      withCare20: null
-    };
+    return { noChange10: null, noChange20: null, withCare10: null, withCare20: null };
   }
 
   const baseAgeText = ageRange ? `who is currently in the ${ageRange} age range` : 'adult';
@@ -144,21 +112,206 @@ async function generateAgingPreviewImages({ ageRange, primaryConcern, fitzpatric
     };
   } catch (err) {
     console.error('Error generating aging preview images:', err);
-    return {
-      noChange10: null,
-      noChange20: null,
-      withCare10: null,
-      withCare20: null
-    };
+    return { noChange10: null, noChange20: null, withCare10: null, withCare20: null };
   }
 }
 
-// Build analysis context using your REAL lib/analysis.js signature
-async function buildAnalysisContext({ ageRange, primaryConcern, visitorQuestion, imageAnalysis }) {
-  const buildAnalysis = await getBuildAnalysis();
-  return buildAnalysis({ ageRange, primaryConcern, visitorQuestion, imageAnalysis });
+// -------------------------
+// Vision analysis (enforced)
+// -------------------------
+function isLikelyWeakImageAnalysis(imageAnalysis) {
+  if (!imageAnalysis || typeof imageAnalysis !== 'object') return true;
+  const a = imageAnalysis.analysis || {};
+  // If nothing meaningful exists, it’s weak.
+  const meaningful =
+    a.skinFindings ||
+    a.texture ||
+    a.poreBehavior ||
+    a.pigment ||
+    a.fineLinesAreas ||
+    a.elasticity ||
+    a.complimentFeatures;
+  return !meaningful;
 }
 
+async function analyzeSelfieWithVision({ client, photoDataUrl, ageRange, primaryConcern }) {
+  if (!photoDataUrl) return null;
+
+  // Use a vision-capable model for analysis
+  const visionModel = process.env.OPENAI_VISION_MODEL || 'gpt-4o-mini';
+
+  const prompt = `
+You are a dermatologist providing a cosmetic, appearance-only analysis from ONE selfie.
+Return ONLY strict JSON (no markdown, no commentary).
+
+Rules:
+- Cosmetic/visual only. Do not diagnose diseases.
+- Do NOT use medical condition names (no rosacea, melasma, eczema, psoriasis, cancer, etc).
+- Extract concrete selfie cues when possible (glasses? eye color? hair color? clothing color?).
+- Provide a short, tasteful compliment referencing a real visible detail.
+
+Return JSON with this shape:
+
+{
+  "fitzpatrickType": 1|2|3|4|5|6|null,
+  "skinType": "oily"|"dry"|"combination"|"normal"|null,
+  "raw": {
+    "wearingGlasses": true|false|null,
+    "eyeColor": "blue|green|brown|hazel|gray|unknown"|null,
+    "hairColor": "blonde|brown|black|red|gray|unknown"|null,
+    "clothingColor": "pink|white|black|blue|green|red|other|unknown"|null
+  },
+  "analysis": {
+    "complimentFeatures": "string",
+    "skinFindings": "1-2 sentences overall visual summary",
+    "texture": "string",
+    "poreBehavior": "string",
+    "pigment": "string",
+    "fineLinesAreas": "string",
+    "elasticity": "string",
+
+    "checklist15": {
+      "1_skinTypeCharacteristics": "string",
+      "2_textureSurfaceQuality": "string",
+      "3_pigmentationColor": "string",
+      "4_vascularCirculation": "string",
+      "5_acneCongestion": "string",
+      "6_agingPhotoaging": "string",
+      "7_inflammatoryClues": "string (visual-only, no disease names)",
+      "8_barrierHealth": "string",
+      "9_structuralAnatomy": "string",
+      "10_lesionMapping": "string (visual-only, recommend in-person eval for anything concerning)",
+      "11_lymphaticPuffiness": "string",
+      "12_lifestyleIndicators": "string (gentle, non-judgmental)",
+      "13_procedureHistoryClues": "string",
+      "14_hairScalpClues": "string",
+      "15_neckChestHands": "string"
+    }
+  }
+}
+
+Context:
+- Age range: ${ageRange || 'unknown'}
+- Primary cosmetic concern: ${primaryConcern || 'unknown'}
+`.trim();
+
+  try {
+    const resp = await client.chat.completions.create({
+      model: visionModel,
+      temperature: 0.2,
+      max_tokens: 900,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            { type: 'image_url', image_url: { url: photoDataUrl } }
+          ]
+        }
+      ]
+    });
+
+    const text = resp?.choices?.[0]?.message?.content || '';
+    const jsonStart = text.indexOf('{');
+    const jsonEnd = text.lastIndexOf('}');
+    if (jsonStart === -1 || jsonEnd === -1) return null;
+
+    const parsed = JSON.parse(text.slice(jsonStart, jsonEnd + 1));
+    return parsed;
+  } catch (err) {
+    console.error('Vision analysis error:', err);
+    return null;
+  }
+}
+
+// -------------------------
+// Build analysis context for LLM
+// -------------------------
+function mapFitzToRoman(value) {
+  if (typeof value === 'number') {
+    const romans = ['I', 'II', 'III', 'IV', 'V', 'VI'];
+    return romans[value - 1] || null;
+  }
+  if (typeof value === 'string') {
+    const up = value.toUpperCase();
+    if (['I', 'II', 'III', 'IV', 'V', 'VI'].includes(up)) return up;
+  }
+  return null;
+}
+
+async function buildAnalysisContext({ buildAnalysis, ageRange, primaryConcern, visitorQuestion, photoDataUrl, imageAnalysis }) {
+  const ia = imageAnalysis || {};
+  const raw = ia.raw || {};
+  const vision = ia.analysis || {};
+
+  const fitzRoman = mapFitzToRoman(ia.fitzpatrickType);
+
+  const tags = [];
+  if (raw.wearingGlasses) tags.push('glasses');
+  if (raw.eyeColor && raw.eyeColor !== 'unknown') tags.push(`${raw.eyeColor} eyes`);
+  if (raw.clothingColor && raw.clothingColor !== 'unknown') tags.push(`${raw.clothingColor} top`);
+
+  // Keep shape consistent with your existing lib/analysis expectations
+  const form = {
+    firstName: null,
+    age: null,
+    skinType: ia.skinType || null,
+    fitzpatrickType: fitzRoman,
+    primaryConcerns: primaryConcern ? [primaryConcern] : [],
+    secondaryConcerns: [],
+    routineLevel: ia.routineLevel || 'standard',
+    budgetLevel: ia.budgetLevel || 'mid-range',
+    currentRoutine: visitorQuestion || null,
+    lifestyle: ia.lifestyle || null,
+    ageRange: ageRange || null
+  };
+
+  const selfie = {
+    url: photoDataUrl || null,
+    tags,
+    dominantColor: raw.clothingColor === 'pink' ? 'soft pink' : null,
+    eyeColor: raw.eyeColor || null,
+    hairColor: raw.hairColor || null,
+    compliment: vision.complimentFeatures || null
+  };
+
+  // Put the 15-point analysis into a single “vision” payload so the report can’t ignore it
+  const visionPayload = {
+    issues: [],
+    strengths: [],
+    texture: vision.texture || null,
+    overallGlow: vision.skinFindings || null,
+    checklist15: vision.checklist15 || null,
+    poreBehavior: vision.poreBehavior || null,
+    pigment: vision.pigment || null,
+    fineLinesAreas: vision.fineLinesAreas || null,
+    elasticity: vision.elasticity || null
+  };
+
+  return buildAnalysis({ form, selfie, vision: visionPayload });
+}
+
+// -------------------------
+// Output enforcement / validation
+// -------------------------
+function stripInternalLines(text) {
+  return String(text || '')
+    .replace(/^\s*INTERNAL_COVERAGE:[^\n]*\n?/gm, '')
+    .replace(/^\s*INTERNAL_SELFIE_DETAIL_OK:[^\n]*\n?/gm, '')
+    .trim();
+}
+
+function hasCoverageLine(text) {
+  return /INTERNAL_COVERAGE:\s*OK/i.test(text || '');
+}
+
+function hasSelfieDetailOkLine(text) {
+  return /INTERNAL_SELFIE_DETAIL_OK:\s*YES/i.test(text || '');
+}
+
+// -------------------------
+// Handler
+// -------------------------
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
@@ -166,9 +319,7 @@ module.exports = async function handler(req, res) {
   }
 
   if (!process.env.OPENAI_API_KEY) {
-    return res
-      .status(500)
-      .json({ ok: false, error: 'OPENAI_API_KEY is not set in the environment' });
+    return res.status(500).json({ ok: false, error: 'OPENAI_API_KEY is not set in the environment' });
   }
 
   // Geo-gate to US only
@@ -177,8 +328,7 @@ module.exports = async function handler(req, res) {
     return res.status(403).json({
       ok: false,
       error: 'geo_blocked',
-      message:
-        'This virtual skincare analysis is currently available only to visitors in the United States.'
+      message: 'This virtual skincare analysis is currently available only to visitors in the United States.'
     });
   }
 
@@ -188,13 +338,12 @@ module.exports = async function handler(req, res) {
     primaryConcern,
     visitorQuestion,
     photoDataUrl,
-    imageAnalysis
+    imageAnalysis: incomingImageAnalysis
   } = req.body || {};
 
   if (!email || typeof email !== 'string' || !email.includes('@')) {
     return res.status(400).json({ ok: false, error: 'invalid_email' });
   }
-
   if (!ageRange || !primaryConcern) {
     return res.status(400).json({
       ok: false,
@@ -203,24 +352,33 @@ module.exports = async function handler(req, res) {
     });
   }
 
-  // 🔥 Loud debug so you can see whether the app is actually using image analysis
-  const hasImageAnalysis =
-    !!imageAnalysis &&
-    typeof imageAnalysis === 'object' &&
-    (imageAnalysis.analysis || imageAnalysis.raw || imageAnalysis.fitzpatrickType != null);
+  const client = await getOpenAIClient();
+  const buildAnalysis = await getBuildAnalysis();
 
-  console.log('HAS_IMAGE_ANALYSIS', hasImageAnalysis);
-  if (imageAnalysis?.analysis) console.log('IMAGE_ANALYSIS_KEYS', Object.keys(imageAnalysis.analysis));
-  if (imageAnalysis?.raw) console.log('IMAGE_RAW_KEYS', Object.keys(imageAnalysis.raw));
+  // 1) Ensure we have strong image analysis
+  let imageAnalysis = incomingImageAnalysis || null;
+  if ((!imageAnalysis || isLikelyWeakImageAnalysis(imageAnalysis)) && photoDataUrl) {
+    const visionResult = await analyzeSelfieWithVision({
+      client,
+      photoDataUrl,
+      ageRange,
+      primaryConcern
+    });
 
+    if (visionResult) imageAnalysis = visionResult;
+  }
+
+  // 2) Build structured context (your lib/analysis.js + enriched vision payload)
   const analysisContext = await buildAnalysisContext({
+    buildAnalysis,
     ageRange,
     primaryConcern,
     visitorQuestion,
+    photoDataUrl,
     imageAnalysis
   });
 
-  // Context for products and services so the model stays on-brand
+  // Brand-locked product + service list
   const productList = `
 - Beneficial Face Cleanser with Centella Asiatica (Dermo Complex): soothing, barrier-supporting cleanser for sensitive or redness-prone skin.
 - Enriched Face Wash with Hyaluronic and Amino Acid: hydrating, gentle cleanser that supports barrier repair.
@@ -241,284 +399,314 @@ module.exports = async function handler(req, res) {
 - Beauty Injectables (Botox®, JUVÉDERM® fillers, PRP): conservative, natural-looking injectable treatments for lines, volume, and facial balance.
 `.trim();
 
-  // ✅ UPDATED prompt: aligns to YOUR ACTUAL analysisContext shape (demographics/selfie/skinSummary/timeline)
+  // 3) Prompt: one continuous letter, but must cover 15 categories.
+  //    We enforce this with INTERNAL_COVERAGE + INTERNAL_SELFIE_DETAIL_OK lines, then strip them.
   const systemPrompt = `
 You are Dr. Iryna Lazuk, a dermatologist and founder of Dr. Lazuk Esthetics® and Dr. Lazuk Cosmetics®.
 
 VOICE & STYLE (NON-NEGOTIABLE):
 - Write as "I" speaking directly to "you" in a warm, elegant, deeply human tone.
-- This should feel like a personal letter from a real dermatologist, not a template.
-- Luxury-clinical: premium, polished, never cold or robotic.
-- Avoid bullet-heavy instruction lists; favor flowing paragraphs.
-- Do NOT invent visual details that are not present in the provided context.
+- This MUST feel like a real dermatologist writing a personal letter, not a template.
+- Luxury-clinical: premium, polished, never cold.
+- Avoid bullet-heavy formatting. Favor flowing paragraphs.
 
 CRITICAL SAFETY / SCOPE:
-- Entertainment + cosmetic education only.
-- Do NOT diagnose or name medical conditions.
-- Only describe visible cosmetic features (tone, texture, dryness, oiliness, fine lines, pigment variation).
+- Cosmetic/visual education & entertainment only.
+- Do NOT diagnose or name medical diseases/conditions.
+- Do NOT use terms like rosacea, melasma, eczema, psoriasis, cancer, etc.
+- Only describe visible appearance-based features.
 
 PRODUCT & SERVICE RULES:
-- Recommend ONLY from the product list and service list below.
-
+- Recommend ONLY from the product list and service list.
 PRODUCTS:
 ${productList}
-
 SERVICES:
 ${serviceList}
 
-YOU WILL RECEIVE A JSON "Structured analysis context" with THIS SHAPE:
-- demographics: ageRange, primaryConcern, visitorQuestion
-- selfie: compliment, fitzpatrickEstimateNumeric, fitzpatrickEstimateRoman
-- skinSummary: keyFindingsText, activesHint, inClinicHint
-- timeline: days_1_7, days_8_30, days_31_90 (each with theme, goal, notes)
-
-YOU MUST USE IT:
-- Paraphrase selfie.compliment in your own words (don’t copy it verbatim).
-- Use skinSummary.keyFindingsText as the backbone of “what I’m seeing.”
-- Use skinSummary.activesHint and inClinicHint to guide routine/treatment suggestions.
-- Weave the timeline into prose (first week… days 8–30… days 31–90), describing what they’ll notice.
+NON-NEGOTIABLE REQUIREMENTS:
+1) Your letter MUST reference at least ONE concrete selfie detail from the provided context:
+   glasses, eye color, hair, clothing color, or another visible detail.
+2) Your letter MUST incorporate the 15-point dermatologist visual analysis categories below,
+   woven naturally in narrative (do NOT list them as a checklist).
+   The 15 categories are:
+   (1) Skin type characteristics
+   (2) Texture & surface quality
+   (3) Pigmentation & color
+   (4) Vascular/circulation status
+   (5) Acne & congestion evaluation
+   (6) Aging & photoaging assessment
+   (7) Inflammatory-pattern visual clues (no disease names)
+   (8) Barrier function & health
+   (9) Structural/anatomical assessments
+   (10) Lesion mapping (visual-only; encourage in-person eval for anything concerning)
+   (11) Lymphatic & puffiness assessment
+   (12) Lifestyle indicators seen in skin
+   (13) Cosmetic procedure history clues (visual hints)
+   (14) Hair & scalp clues
+   (15) Neck/chest/hands observations
 
 OUTPUT FORMAT (MUST FOLLOW EXACTLY):
 FITZPATRICK_TYPE: <I, II, III, IV, V, or VI>
-FITZPATRICK_SUMMARY: <2–4 cosmetic sentences>
+FITZPATRICK_SUMMARY: <2–4 sentences>
 
 <blank line>
 
-<one continuous personal letter, no section headings>
-May your skin always glow as bright as your smile. ~ Dr. Lazuk
+<ONE continuous personal letter (no section headings). End with:
+"May your skin always glow as bright as your smile." ~ Dr. Lazuk
+
+FINAL TWO LINES (INTERNAL, MUST INCLUDE — I will remove them before sending):
+INTERNAL_SELFIE_DETAIL_OK: YES
+INTERNAL_COVERAGE: OK
 `.trim();
 
   const userPrompt = `
 Person details:
 - Age range: ${ageRange}
 - Primary cosmetic concern: ${primaryConcern}
-- Visitor question (if any): ${visitorQuestion || 'none provided'}
+- Visitor question: ${visitorQuestion || 'none provided'}
 
-Structured analysis context (do NOT print this JSON; weave it into the narrative):
+Structured analysis context (do NOT print JSON; weave it into the letter):
 ${JSON.stringify(analysisContext, null, 2)}
 
-Raw image analysis payload (do NOT dump; use only to stay grounded):
+Raw image analysis (do NOT print JSON; use it to be specific):
 ${JSON.stringify(imageAnalysis || {}, null, 2)}
 
-Respect the Fitzpatrick estimate if present in the context.
+Important: If you do not have enough selfie detail, use what's available (tags like glasses/eye color/clothing).
+If still missing, politely mention what you can see (lighting, overall vibe) without inventing specifics.
 `.trim();
 
-  try {
+  // 4) Generate with enforcement retries
+  const textModel = process.env.OPENAI_TEXT_MODEL || 'gpt-4.1-mini';
+
+  let full = '';
+  for (let attempt = 1; attempt <= 3; attempt++) {
     const completion = await client.chat.completions.create({
-      model: 'gpt-4.1-mini',
-      temperature: 0.55,
-      max_tokens: 1900,
+      model: textModel,
+      temperature: attempt === 1 ? 0.55 : 0.4,
+      max_tokens: 2100,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
       ]
     });
 
-    const full = completion.choices?.[0]?.message?.content || '';
+    full = completion.choices?.[0]?.message?.content || '';
+    if (hasCoverageLine(full) && hasSelfieDetailOkLine(full)) break;
 
-    let fitzpatrickType = null;
-    let fitzpatrickSummary = null;
-    let reportText = full;
-
-    const typeMatch = full.match(/FITZPATRICK_TYPE:\s*([IVX]+)/i);
-    if (typeMatch) {
-      fitzpatrickType = typeMatch[1].toUpperCase();
-      reportText = reportText.replace(typeMatch[0], '');
-    }
-
-    const summaryMatch = full.match(/FITZPATRICK_SUMMARY:\s*([\s\S]*?)(\n\s*\n|$)/i);
-    if (summaryMatch) {
-      fitzpatrickSummary = summaryMatch[1].trim();
-      reportText = reportText.replace(summaryMatch[0], '');
-    }
-
-    reportText = reportText.trim();
-    const cleanedReportText = reportText.replace(/^\[Section\s+\d+\][^\n]*\n?/gm, '').trim();
-
-    const safeConcern = primaryConcern || 'Not specified';
-
-    const agingPreviewImages = await generateAgingPreviewImages({
-      ageRange,
-      primaryConcern,
-      fitzpatrickType
-    });
-
-    console.log('AGING_PREVIEW_IMAGES', JSON.stringify(agingPreviewImages, null, 2));
-
-    let agingPreviewHtml = '';
-    if (
-      agingPreviewImages.noChange10 ||
-      agingPreviewImages.noChange20 ||
-      agingPreviewImages.withCare10 ||
-      agingPreviewImages.withCare20
-    ) {
-      agingPreviewHtml = `
-        <div style="margin-top: 24px; padding: 16px 16px 18px; border-radius: 10px; border: 1px solid #E5E7EB; background-color: #F9FAFB;">
-          <h2 style="font-size: 15px; font-weight: 700; margin: 0 0 8px;">
-            Your Skin’s Future Story — A Preview
-          </h2>
-          <p style="font-size: 12px; color: #4B5563; margin: 0 0 10px;">
-            These images are AI-generated visualizations created for cosmetic education and entertainment only.
-            They are not medical predictions and may not reflect your actual future appearance.
-          </p>
-
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 8px;">
-            ${
-              agingPreviewImages.noChange10
-                ? `
-            <div>
-              <img src="${agingPreviewImages.noChange10}" alt="Approximate 10-year future if routine does not change" style="width: 100%; border-radius: 10px; border: 1px solid #E5E7EB;" />
-              <p style="font-size: 11px; color: #4B5563; margin-top: 4px;">~10 years – minimal skincare changes</p>
-            </div>`
-                : ''
-            }
-            ${
-              agingPreviewImages.noChange20
-                ? `
-            <div>
-              <img src="${agingPreviewImages.noChange20}" alt="Approximate 20-year future if routine does not change" style="width: 100%; border-radius: 10px; border: 1px solid #E5E7EB;" />
-              <p style="font-size: 11px; color: #4B5563; margin-top: 4px;">~20 years – minimal skincare changes</p>
-            </div>`
-                : ''
-            }
-            ${
-              agingPreviewImages.withCare10
-                ? `
-            <div>
-              <img src="${agingPreviewImages.withCare10}" alt="Approximate 10-year future with consistent skincare" style="width: 100%; border-radius: 10px; border: 1px solid #E5E7EB;" />
-              <p style="font-size: 11px; color: #4B5563; margin-top: 4px;">~10 years – with supportive care</p>
-            </div>`
-                : ''
-            }
-            ${
-              agingPreviewImages.withCare20
-                ? `
-            <div>
-              <img src="${agingPreviewImages.withCare20}" alt="Approximate 20-year future with consistent skincare" style="width: 100%; border-radius: 10px; border: 1px solid #E5E7EB;" />
-              <p style="font-size: 11px; color: #4B5563; margin-top: 4px;">~20 years – with supportive care</p>
-            </div>`
-                : ''
-            }
-          </div>
-        </div>
-      `;
-    }
-
-    const visitorHtml = `
-      <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111827; line-height: 1.5; background-color: #F9FAFB; padding: 20px;">
-        <div style="max-width: 680px; margin: 0 auto; background-color: #FFFFFF; border-radius: 12px; border: 1px solid #E5E7EB; padding: 20px 24px;">
-          <h1 style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">
-            Your Dr. Lazuk Virtual Skin Analysis
-          </h1>
-          <p style="font-size: 13px; color: #4B5563; margin-bottom: 14px;">
-            Thank you for trusting us with this cosmetic, education-only look at your skin.
-            This is not medical advice, and no medical conditions are being evaluated or treated.
-          </p>
-
-          ${
-            photoDataUrl
-              ? `
-          <div style="margin: 12px 0 18px 0; text-align: left;">
-            <p style="font-size: 12px; color: #6B7280; margin: 0 0 6px 0;">The photo you shared:</p>
-            <img src="${photoDataUrl}" alt="Your uploaded skin photo" style="max-width: 210px; border-radius: 10px; border: 1px solid #E5E7EB;" />
-          </div>
-          `
-              : ''
-          }
-
-          ${
-            fitzpatrickType || fitzpatrickSummary
-              ? `
-          <div style="border: 1px solid #FCD34D; background-color: #FFFBEB; padding: 12px 16px; margin-bottom: 16px; border-radius: 8px;">
-            <h2 style="font-size: 14px; font-weight: 700; color: #92400E; margin: 0 0 4px 0;">
-              Fitzpatrick Skin Type (Cosmetic Estimate)
-            </h2>
-            ${
-              fitzpatrickType
-                ? `<p style="font-size: 13px; font-weight: 600; color: #92400E; margin: 0 0 4px 0;">Type ${fitzpatrickType}</p>`
-                : ''
-            }
-            ${
-              fitzpatrickSummary
-                ? `<p style="font-size: 13px; color: #92400E; margin: 0;">${fitzpatrickSummary}</p>`
-                : ''
-            }
-            ${fitzpatrickType ? renderFitzpatrickScaleHtml(fitzpatrickType) : ''}
-            <p style="font-size: 11px; color: #92400E; margin-top: 8px;">
-              This is a visual, cosmetic estimate only and is not a medical diagnosis.
-            </p>
-          </div>
-          `
-              : ''
-          }
-
-          ${agingPreviewHtml}
-
-          <pre style="white-space: pre-wrap; font-size: 13px; margin-top: 16px; color: #111827;">${cleanedReportText}</pre>
-
-          <hr style="border-top: 1px solid #E5E7EB; margin: 24px 0;" />
-
-          <p style="font-size: 12px; color: #6B7280; margin-bottom: 4px;">
-            If you have any medical concerns or skin conditions, please see a qualified in-person professional.
-          </p>
-          <p style="font-size: 12px; color: #6B7280;">
-            With care,<br/>
-            Dr. Lazuk Esthetics® &amp; Dr. Lazuk Cosmetics®
-          </p>
-        </div>
-      </div>
-    `;
-
-    const clinicEmail = process.env.RESEND_CLINIC_EMAIL || 'contact@drlazuk.com';
-
-    const clinicHtml = `
-      <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111827; line-height: 1.5; background-color: #F9FAFB; padding: 16px;">
-        <div style="max-width: 680px; margin: 0 auto; background-color: #FFFFFF; border-radius: 12px; border: 1px solid #E5E7EB; padding: 20px 24px;">
-          <h1 style="font-size: 18px; font-weight: 700; margin-bottom: 4px;">
-            New Virtual Skin Analysis – Cosmetic Report
-          </h1>
-          <ul style="font-size: 13px; color: #374151; margin-bottom: 12px; padding-left: 18px;">
-            <li><strong>Email:</strong> ${email}</li>
-            <li><strong>Age Range:</strong> ${ageRange}</li>
-            <li><strong>Primary Concern:</strong> ${safeConcern}</li>
-            ${fitzpatrickType ? `<li><strong>Fitzpatrick Estimate:</strong> Type ${fitzpatrickType}</li>` : ''}
-          </ul>
-
-          ${agingPreviewHtml}
-
-          <hr style="border-top: 1px solid #E5E7EB; margin: 16px 0;" />
-          <pre style="white-space: pre-wrap; font-size: 13px; color: #111827;">${cleanedReportText}</pre>
-        </div>
-      </div>
-    `;
-
-    await Promise.all([
-      sendEmailWithResend({
-        to: email,
-        subject: 'Your Dr. Lazuk Virtual Skin Analysis Report',
-        html: visitorHtml
-      }),
-      sendEmailWithResend({
-        to: clinicEmail,
-        subject: 'New Skincare Analysis Guest',
-        html: clinicHtml
-      })
-    ]);
-
-    return res.status(200).json({
-      ok: true,
-      report: cleanedReportText,
-      fitzpatrickType: fitzpatrickType || null,
-      fitzpatrickSummary: fitzpatrickSummary || null,
-      agingPreviewImages
-    });
-  } catch (error) {
-    console.error('generate-report error:', error);
-    return res.status(500).json({
-      ok: false,
-      error: 'openai_error',
-      message: error?.message || 'Unknown error calling OpenAI'
+    console.warn('Report validation failed, retrying...', {
+      attempt,
+      hasCoverage: hasCoverageLine(full),
+      hasSelfieDetail: hasSelfieDetailOkLine(full)
     });
   }
+
+  // Parse FITZPATRICK_TYPE and FITZPATRICK_SUMMARY
+  let fitzpatrickType = null;
+  let fitzpatrickSummary = null;
+  let reportText = full;
+
+  const typeMatch = full.match(/FITZPATRICK_TYPE:\s*([IVX]+)/i);
+  if (typeMatch) {
+    fitzpatrickType = typeMatch[1].toUpperCase();
+    reportText = reportText.replace(typeMatch[0], '');
+  }
+
+  const summaryMatch = full.match(/FITZPATRICK_SUMMARY:\s*([\s\S]*?)(\n\s*\n|$)/i);
+  if (summaryMatch) {
+    fitzpatrickSummary = summaryMatch[1].trim();
+    reportText = reportText.replace(summaryMatch[0], '');
+  }
+
+  reportText = stripInternalLines(reportText).trim();
+  const safeConcern = primaryConcern || 'Not specified';
+
+  // 5) 4 aging images (kept)
+  const agingPreviewImages = await generateAgingPreviewImages({
+    client,
+    ageRange,
+    primaryConcern,
+    fitzpatrickType
+  });
+
+  // Build aging preview HTML (kept)
+  let agingPreviewHtml = '';
+  if (
+    agingPreviewImages.noChange10 ||
+    agingPreviewImages.noChange20 ||
+    agingPreviewImages.withCare10 ||
+    agingPreviewImages.withCare20
+  ) {
+    agingPreviewHtml = `
+      <div style="margin-top: 24px; padding: 16px 16px 18px; border-radius: 10px; border: 1px solid #E5E7EB; background-color: #F9FAFB;">
+        <h2 style="font-size: 15px; font-weight: 700; margin: 0 0 8px;">
+          Your Skin’s Future Story — A Preview
+        </h2>
+        <p style="font-size: 12px; color: #4B5563; margin: 0 0 10px;">
+          These images are AI-generated visualizations created for cosmetic education and entertainment only.
+          They are not medical predictions and may not reflect your actual future appearance.
+          Their purpose is simply to show how lifestyle and skincare choices might influence the overall impression of aging over time.
+        </p>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 8px;">
+          ${
+            agingPreviewImages.noChange10
+              ? `
+          <div>
+            <img src="${agingPreviewImages.noChange10}" alt="Approximate 10-year future if routine does not change" style="width: 100%; border-radius: 10px; border: 1px solid #E5E7EB;" />
+            <p style="font-size: 11px; color: #4B5563; margin-top: 4px;">~10 years – minimal skincare changes</p>
+          </div>`
+              : ''
+          }
+          ${
+            agingPreviewImages.noChange20
+              ? `
+          <div>
+            <img src="${agingPreviewImages.noChange20}" alt="Approximate 20-year future if routine does not change" style="width: 100%; border-radius: 10px; border: 1px solid #E5E7EB;" />
+            <p style="font-size: 11px; color: #4B5563; margin-top: 4px;">~20 years – minimal skincare changes</p>
+          </div>`
+              : ''
+          }
+          ${
+            agingPreviewImages.withCare10
+              ? `
+          <div>
+            <img src="${agingPreviewImages.withCare10}" alt="Approximate 10-year future with consistent skincare" style="width: 100%; border-radius: 10px; border: 1px solid #E5E7EB;" />
+            <p style="font-size: 11px; color: #4B5563; margin-top: 4px;">~10 years – with consistent care</p>
+          </div>`
+              : ''
+          }
+          ${
+            agingPreviewImages.withCare20
+              ? `
+          <div>
+            <img src="${agingPreviewImages.withCare20}" alt="Approximate 20-year future with consistent skincare" style="width: 100%; border-radius: 10px; border: 1px solid #E5E7EB;" />
+            <p style="font-size: 11px; color: #4B5563; margin-top: 4px;">~20 years – with consistent care</p>
+          </div>`
+              : ''
+          }
+        </div>
+      </div>
+    `;
+  }
+
+  // Visitor email HTML (kept)
+  const visitorHtml = `
+    <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111827; line-height: 1.5; background-color: #F9FAFB; padding: 20px;">
+      <div style="max-width: 680px; margin: 0 auto; background-color: #FFFFFF; border-radius: 12px; border: 1px solid #E5E7EB; padding: 20px 24px;">
+        <h1 style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">Your Dr. Lazuk Virtual Skin Analysis</h1>
+        <p style="font-size: 13px; color: #4B5563; margin-bottom: 14px;">
+          Thank you for trusting us with this cosmetic, education-only look at your skin.
+          This is not medical advice, and no medical conditions are being evaluated or treated.
+        </p>
+
+        ${
+          photoDataUrl
+            ? `
+        <div style="margin: 12px 0 18px 0; text-align: left;">
+          <p style="font-size: 12px; color: #6B7280; margin: 0 0 6px 0;">The photo you shared:</p>
+          <img src="${photoDataUrl}" alt="Your uploaded skin photo" style="max-width: 210px; border-radius: 10px; border: 1px solid #E5E7EB;" />
+        </div>`
+            : ''
+        }
+
+        ${
+          fitzpatrickType || fitzpatrickSummary
+            ? `
+        <div style="border: 1px solid #FCD34D; background-color: #FFFBEB; padding: 12px 16px; margin-bottom: 16px; border-radius: 8px;">
+          <h2 style="font-size: 14px; font-weight: 700; color: #92400E; margin: 0 0 4px 0;">Fitzpatrick Skin Type (Cosmetic Estimate)</h2>
+          ${
+            fitzpatrickType
+              ? `<p style="font-size: 13px; font-weight: 600; color: #92400E; margin: 0 0 4px 0;">Type ${fitzpatrickType}</p>`
+              : ''
+          }
+          ${
+            fitzpatrickSummary
+              ? `<p style="font-size: 13px; color: #92400E; margin: 0;">${fitzpatrickSummary}</p>`
+              : ''
+          }
+          ${fitzpatrickType ? renderFitzpatrickScaleHtml(fitzpatrickType) : ''}
+          <p style="font-size: 11px; color: #92400E; margin-top: 8px;">This is a visual, cosmetic estimate only and is not a medical diagnosis.</p>
+        </div>`
+            : ''
+        }
+
+        ${agingPreviewHtml}
+
+        <pre style="white-space: pre-wrap; font-size: 13px; margin-top: 16px; color: #111827;">${reportText}</pre>
+
+        <hr style="border-top: 1px solid #E5E7EB; margin: 24px 0;" />
+        <p style="font-size: 12px; color: #6B7280; margin-bottom: 4px;">If you have any medical concerns or skin conditions, please see a qualified in-person professional.</p>
+        <p style="font-size: 12px; color: #6B7280; margin-bottom: 8px;">If you’d like in-person, customized care, our team at Dr. Lazuk Esthetics® in Georgia would be honored to see you.</p>
+        <p style="font-size: 12px; color: #6B7280;">
+          With care,<br/>
+          Dr. Lazuk Esthetics® &amp; Dr. Lazuk Cosmetics®<br/>
+          <a href="mailto:contact@drlazuk.com" style="color: #111827; text-decoration: underline;">contact@drlazuk.com</a>
+        </p>
+      </div>
+    </div>
+  `;
+
+  // Clinic email HTML (kept)
+  const clinicEmail = process.env.RESEND_CLINIC_EMAIL || 'contact@drlazuk.com';
+
+  const clinicHtml = `
+    <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111827; line-height: 1.5; background-color: #F9FAFB; padding: 16px;">
+      <div style="max-width: 680px; margin: 0 auto; background-color: #FFFFFF; border-radius: 12px; border: 1px solid #E5E7EB; padding: 20px 24px;">
+        <h1 style="font-size: 18px; font-weight: 700; margin-bottom: 4px;">New Virtual Skin Analysis – Cosmetic Report</h1>
+        <p style="font-size: 13px; color: #4B5563; margin-bottom: 8px;">A visitor completed the Dr. Lazuk virtual skin analysis.</p>
+        <ul style="font-size: 13px; color: #374151; margin-bottom: 12px; padding-left: 18px;">
+          <li><strong>Email:</strong> ${email}</li>
+          <li><strong>Age Range:</strong> ${ageRange}</li>
+          <li><strong>Primary Concern:</strong> ${safeConcern}</li>
+          ${fitzpatrickType ? `<li><strong>Fitzpatrick Estimate:</strong> Type ${fitzpatrickType}</li>` : ''}
+        </ul>
+        ${fitzpatrickSummary ? `<p style="font-size: 13px; margin-bottom: 12px;"><strong>Fitzpatrick Summary:</strong> ${fitzpatrickSummary}</p>` : ''}
+
+        ${
+          photoDataUrl
+            ? `
+        <div style="margin: 12px 0 18px 0;">
+          <p style="font-size: 12px; color: #6B7280; margin: 0 0 6px 0;">Visitor photo (data URL):</p>
+          <img src="${photoDataUrl}" alt="Uploaded skin photo" style="max-width: 210px; border-radius: 10px; border: 1px solid #E5E7EB;" />
+        </div>`
+            : ''
+        }
+
+        ${agingPreviewHtml}
+
+        <hr style="border-top: 1px solid #E5E7EB; margin: 16px 0;" />
+        <pre style="white-space: pre-wrap; font-size: 13px; color: #111827;">${reportText}</pre>
+      </div>
+    </div>
+  `;
+
+  // Send visitor + clinic emails
+  await Promise.all([
+    sendEmailWithResend({
+      to: email,
+      subject: 'Your Dr. Lazuk Virtual Skin Analysis Report',
+      html: visitorHtml
+    }),
+    sendEmailWithResend({
+      to: clinicEmail,
+      subject: 'New Skincare Analysis Guest',
+      html: clinicHtml
+    })
+  ]);
+
+  // Response to frontend
+  return res.status(200).json({
+    ok: true,
+    report: reportText,
+    fitzpatrickType: fitzpatrickType || null,
+    fitzpatrickSummary: fitzpatrickSummary || null,
+    agingPreviewImages,
+    // Helpful for debugging: confirms whether we had/enriched image analysis
+    _debug: {
+      usedIncomingImageAnalysis: !!incomingImageAnalysis,
+      enrichedWithVision: !isLikelyWeakImageAnalysis(imageAnalysis) && !!photoDataUrl
+    }
+  });
 };
+
 
