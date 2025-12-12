@@ -89,11 +89,12 @@ with the following shape ONLY (no extra keys):
   },
 
   "analysis": {
-    "complimentFeatures": string,       // Very warm, specific compliment based on what you SEE:
-                                        // e.g., mention eyes, smile, glasses, clothing color, bouquet of flowers or
-                                        // object they are holding, hairstyle, or overall vibe.
+"complimentFeatures": string,           // Very warm, specific compliment based on what you SEE:
+                                        // you MUST mention at least one concrete visible detail:
+                                        // eyes, smile, glasses, hair, clothing color or pattern,
+                                        // bouquet of flowers or object they are holding, or background vibe.
                                         // Example: "Your light blue eyes and gentle smile give you such an open, kind presence,
-                                        // and the soft floral bouquet you’re holding makes the whole image feel joyful and luminous."
+                                        // and the large bouquet of flowers you’re holding makes the whole image feel joyful and luminous."
 
     "skinFindings": string,                 // 2–4 sentences summarizing what the skin is "telling" you overall:
                                             // texture, evenness, glow, visible pores, general first impression.
