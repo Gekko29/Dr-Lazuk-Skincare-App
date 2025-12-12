@@ -17,6 +17,37 @@ async function getBuildAnalysis() {
   _buildAnalysis = mod.buildAnalysis;
   return _buildAnalysis;
 }
+async function ensureImageAnalysis({ photoDataUrl, imageAnalysis }) {
+  if (imageAnalysis) return imageAnalysis;
+  if (!photoDataUrl) return null;
+
+  // Call your existing /api/analyzeImage if frontend didn't send imageAnalysis.
+  const base =
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '');
+
+  if (!base) {
+    console.warn('No base URL available to call /api/analyzeImage; returning null imageAnalysis.');
+    return null;
+  }
+
+  try {
+    const r = await fetch(`${base}/api/analyzeImage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ photoDataUrl })
+    });
+
+    if (!r.ok) {
+      console.error('ensureImageAnalysis: analyzeImage failed', r.status, await r.text());
+      return null;
+    }
+    return await r.json();
+  } catch (e) {
+    console.error('ensureImageAnalysis exception:', e);
+    return null;
+  }
+}
 
 // Small helper to render a simple Fitzpatrick scale line in HTML
 function renderFitzpatrickScaleHtml(type) {
