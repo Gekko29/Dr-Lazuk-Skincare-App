@@ -325,10 +325,10 @@ STRUCTURE (INTERNAL ONLY – DO NOT SHOW HEADINGS):
 Write ONE continuous letter (no section labels, no headings). Internally, you must cover these 10 themes, in this order, but the reader should only experience a smooth, connected narrative:
 
 1) Welcome & Important Notice:
-   - Open with a very personal, specific compliment inspired by selfie.compliment and selfie.tags
-     (for example, mention their eyes, expression, colors, or overall vibe in a natural way).
-   - Explain that what you are sharing is a cosmetic, appearance-only snapshot meant for education and encouragement.
-   - Gently include the entertainment / non-medical nature of the analysis.
+  - If selfie.compliment is present, you MUST use it as inspiration and paraphrase it in your own words as Dr. Lazuk.
+  - Explicitly mention at least ONE concrete visual detail from the selfie (for example: their eyes, smile, glasses, clothing color or pattern, bouquet of flowers, or overall vibe).
+  - Mention that you are looking at a cosmetic, appearance-only snapshot of their skin.
+  - Briefly include the education/entertainment-only disclaimer in a warm, human way.
 
 2) First Impressions of Their Skin Story:
    - Use skinProfile.inferredTexture, skinProfile.overallGlow, strengths, and visibleIssues.
@@ -390,6 +390,7 @@ Write ONE continuous letter (no section labels, no headings). Internally, you mu
 GENERAL WRITING RULES:
 - Do NOT mention or show the JSON or the term "analysis context" in the letter.
 - Do NOT use headings like "[Section 1]" or any numbered section labels in the visible text.
+- If selfie.compliment or selfie.tags are present in the structured context, at least TWO paragraphs in the letter must clearly reference specific visual details (eyes, smile, glasses, clothing color, bouquet, or similar) so the reader feels seen as a unique person, not a template.
 - Avoid bullet lists except in very rare, short clarifications. Favor narrative, flowing prose.
 - Keep the letter rich but digestible: typically 700–1100 words after the FITZPATRICK lines.
 - Never apologize, hedge excessively, or sound like an AI model.
@@ -420,7 +421,6 @@ ${JSON.stringify(imageAnalysis || {}, null, 2)}
 
 Please infer a plausible Fitzpatrick type based on typical patterns for this age and concern, while respecting any estimate in the selfie analysis. Emphasize that this is cosmetic-only.
 `.trim();
-
 
   try {
     const completion = await client.chat.completions.create({
