@@ -458,12 +458,15 @@ Please infer a plausible Fitzpatrick type based on typical patterns for this age
 
     const safeConcern = primaryConcern || 'Not specified';
 
-    // 🔮 Generate the 4 aging preview images (may gracefully return nulls)
-    const agingPreviewImages = await generateAgingPreviewImages({
-      ageRange,
-      primaryConcern,
-      fitzpatrickType
-    });
+// 🔮 Generate the 4 aging preview images (may gracefully return nulls)
+const agingPreviewImages = await generateAgingPreviewImages({
+  ageRange,
+  primaryConcern,
+  fitzpatrickType
+});
+
+// TEMP: log what we actually got back
+console.log('AGING_PREVIEW_IMAGES', JSON.stringify(agingPreviewImages, null, 2));
 
     // Build the "Your Skin's Future Story — A Preview" HTML block
     let agingPreviewHtml = '';
