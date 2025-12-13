@@ -2,12 +2,6 @@
 // CommonJS-safe (no top-level ESM imports) + optional vision selfie analysis
 // + brand-locked products/services + cosmetic-only language safeguards.
 
-const path = require("path");
-const { pathToFileURL } = require("url");
-
-// -------------------------
-// Helpers: dynamic imports
-// -------------------------
 async function getOpenAIClient() {
   const mod = await import("openai");
   const OpenAI = mod?.default || mod;
@@ -86,18 +80,53 @@ const serviceList = `
 `.trim();
 
 // -------------------------
-// Optional: Vision selfie analysis (15-point cosmetic checklist)
+// Vision selfie analysis (15-point cosmetic checklist)
 // -------------------------
-function safeJsonExtract(text) {
-  const s = String(text || "");
-  const start = s.indexOf("{");
-  const end = s.lastIndexOf("}");
-  if (start === -1 || end === -1) return null;
-  try {
-    return JSON.parse(s.slice(start, end + 1));
-  } catch {
-    return null;
+function extractJson(rawText) {
+  const text = String(rawText || "").trim();
+
+  // Strip ```json fences if present
+  const fenceMatch = text.match(/```json\s*([\s\S]*?)\s*```/i);
+  if (fenceMatch?.[1]) return fenceMatch[1].trim();
+
+  // Otherwise slice from first { to last }
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start !== -1 && end !== -1 && end > start) {
+    return text.slice(start, end + 1).trim();
   }
+
+  return text;
+}
+
+function normalizeFitzpatrick(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 1 || n > 6) return null;
+  return n;
+}
+
+function scaffoldChecklist15(existing) {
+  const base = {
+    "1_skinTypeCharacteristics": "",
+    "2_textureSurfaceQuality": "",
+    "3_pigmentationColor": "",
+    "4_vascularCirculation": "",
+    "5_acneCongestion": "",
+    "6_agingPhotoaging": "",
+    "7_inflammatoryClues": "",
+    "8_barrierHealth": "",
+    "9_structuralAnatomy": "",
+    "10_lesionMapping": "",
+    "11_lymphaticPuffiness": "",
+    "12_lifestyleIndicators": "",
+    "13_procedureHistoryClues": "",
+    "14_hairScalpClues": "",
+    "15_neckChestHands": ""
+  };
+  if (existing && typeof existing === "object") {
+    return { ...base, ...existing };
+  }
+  return base;
 }
 
 async function analyzeSelfieWithVision({ client, photoDataUrl, userQuestion }) {
@@ -161,20 +190,37 @@ User’s question context (may help you focus, but do not diagnose): ${userQuest
     const resp = await client.chat.completions.create({
       model: visionModel,
       temperature: 0.2,
-      max_tokens: 900,
+      max_tokens: 950,
       messages: [
         {
           role: "user",
           content: [
             { type: "text", text: prompt },
-            { type: "image_url", image_url: { url: photoDataUrl } },
-          ],
-        },
-      ],
+            { type: "image_url", image_url: { url: photoDataUrl } }
+          ]
+        }
+      ]
     });
 
     const text = resp?.choices?.[0]?.message?.content || "";
-    return safeJsonExtract(text);
+    const parsed = JSON.parse(extractJson(text));
+
+    // Normalize + scaffold to keep downstream consistent
+    const out = {
+      fitzpatrickType: normalizeFitzpatrick(parsed?.fitzpatrickType),
+      skinType: parsed?.skinType || null,
+      raw: parsed?.raw || {},
+      analysis: parsed?.analysis || {}
+    };
+
+    if (!out.analysis.complimentFeatures || typeof out.analysis.complimentFeatures !== "string") {
+      out.analysis.complimentFeatures =
+        "Your expression has a calm, approachable warmth — my goal is to help your skin reflect that same ease and radiance.";
+    }
+
+    out.analysis.checklist15 = scaffoldChecklist15(out.analysis.checklist15);
+
+    return out;
   } catch (err) {
     console.error("ask-dr-lazuk vision error:", err);
     return null;
@@ -193,7 +239,7 @@ module.exports = async function handler(req, res) {
   if (!process.env.OPENAI_API_KEY) {
     return res.status(500).json({
       ok: false,
-      error: "OPENAI_API_KEY is not set in the environment",
+      error: "OPENAI_API_KEY is not set in the environment"
     });
   }
 
@@ -203,8 +249,7 @@ module.exports = async function handler(req, res) {
     return res.status(403).json({
       ok: false,
       error: "geo_restricted",
-      message:
-        "The Dr. Lazuk virtual skincare assistant chat is currently available to U.S. visitors only.",
+      message: "The Dr. Lazuk virtual skincare assistant chat is currently available to U.S. visitors only."
     });
   }
 
@@ -213,8 +258,7 @@ module.exports = async function handler(req, res) {
     return res.status(429).json({
       ok: false,
       error: "rate_limited",
-      message:
-        "You’ve reached the current chat request limit. Please wait a little while before trying again.",
+      message: "You’ve reached the current chat request limit. Please wait a little while before trying again."
     });
   }
 
@@ -223,31 +267,24 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({
       ok: false,
       error: "invalid_body",
-      message: "messages array is required",
+      message: "messages array is required"
     });
   }
 
-  // Normalize messages
   const normalized = messages.map((m) => ({
     role: m.role === "assistant" ? "assistant" : "user",
-    content: String(m.content || ""),
+    content: String(m.content || "")
   }));
 
-  // Extract most recent user question for context
   const lastUser = [...normalized].reverse().find((m) => m.role === "user");
   const userQuestion = lastUser?.content || "";
 
   const client = await getOpenAIClient();
 
   // Optional vision analysis if photo provided
-  let vision = null;
-  if (photoDataUrl) {
-    vision = await analyzeSelfieWithVision({
-      client,
-      photoDataUrl,
-      userQuestion,
-    });
-  }
+  const vision = photoDataUrl
+    ? await analyzeSelfieWithVision({ client, photoDataUrl, userQuestion })
+    : null;
 
   const systemPrompt = `
 You are Dr. Iryna Lazuk, a dermatologist and founder of Dr. Lazuk Esthetics® and Dr. Lazuk Cosmetics® in Johns Creek, Georgia.
@@ -261,38 +298,44 @@ NON-NEGOTIABLE SAFETY / SCOPE:
 
 LANGUAGE GUARDRAILS:
 - Avoid medical disease names (e.g., rosacea, melasma, eczema, psoriasis, cancer).
-- Speak in appearance-based terms: redness, uneven tone, dryness, oiliness, texture, fine lines, visible spots, irritation, etc.
+- Speak in appearance-based terms only: redness, uneven tone, dryness, oiliness, texture, fine lines, visible spots, irritation, puffiness, etc.
 
 TONE:
-- Warm, clear, elegant, reassuring, and practical.
-- Speak as "I" to "you". No robotic checklists.
-- If a selfie analysis is provided, reference ONE concrete visible detail (glasses/eye color/hair/clothing color) only if present in the analysis.
+- Warm, elegant, practical, reassuring.
+- Speak as "I" to "you".
+- Avoid cold checklists; use short, flowing paragraphs.
 
 BRAND / RECOMMENDATIONS:
-- When recommending products, ONLY use this list:
+- If you recommend products, ONLY use this list:
 ${productList}
 
-- When suggesting services, ONLY use this list:
+- If you suggest services, ONLY use this list:
 ${serviceList}
 
-If the user asks for something outside these lists, explain you’ll keep it general and offer on-brand alternatives.
+SELFIE CONTEXT (if provided by the system):
+- If a selfie analysis is present, you may reference ONE concrete visible detail (glasses/eye color/hair/clothing) ONLY if that exact detail exists in the selfie analysis.
+- Use the 15-point checklist insights to guide what you mention, but weave it naturally (do not list the categories).
+
+If the user asks for something outside these lists, keep it general and offer an on-brand alternative.
 `.trim();
 
-  // If vision exists, inject it as hidden context for specificity
   const visionContextMessage = vision
     ? {
         role: "system",
         content: `
-Selfie-based cosmetic context (do NOT output as JSON; use only to personalize tone and observations):
+Selfie-based cosmetic context (PRIVATE):
+- Do NOT output this JSON.
+- Use it only to personalize and stay specific without guessing.
+
 ${JSON.stringify(vision, null, 2)}
-`.trim(),
+`.trim()
       }
     : null;
 
   const chatMessages = [
     { role: "system", content: systemPrompt },
     ...(visionContextMessage ? [visionContextMessage] : []),
-    ...normalized,
+    ...normalized
   ];
 
   try {
@@ -302,14 +345,13 @@ ${JSON.stringify(vision, null, 2)}
       model: textModel,
       messages: chatMessages,
       max_tokens: 900,
-      temperature: 0.7,
+      temperature: 0.7
     });
 
     let reply =
       completion?.choices?.[0]?.message?.content ||
       "I’m sorry, I wasn’t able to generate a response just now.";
 
-    // Prepend disclaimer only for first reply
     if (isFirstReply) {
       const disclaimer =
         "Important: This conversation is for general cosmetic education and entertainment only and is not medical advice. For any personal or urgent concerns, please see a licensed medical professional.\n\n";
@@ -319,26 +361,25 @@ ${JSON.stringify(vision, null, 2)}
     return res.status(200).json({
       ok: true,
       reply,
-      // Optional debug + vision summary (kept small)
       _debug: {
         visionUsed: !!vision,
         hasPhoto: !!photoDataUrl,
-        model: textModel,
+        model: textModel
       },
       vision: vision
         ? {
             fitzpatrickType: vision.fitzpatrickType ?? null,
             skinType: vision.skinType ?? null,
-            raw: vision.raw ?? null,
+            raw: vision.raw ?? null
           }
-        : null,
+        : null
     });
   } catch (error) {
     console.error("ask-dr-lazuk error:", error);
     return res.status(500).json({
       ok: false,
       error: "openai_request_failed",
-      message: String(error?.message || error),
+      message: String(error?.message || error)
     });
   }
 };
