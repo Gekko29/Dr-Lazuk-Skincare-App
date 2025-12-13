@@ -5,45 +5,10 @@
 //
 // Returns:
 // {
-//   raw: {
-//     wearingGlasses: boolean | null,
-//     eyeColor: string | null,
-//     hairColor: string | null,
-//     clothingColor: string | null,
-//     globalTexture: string | null,
-//     tZonePores: boolean | null,
-//     pigmentType: string | null,
-//     fineLinesRegions: string | null
-//   },
-//   analysis: {
-//     complimentFeatures: string,
-//     skinFindings: string,
-//     texture: string,
-//     poreBehavior: string,
-//     pigment: string,
-//     fineLinesAreas: string,
-//     elasticity: string,
-//     eveningActive: string,
-//     estheticRecommendations: string,
-//     checklist15: {
-//       "1_skinTypeCharacteristics": string,
-//       "2_textureSurfaceQuality": string,
-//       "3_pigmentationColor": string,
-//       "4_vascularCirculation": string,
-//       "5_acneCongestion": string,
-//       "6_agingPhotoaging": string,
-//       "7_inflammatoryClues": string,
-//       "8_barrierHealth": string,
-//       "9_structuralAnatomy": string,
-//       "10_lesionMapping": string,
-//       "11_lymphaticPuffiness": string,
-//       "12_lifestyleIndicators": string,
-//       "13_procedureHistoryClues": string,
-//       "14_hairScalpClues": string,
-//       "15_neckChestHands": string
-//     }
-//   },
-//   fitzpatrickType: number (1–6)
+//   raw: { ... },
+//   analysis: { ... checklist15 ... },
+//   fitzpatrickType: number (1–6),
+//   skinType: "oily"|"dry"|"combination"|"normal"|null
 // }
 
 async function getOpenAIClient() {
@@ -75,6 +40,14 @@ function normalizeFitzpatrick(value) {
   return n;
 }
 
+function normalizeSkinType(value) {
+  if (!value) return null;
+  const v = String(value).toLowerCase().trim();
+  if (v.includes('combo')) return 'combination';
+  if (v === 'oily' || v === 'dry' || v === 'normal' || v === 'combination') return v;
+  return null;
+}
+
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
@@ -95,8 +68,6 @@ module.exports = async function handler(req, res) {
     }
 
     const client = await getOpenAIClient();
-
-    // We treat imageBase64 as an image URL – it can be a real URL or a data URL.
     const imageUrl = imageBase64;
 
     const visionModel = process.env.OPENAI_VISION_MODEL || 'gpt-4o-mini';
@@ -152,7 +123,8 @@ Return VALID JSON ONLY (no markdown, no extra commentary) with EXACTLY this shap
       "15_neckChestHands": string
     }
   },
-  "fitzpatrickType": number
+  "fitzpatrickType": number,
+  "skinType": "oily"|"dry"|"combination"|"normal"|null
 }
 
 IMPORTANT REQUIREMENT FOR complimentFeatures:
@@ -199,6 +171,7 @@ ${notes || 'none provided'}
     const raw = parsed.raw || {};
 
     const fitzpatrickType = normalizeFitzpatrick(parsed.fitzpatrickType);
+    const skinType = normalizeSkinType(parsed.skinType);
 
     // Minimal safety: ensure compliment exists (fallback only if model breaks)
     if (!analysis.complimentFeatures || typeof analysis.complimentFeatures !== 'string') {
@@ -230,7 +203,8 @@ ${notes || 'none provided'}
     return res.status(200).json({
       raw,
       analysis,
-      fitzpatrickType
+      fitzpatrickType,
+      skinType
     });
   } catch (error) {
     console.error('Error in /api/analyzeImage:', error);
@@ -239,4 +213,5 @@ ${notes || 'none provided'}
     });
   }
 };
+
 
