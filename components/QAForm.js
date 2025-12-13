@@ -1,6 +1,6 @@
 // components/QAForm.js
 // Reusable form for Ask-Dr-Lazuk Q&A.
-// Now supports OPTIONAL selfie upload for more personalized answers.
+// Now supports OPTIONAL selfie upload (photoDataUrl).
 
 import React from "react";
 import { ImageUploader } from "./ImageUploader";
@@ -19,28 +19,21 @@ export function QAForm({
         Ask Dr. Lazuk a Skincare Question
       </h2>
       <p style={{ color: "#777", marginBottom: "16px" }}>
-        Type your question below. If you’d like, upload a selfie so I can tailor
-        my answer to what’s visible cosmetically (education-only).
+        Type your question below. If you’d like, upload a selfie so I can make
+        the answer more visually specific (cosmetic-only).
       </p>
 
       {/* Optional selfie upload */}
-      <div style={{ marginBottom: "14px" }}>
-        <label style={{ display: "block", fontWeight: 500, marginBottom: "6px" }}>
-          Optional: Upload a selfie for more personalized guidance
-        </label>
-
-        <ImageUploader onImageSelected={onPhotoSelected} />
-
-        {photoDataUrl ? (
-          <p style={{ marginTop: "8px", color: "#666", fontSize: "0.9rem" }}>
-            ✅ Selfie attached — I’ll reference only what’s visibly present (cosmetic-only).
-          </p>
-        ) : (
-          <p style={{ marginTop: "8px", color: "#666", fontSize: "0.9rem" }}>
-            No selfie uploaded (totally fine).
-          </p>
-        )}
-      </div>
+      {typeof onPhotoSelected === "function" ? (
+        <div style={{ marginBottom: "14px" }}>
+          <ImageUploader onImageSelected={onPhotoSelected} />
+          {photoDataUrl ? (
+            <p style={{ marginTop: "6px", color: "#666", fontSize: "0.85rem" }}>
+              Selfie attached (optional).
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       <div style={{ marginBottom: "12px" }}>
         <label
@@ -88,4 +81,3 @@ export function QAForm({
     </form>
   );
 }
-
