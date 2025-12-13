@@ -1,5 +1,6 @@
 // components/FitzpatrickDetector.js
 // Fitzpatrick skin type display with color bar + friendly description.
+// Accepts numeric (1–6) OR Roman ("I"–"VI").
 
 import React from "react";
 
@@ -36,6 +37,8 @@ const TYPES = {
   },
 };
 
+const ROMAN_TO_NUM = { I: 1, II: 2, III: 3, IV: 4, V: 5, VI: 6 };
+
 // Simple gradient from very fair → very deep
 const BAR_COLORS = [
   "#ffe5e0", // I
@@ -46,29 +49,26 @@ const BAR_COLORS = [
   "#80c7ff", // VI
 ];
 
+function normalizeFitzType(type) {
+  if (type === null || type === undefined) return null;
+
+  // numeric string or number
+  const asNum = Number(type);
+  if (Number.isFinite(asNum) && asNum >= 1 && asNum <= 6) return asNum;
+
+  // roman
+  const roman = String(type).trim().toUpperCase();
+  if (ROMAN_TO_NUM[roman]) return ROMAN_TO_NUM[roman];
+
+  return null;
+}
+
 export function FitzpatrickDetector({ type, detectedBy = "auto" }) {
-  if (!type) return null;
+  const numeric = normalizeFitzType(type);
+  if (!numeric) return null;
 
-  const numeric = Number(type);
   const info = TYPES[numeric];
-
-  if (!info) {
-    return (
-      <div
-        style={{
-          marginTop: "16px",
-          padding: "12px 14px",
-          borderRadius: "10px",
-          background: "#f5f0f0",
-          border: "1px solid #e2d6d6",
-          fontSize: "0.9rem",
-        }}
-      >
-        <strong>Fitzpatrick Skin Type:</strong>{" "}
-        <span style={{ color: "#555" }}>Unknown</span>
-      </div>
-    );
-  }
+  if (!info) return null;
 
   const detectedLabel =
     detectedBy === "auto"
@@ -96,13 +96,7 @@ export function FitzpatrickDetector({ type, detectedBy = "auto" }) {
         }}
       >
         <strong>Fitzpatrick Skin Type</strong>
-        <span
-          style={{
-            fontWeight: 600,
-            fontSize: "0.95rem",
-            color: "#444",
-          }}
-        >
+        <span style={{ fontWeight: 600, fontSize: "0.95rem", color: "#444" }}>
           {info.label} (Type {numeric})
         </span>
       </div>
@@ -154,20 +148,11 @@ export function FitzpatrickDetector({ type, detectedBy = "auto" }) {
         {info.description}
       </p>
 
-      {detectedLabel && (
-        <p
-          style={{
-            margin: 0,
-            fontSize: "0.8rem",
-            color: "#888",
-          }}
-        >
+      {detectedLabel ? (
+        <p style={{ margin: 0, fontSize: "0.8rem", color: "#888" }}>
           {detectedLabel}
         </p>
-      )}
+      ) : null}
     </div>
   );
 }
-
-
-
