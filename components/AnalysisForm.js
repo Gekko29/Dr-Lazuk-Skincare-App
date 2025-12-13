@@ -1,72 +1,71 @@
 // components/AnalysisForm.js
-// Reusable form for collecting the REQUIRED inputs for /api/generate-report
+// Form for the NEW generate-report inputs:
+// email, ageRange, primaryConcern, visitorQuestion
 
 import React from "react";
 
 export function AnalysisForm({ values, onChange, onSubmit, loading }) {
-  const handleChange = (field) => (e) => {
+  const setField = (field) => (e) => {
     onChange({ ...values, [field]: e.target.value });
   };
 
   return (
-    <form onSubmit={onSubmit}>
+    <form onSubmit={onSubmit} style={{ marginTop: "8px" }}>
       <h2 style={{ fontSize: "1.2rem", marginBottom: "8px" }}>
-        Personalized Analysis Inputs
+        Your Details (for your report)
       </h2>
       <p style={{ color: "#777", marginBottom: "16px" }}>
-        These details are required to generate your personalized letter and email
-        you the full report.
+        This creates your personalized report and sends it to your email.
       </p>
 
       <LabelInput
-        label="Email (required)"
-        value={values.email || ""}
-        onChange={handleChange("email")}
-        placeholder="you@example.com"
+        label="Email"
         type="email"
+        value={values.email}
+        onChange={setField("email")}
+        placeholder="you@example.com"
+        required
       />
 
       <LabelSelect
-        label="Age range (required)"
-        value={values.ageRange || ""}
-        onChange={handleChange("ageRange")}
+        label="Age Range"
+        value={values.ageRange}
+        onChange={setField("ageRange")}
+        required
         options={[
-          "",
-          "Under 18",
-          "18–24",
-          "25–34",
-          "35–44",
-          "45–54",
-          "55–64",
-          "65+",
+          { value: "", label: "Select your age range" },
+          { value: "18–24", label: "18–24" },
+          { value: "25–34", label: "25–34" },
+          { value: "35–44", label: "35–44" },
+          { value: "45–54", label: "45–54" },
+          { value: "55–64", label: "55–64" },
+          { value: "65+", label: "65+" },
         ]}
       />
 
       <LabelSelect
-        label="Primary cosmetic concern (required)"
-        value={values.primaryConcern || ""}
-        onChange={handleChange("primaryConcern")}
+        label="Primary Cosmetic Concern"
+        value={values.primaryConcern}
+        onChange={setField("primaryConcern")}
+        required
         options={[
-          "",
-          "Acne / Breakouts",
-          "Uneven tone / Dark spots",
-          "Fine lines / Wrinkles",
-          "Texture / Roughness",
-          "Redness / Sensitivity",
-          "Dryness / Dehydration",
-          "Oiliness / Shine",
-          "Pores / Congestion",
-          "Under-eye concerns",
-          "Firmness / Sagging",
-          "Glow / Dullness",
+          { value: "", label: "Select your primary concern" },
+          { value: "Texture / roughness", label: "Texture / roughness" },
+          { value: "Visible pores", label: "Visible pores" },
+          { value: "Uneven tone / spots", label: "Uneven tone / spots" },
+          { value: "Redness / sensitivity", label: "Redness / sensitivity" },
+          { value: "Breakouts / congestion", label: "Breakouts / congestion" },
+          { value: "Fine lines / aging support", label: "Fine lines / aging support" },
+          { value: "Dryness / dehydration", label: "Dryness / dehydration" },
+          { value: "Glow / dullness", label: "Glow / dullness" },
         ]}
       />
 
-      <LabelTextArea
-        label="Your question / notes (optional)"
-        value={values.visitorQuestion || ""}
-        onChange={handleChange("visitorQuestion")}
-        placeholder="Anything you want me to focus on? (Example: 'My skin feels dry but my T-zone gets shiny by noon…')"
+      <LabelTextarea
+        label="Anything you want Dr. Lazuk to focus on? (optional)"
+        value={values.visitorQuestion}
+        onChange={setField("visitorQuestion")}
+        placeholder="e.g., I get oily in the T-zone but feel dry on my cheeks. I want a calmer routine."
       />
 
       <button
@@ -77,7 +76,7 @@ export function AnalysisForm({ values, onChange, onSubmit, loading }) {
           padding: "10px 18px",
           borderRadius: "999px",
           border: "none",
-          cursor: "pointer",
+          cursor: loading ? "not-allowed" : "pointer",
           background: "#222",
           color: "#fff",
           fontWeight: 500,
@@ -90,7 +89,7 @@ export function AnalysisForm({ values, onChange, onSubmit, loading }) {
   );
 }
 
-function LabelInput({ label, value, onChange, placeholder, type = "text" }) {
+function LabelInput({ label, value, onChange, placeholder, type = "text", required }) {
   return (
     <div style={{ marginBottom: "10px" }}>
       <label style={{ display: "block", fontWeight: 500, marginBottom: "4px" }}>
@@ -101,10 +100,11 @@ function LabelInput({ label, value, onChange, placeholder, type = "text" }) {
         onChange={onChange}
         placeholder={placeholder}
         type={type}
+        required={required}
         style={{
           width: "100%",
-          padding: "8px",
-          borderRadius: "8px",
+          padding: "10px",
+          borderRadius: "10px",
           border: "1px solid #ddd",
           fontFamily: "inherit",
         }}
@@ -113,7 +113,7 @@ function LabelInput({ label, value, onChange, placeholder, type = "text" }) {
   );
 }
 
-function LabelSelect({ label, value, onChange, options }) {
+function LabelSelect({ label, value, onChange, options, required }) {
   return (
     <div style={{ marginBottom: "10px" }}>
       <label style={{ display: "block", fontWeight: 500, marginBottom: "4px" }}>
@@ -122,18 +122,19 @@ function LabelSelect({ label, value, onChange, options }) {
       <select
         value={value}
         onChange={onChange}
+        required={required}
         style={{
           width: "100%",
-          padding: "8px",
-          borderRadius: "8px",
+          padding: "10px",
+          borderRadius: "10px",
           border: "1px solid #ddd",
           fontFamily: "inherit",
           background: "#fff",
         }}
       >
-        {options.map((opt) => (
-          <option key={opt} value={opt}>
-            {opt === "" ? "Select..." : opt}
+        {options.map((o) => (
+          <option key={o.value || o.label} value={o.value}>
+            {o.label}
           </option>
         ))}
       </select>
@@ -141,7 +142,7 @@ function LabelSelect({ label, value, onChange, options }) {
   );
 }
 
-function LabelTextArea({ label, value, onChange, placeholder }) {
+function LabelTextarea({ label, value, onChange, placeholder }) {
   return (
     <div style={{ marginBottom: "10px" }}>
       <label style={{ display: "block", fontWeight: 500, marginBottom: "4px" }}>
@@ -154,11 +155,11 @@ function LabelTextArea({ label, value, onChange, placeholder }) {
         rows={4}
         style={{
           width: "100%",
-          padding: "8px",
-          borderRadius: "8px",
+          resize: "vertical",
+          padding: "10px",
+          borderRadius: "10px",
           border: "1px solid #ddd",
           fontFamily: "inherit",
-          resize: "vertical",
         }}
       />
     </div>
