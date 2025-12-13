@@ -3,7 +3,6 @@
 // Now supports OPTIONAL selfie upload (photoDataUrl).
 
 import React from "react";
-import { ImageUploader } from "./ImageUploader";
 
 export function QAForm({
   question,
@@ -13,36 +12,56 @@ export function QAForm({
   photoDataUrl,
   onPhotoSelected,
 }) {
+  function handleFileChange(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64 = reader.result;
+      if (onPhotoSelected) onPhotoSelected(base64);
+    };
+    reader.readAsDataURL(file);
+  }
+
   return (
     <form onSubmit={onSubmit}>
       <h2 style={{ fontSize: "1.2rem", marginBottom: "8px" }}>
         Ask Dr. Lazuk a Skincare Question
       </h2>
       <p style={{ color: "#777", marginBottom: "16px" }}>
-        Type your question below. If you’d like, upload a selfie so I can make
-        the answer more visually specific (cosmetic-only).
+        Type your question below. Optionally upload a selfie to help me tailor my
+        answer cosmetically.
       </p>
 
-      {/* Optional selfie upload */}
-      {typeof onPhotoSelected === "function" ? (
-        <div style={{ marginBottom: "14px" }}>
-          <ImageUploader onImageSelected={onPhotoSelected} />
-          {photoDataUrl ? (
-            <p style={{ marginTop: "6px", color: "#666", fontSize: "0.85rem" }}>
-              Selfie attached (optional).
-            </p>
-          ) : null}
-        </div>
-      ) : null}
-
+      {/* Optional selfie */}
       <div style={{ marginBottom: "12px" }}>
-        <label
-          style={{
-            display: "block",
-            fontWeight: 500,
-            marginBottom: "4px",
-          }}
-        >
+        <label style={{ display: "block", fontWeight: 500, marginBottom: "4px" }}>
+          Optional selfie (for cosmetic context)
+        </label>
+        <input type="file" accept="image/*" onChange={handleFileChange} />
+        {photoDataUrl ? (
+          <div
+            style={{
+              marginTop: "10px",
+              borderRadius: "12px",
+              overflow: "hidden",
+              maxWidth: "220px",
+              border: "1px solid #eee",
+            }}
+          >
+            <img
+              src={photoDataUrl}
+              alt="Selfie preview"
+              style={{ width: "100%", display: "block" }}
+            />
+          </div>
+        ) : null}
+      </div>
+
+      {/* Question */}
+      <div style={{ marginBottom: "12px" }}>
+        <label style={{ display: "block", fontWeight: 500, marginBottom: "4px" }}>
           Your question
         </label>
         <textarea
