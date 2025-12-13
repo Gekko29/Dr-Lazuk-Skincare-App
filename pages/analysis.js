@@ -1,6 +1,4 @@
 // pages/analysis.js
-// Dedicated page for the personalized analysis letter flow + Fitzpatrick UI.
-
 import { useState } from "react";
 import { AnalysisForm } from "../components/AnalysisForm";
 import { OutputCard } from "../components/OutputCard";
@@ -8,22 +6,25 @@ import { ImageUploader } from "../components/ImageUploader";
 import { FitzpatrickDetector } from "../components/FitzpatrickDetector";
 
 export default function AnalysisPage() {
-  const [analysisValues, setAnalysisValues] = useState({
-    complimentFeatures: "",
-    skinFindings: "",
-    texture: "",
-    poreBehavior: "",
-    pigment: "",
-    fineLinesAreas: "",
-    elasticity: "",
-    eveningActive: "",
-    estheticRecommendations: "",
+  // These should be your REAL inputs to generate-report now
+  const [form, setForm] = useState({
+    email: "",
+    ageRange: "",
+    primaryConcern: "",
+    visitorQuestion: "",
   });
 
   const [imageBase64, setImageBase64] = useState(null);
+
+  // Optional client-side image analysis result
+  const [imageAnalysis, setImageAnalysis] = useState(null);
   const [fitzpatrickType, setFitzpatrickType] = useState(null);
 
+  // Output from generate-report
   const [output, setOutput] = useState("");
+  const [fitzpatrickSummary, setFitzpatrickSummary] = useState(null);
+  const [agingPreviewImages, setAgingPreviewImages] = useState(null);
+
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -32,70 +33,85 @@ export default function AnalysisPage() {
     setLoading(true);
     setErrorMsg("");
     setOutput("");
+    setFitzpatrickSummary(null);
+    setAgingPreviewImages(null);
 
     try {
-      let mergedAnalysis = { ...analysisValues };
-      let detectedFitz = fitzpatrickType;
+      const email = String(form.email || "").trim();
+      const ageRange = String(form.ageRange || "").trim();
+      const primaryConcern = String(form.primaryConcern || "").trim();
+      const visitorQuestion = String(form.visitorQuestion || "").trim();
 
-      // 1) If an image is uploaded, call analyzeImage to auto-fill fields + Fitzpatrick
+      if (!email || !email.includes("@")) {
+        throw new Error("Please enter a valid email address.");
+      }
+      if (!ageRange || !primaryConcern) {
+        throw new Error("Please select an age range and primary concern.");
+      }
+
+      let localImageAnalysis = imageAnalysis;
+
+      // 1) Optional: analyze image client-side for earlier Fitzpatrick UI + pass-through richness
       if (imageBase64) {
         const analyzeRes = await fetch("/api/analyzeImage", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             imageBase64,
-            notes: "", // optional text hints; you can wire UI to send them later
+            notes: visitorQuestion || "",
           }),
         });
 
-        const analyzeData = await analyzeRes.json();
+        const analyzeData = await analyzeRes.json().catch(() => ({}));
 
         if (!analyzeRes.ok) {
           throw new Error(
-            analyzeData.error ||
-              "Something went wrong while analyzing the image."
+            analyzeData?.error || "Something went wrong while analyzing the image."
           );
         }
 
-        if (analyzeData.analysis) {
-          mergedAnalysis = {
-            ...mergedAnalysis,
-            ...analyzeData.analysis,
-          };
-          setAnalysisValues((prev) => ({
-            ...prev,
-            ...analyzeData.analysis,
-          }));
-        }
+        // Store for UI + pass to generate-report (optional)
+        localImageAnalysis = analyzeData;
+        setImageAnalysis(analyzeData);
 
-        if (analyzeData.fitzpatrickType) {
-          detectedFitz = analyzeData.fitzpatrickType;
+        if (analyzeData?.fitzpatrickType) {
           setFitzpatrickType(analyzeData.fitzpatrickType);
         }
       }
 
-      // 2) Call /api/chat in "analysis" mode to generate the full report
-      const response = await fetch("/api/chat", {
+      // 2) Generate report (this is the NEW canonical endpoint)
+      const response = await fetch("/api/generate-report", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          mode: "analysis",
-          analysis: mergedAnalysis,
+          email,
+          ageRange,
+          primaryConcern,
+          visitorQuestion: visitorQuestion || null,
+          photoDataUrl: imageBase64 || null,
+          // Optional: pass along the analysis result to reduce server work
+          // Your server will enrich with vision if missing/weak.
+          imageAnalysis: localImageAnalysis || null,
         }),
       });
 
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Unexpected error while generating report.");
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok || !data.ok) {
+        throw new Error(
+          data?.message ||
+            data?.error ||
+            `Unexpected error while generating report (HTTP ${response.status}).`
+        );
       }
 
-      setOutput(data.output || "");
+      setOutput(data.report || "");
+      setFitzpatrickType(data.fitzpatrickType || fitzpatrickType || null);
+      setFitzpatrickSummary(data.fitzpatrickSummary || null);
+      setAgingPreviewImages(data.agingPreviewImages || null);
     } catch (err) {
       console.error(err);
-      setErrorMsg(
-        err.message ||
-          "Something went wrong while generating the analysis letter."
-      );
+      setErrorMsg(err?.message || "Something went wrong while generating the analysis letter.");
     } finally {
       setLoading(false);
     }
@@ -122,47 +138,102 @@ export default function AnalysisPage() {
           padding: "24px 24px 32px",
         }}
       >
-        <h1
-          style={{
-            fontSize: "1.75rem",
-            marginBottom: "4px",
-            fontWeight: 600,
-          }}
-        >
+        <h1 style={{ fontSize: "1.75rem", marginBottom: "4px", fontWeight: 600 }}>
           Personalized Skin Analysis
         </h1>
         <p style={{ color: "#666", marginBottom: "20px" }}>
-          Upload a photo (optional), allow the app to auto-detect your skin
-          profile, and generate a full, conversational letter from Dr. Lazuk.
+          Upload a photo (optional), and receive a full narrative letter from Dr. Lazuk via email.
         </p>
 
         <ImageUploader onImageSelected={setImageBase64} />
 
-        {/* Fitzpatrick display (only when detected) */}
+        {/* Fitzpatrick display (only when detected/returned) */}
         <FitzpatrickDetector type={fitzpatrickType} />
 
+        {/* IMPORTANT: AnalysisForm must now collect email/ageRange/primaryConcern/visitorQuestion */}
         <AnalysisForm
-          values={analysisValues}
-          onChange={setAnalysisValues}
+          values={form}
+          onChange={setForm}
           onSubmit={handleGenerate}
           loading={loading}
         />
 
         {errorMsg && (
-          <p
-            style={{
-              marginTop: "16px",
-              color: "#b00020",
-              fontSize: "0.9rem",
-            }}
-          >
+          <p style={{ marginTop: "16px", color: "#b00020", fontSize: "0.9rem" }}>
             {errorMsg}
           </p>
         )}
+
+        {/* Show Fitz summary if returned */}
+        {fitzpatrickSummary ? (
+          <div
+            style={{
+              marginTop: "16px",
+              border: "1px solid #FCD34D",
+              background: "#FFFBEB",
+              borderRadius: "10px",
+              padding: "12px 14px",
+            }}
+          >
+            <div style={{ fontWeight: 700, marginBottom: "4px", color: "#92400E" }}>
+              Fitzpatrick Skin Type (Cosmetic Estimate)
+            </div>
+            <div style={{ color: "#92400E", fontSize: "0.95rem" }}>
+              {fitzpatrickType ? `Type ${fitzpatrickType}. ` : ""}
+              {fitzpatrickSummary}
+            </div>
+          </div>
+        ) : null}
+
+        {/* Show aging preview images if returned */}
+        {agingPreviewImages ? (
+          <div style={{ marginTop: "16px" }}>
+            <div style={{ fontWeight: 700, marginBottom: "8px" }}>
+              Your Skin’s Future Story — A Preview
+            </div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+                gap: "10px",
+              }}
+            >
+              {agingPreviewImages.noChange10 ? (
+                <img
+                  src={agingPreviewImages.noChange10}
+                  alt="~10 years minimal skincare changes"
+                  style={{ width: "100%", borderRadius: "10px", border: "1px solid #eee" }}
+                />
+              ) : null}
+              {agingPreviewImages.noChange20 ? (
+                <img
+                  src={agingPreviewImages.noChange20}
+                  alt="~20 years minimal skincare changes"
+                  style={{ width: "100%", borderRadius: "10px", border: "1px solid #eee" }}
+                />
+              ) : null}
+              {agingPreviewImages.withCare10 ? (
+                <img
+                  src={agingPreviewImages.withCare10}
+                  alt="~10 years with consistent care"
+                  style={{ width: "100%", borderRadius: "10px", border: "1px solid #eee" }}
+                />
+              ) : null}
+              {agingPreviewImages.withCare20 ? (
+                <img
+                  src={agingPreviewImages.withCare20}
+                  alt="~20 years with consistent care"
+                  style={{ width: "100%", borderRadius: "10px", border: "1px solid #eee" }}
+                />
+              ) : null}
+            </div>
+          </div>
+        ) : null}
 
         <OutputCard title="Dr. Lazuk Letter" value={output} />
       </div>
     </div>
   );
 }
+
 
