@@ -2,21 +2,21 @@
 // NOTE: This file intentionally avoids top-level ESM imports so it works in Vercel
 // environments that treat /api as CommonJS by default (no "type":"module" required).
 
-const path = require('path');
-const { pathToFileURL } = require('url');
+const path = require("path");
+const { pathToFileURL } = require("url");
 
 // -------------------------
 // Helpers: dynamic imports
 // -------------------------
 async function getOpenAIClient() {
-  const mod = await import('openai');
+  const mod = await import("openai");
   const OpenAI = mod?.default || mod;
   return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 }
 
 async function getBuildAnalysis() {
   // Load ../lib/analysis.js (ESM) safely from CJS
-  const fileUrl = pathToFileURL(path.join(__dirname, '..', 'lib', 'analysis.js')).href;
+  const fileUrl = pathToFileURL(path.join(__dirname, "..", "lib", "analysis.js")).href;
   const mod = await import(fileUrl);
   return mod.buildAnalysis;
 }
@@ -25,12 +25,12 @@ async function getBuildAnalysis() {
 // UI helper: Fitzpatrick line
 // -------------------------
 function renderFitzpatrickScaleHtml(type) {
-  if (!type) return '';
-  const types = ['I', 'II', 'III', 'IV', 'V', 'VI'];
+  if (!type) return "";
+  const types = ["I", "II", "III", "IV", "V", "VI"];
   const normalized = String(type).toUpperCase();
   const line = types
     .map((t) => (t === normalized ? `<strong>${t}</strong>` : t))
-    .join(' · ');
+    .join(" · ");
   return `<p style="font-size: 12px; color: #92400E; margin-top: 6px;">
     Cosmetic Fitzpatrick scale: ${line}
   </p>`;
@@ -42,82 +42,98 @@ function renderFitzpatrickScaleHtml(type) {
 async function sendEmailWithResend({ to, subject, html }) {
   const apiKey = process.env.RESEND_API_KEY;
   const fromEmail =
-    process.env.RESEND_FROM_EMAIL || 'Dr. Lazuk Esthetics <no-reply@drlazuk.com>';
+    process.env.RESEND_FROM_EMAIL || "Dr. Lazuk Esthetics <no-reply@drlazuk.com>";
 
   if (!apiKey) {
-    console.error('RESEND_API_KEY is not set; skipping email send.');
+    console.error("RESEND_API_KEY is not set; skipping email send.");
     return;
   }
 
   try {
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify({ from: fromEmail, to, subject, html })
+      body: JSON.stringify({ from: fromEmail, to, subject, html }),
     });
 
     if (!res.ok) {
       const body = await res.text();
-      console.error('Resend email error:', res.status, body);
+      console.error("Resend email error:", res.status, body);
     }
   } catch (err) {
-    console.error('Resend email exception:', err);
+    console.error("Resend email exception:", err);
   }
 }
 
 // -------------------------
 // 4 aging preview images
 // -------------------------
-async function generateAgingPreviewImages({ client, ageRange, primaryConcern, fitzpatrickType }) {
+function b64ToDataUrl(b64) {
+  if (!b64) return null;
+  // Most outputs are PNG. If you ever see JPEG, switch the mime type accordingly.
+  return `data:image/png;base64,${b64}`;
+}
+
+async function generateAgingPreviewImages({
+  client,
+  ageRange,
+  primaryConcern,
+  fitzpatrickType,
+}) {
   if (!process.env.OPENAI_API_KEY) {
     return { noChange10: null, noChange20: null, withCare10: null, withCare20: null };
   }
 
-  const baseAgeText = ageRange ? `who is currently in the ${ageRange} age range` : 'adult';
+  const baseAgeText = ageRange ? `who is currently in the ${ageRange} age range` : "adult";
   const concernText = primaryConcern
     ? `with a primary cosmetic concern of ${primaryConcern}`
-    : 'with common cosmetic skin concerns';
+    : "with common cosmetic skin concerns";
   const fitzText = fitzpatrickType
     ? `with Fitzpatrick type ${fitzpatrickType}`
-    : 'with a realistic skin tone and texture';
+    : "with a realistic skin tone and texture";
 
   // ✅ Bias enforcement (as requested):
   // - NO-CHANGE = no beautification / no flattering bias (honest rendering)
   // - WITH-CARE = slight, tasteful beautification bias (still realistic, no "perfect skin")
-  const baseStyleNoChange =
-    'ultra-realistic portrait, neutral expression, studio lighting, no makeup, no filters, no retouching, no beautification, no flattering bias, no skin smoothing, subtle signs of aging rendered honestly but respectfully, realistic pores and texture';
-  const baseStyleWithCare =
-    'ultra-realistic portrait, neutral expression, studio lighting, minimal/no makeup, no heavy filters, tasteful and slight "well-cared-for" bias allowed (subtle, not fake), realistic pores and texture, realistic aging but clearly supported by consistent skincare and sun protection (no plastic-smooth skin)';
+  const baseStyleNoBias =
+    "ultra-realistic portrait, neutral expression, studio lighting, no makeup, no filters, no retouching, no beautification, no flattering bias, no skin smoothing, subtle signs of aging rendered honestly but respectfully, realistic pores and texture";
+
+  const baseStyleSlightBeauty =
+    'ultra-realistic portrait, neutral expression, studio lighting, minimal/no makeup, no heavy filters, very subtle beautification bias (healthy, well-rested impression), realistic pores and texture, realistic aging preserved, no plastic perfection';
 
   const prompts = {
-    noChange10: `A ${baseAgeText} ${concernText}, ${fitzText}, imagined about 10 years in the future if they do not meaningfully improve their skincare routine — more pronounced fine lines, duller tone, more visible sun and lifestyle effects, but still treated respectfully as a real human. ${baseStyleNoChange}.`,
-    noChange20: `A ${baseAgeText} ${concernText}, ${fitzText}, imagined about 20 years in the future with minimal skincare support — deeper wrinkles, more sagging, more uneven pigment and sun markings, but still dignified and human, no caricature. ${baseStyleNoChange}.`,
-    withCare10: `A ${baseAgeText} ${concernText}, ${fitzText}, imagined about 10 years in the future if they follow a gentle, consistent, dermatologist-guided skincare routine with sun protection, hydration, and barrier support — smoother texture, healthier glow, more even tone, realistic aging but clearly well cared-for skin. ${baseStyleWithCare}.`,
-    withCare20: `A ${baseAgeText} ${concernText}, ${fitzText}, imagined about 20 years in the future with consistent skincare, sun protection, and healthy lifestyle habits — naturally aged but radiant, balanced skin, softened lines, graceful aging, no unrealistic perfection. ${baseStyleWithCare}.`
+    noChange10: `A ${baseAgeText} ${concernText}, ${fitzText}, imagined about 10 years in the future if they do not meaningfully improve their skincare routine — more pronounced fine lines, duller tone, more visible sun and lifestyle effects, but still treated respectfully as a real human. ${baseStyleNoBias}.`,
+    noChange20: `A ${baseAgeText} ${concernText}, ${fitzText}, imagined about 20 years in the future with minimal skincare support — deeper wrinkles, more sagging, more uneven pigment and sun markings, but still dignified and human, no caricature. ${baseStyleNoBias}.`,
+    withCare10: `A ${baseAgeText} ${concernText}, ${fitzText}, imagined about 10 years in the future if they follow a gentle, consistent, dermatologist-guided skincare routine with sun protection, hydration, and barrier support — smoother texture, healthier glow, more even tone, realistic aging but clearly well cared-for skin. ${baseStyleSlightBeauty}.`,
+    withCare20: `A ${baseAgeText} ${concernText}, ${fitzText}, imagined about 20 years in the future with consistent skincare, sun protection, and healthy lifestyle habits — naturally aged but radiant, balanced skin, softened lines, graceful aging, no unrealistic perfection. ${baseStyleSlightBeauty}.`,
   };
 
   try {
-    // ✅ Required image size (per prior error + your requirement)
-    const size = '1024x1024';
+    const size = "1024x1024";
 
     const [imgNo10, imgNo20, imgCare10, imgCare20] = await Promise.all([
-      client.images.generate({ model: 'gpt-image-1', prompt: prompts.noChange10, size }),
-      client.images.generate({ model: 'gpt-image-1', prompt: prompts.noChange20, size }),
-      client.images.generate({ model: 'gpt-image-1', prompt: prompts.withCare10, size }),
-      client.images.generate({ model: 'gpt-image-1', prompt: prompts.withCare20, size })
+      client.images.generate({ model: "gpt-image-1", prompt: prompts.noChange10, size }),
+      client.images.generate({ model: "gpt-image-1", prompt: prompts.noChange20, size }),
+      client.images.generate({ model: "gpt-image-1", prompt: prompts.withCare10, size }),
+      client.images.generate({ model: "gpt-image-1", prompt: prompts.withCare20, size }),
     ]);
 
-    return {
-      noChange10: imgNo10?.data?.[0]?.url || null,
-      noChange20: imgNo20?.data?.[0]?.url || null,
-      withCare10: imgCare10?.data?.[0]?.url || null,
-      withCare20: imgCare20?.data?.[0]?.url || null
-    };
+    // ✅ gpt-image-1 frequently returns base64 in `b64_json` (no hosted URL).
+    const noChange10 =
+      b64ToDataUrl(imgNo10?.data?.[0]?.b64_json) || imgNo10?.data?.[0]?.url || null;
+    const noChange20 =
+      b64ToDataUrl(imgNo20?.data?.[0]?.b64_json) || imgNo20?.data?.[0]?.url || null;
+    const withCare10 =
+      b64ToDataUrl(imgCare10?.data?.[0]?.b64_json) || imgCare10?.data?.[0]?.url || null;
+    const withCare20 =
+      b64ToDataUrl(imgCare20?.data?.[0]?.b64_json) || imgCare20?.data?.[0]?.url || null;
+
+    return { noChange10, noChange20, withCare10, withCare20 };
   } catch (err) {
-    console.error('Error generating aging preview images:', err);
+    console.error("Error generating aging preview images:", err);
     return { noChange10: null, noChange20: null, withCare10: null, withCare20: null };
   }
 }
@@ -126,9 +142,8 @@ async function generateAgingPreviewImages({ client, ageRange, primaryConcern, fi
 // Vision analysis (enforced)
 // -------------------------
 function isLikelyWeakImageAnalysis(imageAnalysis) {
-  if (!imageAnalysis || typeof imageAnalysis !== 'object') return true;
+  if (!imageAnalysis || typeof imageAnalysis !== "object") return true;
   const a = imageAnalysis.analysis || {};
-  // If nothing meaningful exists, it’s weak.
   const meaningful =
     a.skinFindings ||
     a.texture ||
@@ -143,8 +158,7 @@ function isLikelyWeakImageAnalysis(imageAnalysis) {
 async function analyzeSelfieWithVision({ client, photoDataUrl, ageRange, primaryConcern }) {
   if (!photoDataUrl) return null;
 
-  // Use a vision-capable model for analysis
-  const visionModel = process.env.OPENAI_VISION_MODEL || 'gpt-4o-mini';
+  const visionModel = process.env.OPENAI_VISION_MODEL || "gpt-4o-mini";
 
   const prompt = `
 You are a dermatologist providing a cosmetic, appearance-only analysis from ONE selfie.
@@ -197,8 +211,8 @@ Return JSON with this shape:
 }
 
 Context:
-- Age range: ${ageRange || 'unknown'}
-- Primary cosmetic concern: ${primaryConcern || 'unknown'}
+- Age range: ${ageRange || "unknown"}
+- Primary cosmetic concern: ${primaryConcern || "unknown"}
 `.trim();
 
   try {
@@ -208,24 +222,24 @@ Context:
       max_tokens: 900,
       messages: [
         {
-          role: 'user',
+          role: "user",
           content: [
-            { type: 'text', text: prompt },
-            { type: 'image_url', image_url: { url: photoDataUrl } }
-          ]
-        }
-      ]
+            { type: "text", text: prompt },
+            { type: "image_url", image_url: { url: photoDataUrl } },
+          ],
+        },
+      ],
     });
 
-    const text = resp?.choices?.[0]?.message?.content || '';
-    const jsonStart = text.indexOf('{');
-    const jsonEnd = text.lastIndexOf('}');
+    const text = resp?.choices?.[0]?.message?.content || "";
+    const jsonStart = text.indexOf("{");
+    const jsonEnd = text.lastIndexOf("}");
     if (jsonStart === -1 || jsonEnd === -1) return null;
 
     const parsed = JSON.parse(text.slice(jsonStart, jsonEnd + 1));
     return parsed;
   } catch (err) {
-    console.error('Vision analysis error:', err);
+    console.error("Vision analysis error:", err);
     return null;
   }
 }
@@ -234,13 +248,13 @@ Context:
 // Build analysis context for LLM
 // -------------------------
 function mapFitzToRoman(value) {
-  if (typeof value === 'number') {
-    const romans = ['I', 'II', 'III', 'IV', 'V', 'VI'];
+  if (typeof value === "number") {
+    const romans = ["I", "II", "III", "IV", "V", "VI"];
     return romans[value - 1] || null;
   }
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     const up = value.toUpperCase();
-    if (['I', 'II', 'III', 'IV', 'V', 'VI'].includes(up)) return up;
+    if (["I", "II", "III", "IV", "V", "VI"].includes(up)) return up;
   }
   return null;
 }
@@ -251,7 +265,7 @@ async function buildAnalysisContext({
   primaryConcern,
   visitorQuestion,
   photoDataUrl,
-  imageAnalysis
+  imageAnalysis,
 }) {
   const ia = imageAnalysis || {};
   const raw = ia.raw || {};
@@ -260,9 +274,9 @@ async function buildAnalysisContext({
   const fitzRoman = mapFitzToRoman(ia.fitzpatrickType);
 
   const tags = [];
-  if (raw.wearingGlasses) tags.push('glasses');
-  if (raw.eyeColor && raw.eyeColor !== 'unknown') tags.push(`${raw.eyeColor} eyes`);
-  if (raw.clothingColor && raw.clothingColor !== 'unknown') tags.push(`${raw.clothingColor} top`);
+  if (raw.wearingGlasses) tags.push("glasses");
+  if (raw.eyeColor && raw.eyeColor !== "unknown") tags.push(`${raw.eyeColor} eyes`);
+  if (raw.clothingColor && raw.clothingColor !== "unknown") tags.push(`${raw.clothingColor} top`);
 
   // Keep shape consistent with your existing lib/analysis expectations
   const form = {
@@ -272,20 +286,20 @@ async function buildAnalysisContext({
     fitzpatrickType: fitzRoman,
     primaryConcerns: primaryConcern ? [primaryConcern] : [],
     secondaryConcerns: [],
-    routineLevel: ia.routineLevel || 'standard',
-    budgetLevel: ia.budgetLevel || 'mid-range',
+    routineLevel: ia.routineLevel || "standard",
+    budgetLevel: ia.budgetLevel || "mid-range",
     currentRoutine: visitorQuestion || null,
     lifestyle: ia.lifestyle || null,
-    ageRange: ageRange || null
+    ageRange: ageRange || null,
   };
 
   const selfie = {
     url: photoDataUrl || null,
     tags,
-    dominantColor: raw.clothingColor === 'pink' ? 'soft pink' : null,
+    dominantColor: raw.clothingColor === "pink" ? "soft pink" : null,
     eyeColor: raw.eyeColor || null,
     hairColor: raw.hairColor || null,
-    compliment: vision.complimentFeatures || null
+    compliment: vision.complimentFeatures || null,
   };
 
   // Put the 15-point analysis into a single “vision” payload so the report can’t ignore it
@@ -298,7 +312,9 @@ async function buildAnalysisContext({
     poreBehavior: vision.poreBehavior || null,
     pigment: vision.pigment || null,
     fineLinesAreas: vision.fineLinesAreas || null,
-    elasticity: vision.elasticity || null
+    elasticity: vision.elasticity || null,
+    raw: raw || null,
+    skinFindings: vision.skinFindings || null,
   };
 
   return buildAnalysis({ form, selfie, vision: visionPayload });
@@ -308,40 +324,44 @@ async function buildAnalysisContext({
 // Output enforcement / validation
 // -------------------------
 function stripInternalLines(text) {
-  return String(text || '')
-    .replace(/^\s*INTERNAL_COVERAGE:[^\n]*\n?/gm, '')
-    .replace(/^\s*INTERNAL_SELFIE_DETAIL_OK:[^\n]*\n?/gm, '')
+  return String(text || "")
+    .replace(/^\s*INTERNAL_COVERAGE:[^\n]*\n?/gm, "")
+    .replace(/^\s*INTERNAL_SELFIE_DETAIL_OK:[^\n]*\n?/gm, "")
     .trim();
 }
 
 function hasCoverageLine(text) {
-  return /INTERNAL_COVERAGE:\s*OK/i.test(text || '');
+  return /INTERNAL_COVERAGE:\s*OK/i.test(text || "");
 }
 
 function hasSelfieDetailOkLine(text) {
-  return /INTERNAL_SELFIE_DETAIL_OK:\s*YES/i.test(text || '');
+  return /INTERNAL_SELFIE_DETAIL_OK:\s*YES/i.test(text || "");
 }
 
 // -------------------------
 // Handler
 // -------------------------
 module.exports = async function handler(req, res) {
-  if (req.method !== 'POST') {
-    res.setHeader('Allow', ['POST']);
-    return res.status(405).json({ ok: false, error: 'Method not allowed' });
+  if (req.method !== "POST") {
+    res.setHeader("Allow", ["POST"]);
+    return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
 
   if (!process.env.OPENAI_API_KEY) {
-    return res.status(500).json({ ok: false, error: 'OPENAI_API_KEY is not set in the environment' });
+    return res.status(500).json({
+      ok: false,
+      error: "OPENAI_API_KEY is not set in the environment",
+    });
   }
 
   // Geo-gate to US only
-  const country = req.headers['x-vercel-ip-country'];
-  if (country && country !== 'US') {
+  const country = req.headers["x-vercel-ip-country"];
+  if (country && country !== "US") {
     return res.status(403).json({
       ok: false,
-      error: 'geo_blocked',
-      message: 'This virtual skincare analysis is currently available only to visitors in the United States.'
+      error: "geo_blocked",
+      message:
+        "This virtual skincare analysis is currently available only to visitors in the United States.",
     });
   }
 
@@ -351,17 +371,17 @@ module.exports = async function handler(req, res) {
     primaryConcern,
     visitorQuestion,
     photoDataUrl,
-    imageAnalysis: incomingImageAnalysis
+    imageAnalysis: incomingImageAnalysis,
   } = req.body || {};
 
-  if (!email || typeof email !== 'string' || !email.includes('@')) {
-    return res.status(400).json({ ok: false, error: 'invalid_email' });
+  if (!email || typeof email !== "string" || !email.includes("@")) {
+    return res.status(400).json({ ok: false, error: "invalid_email" });
   }
   if (!ageRange || !primaryConcern) {
     return res.status(400).json({
       ok: false,
-      error: 'missing_fields',
-      message: 'Age range and primary concern are required.'
+      error: "missing_fields",
+      message: "Age range and primary concern are required.",
     });
   }
 
@@ -377,7 +397,7 @@ module.exports = async function handler(req, res) {
       client,
       photoDataUrl,
       ageRange,
-      primaryConcern
+      primaryConcern,
     });
 
     if (visionResult) {
@@ -393,7 +413,7 @@ module.exports = async function handler(req, res) {
     primaryConcern,
     visitorQuestion,
     photoDataUrl,
-    imageAnalysis
+    imageAnalysis,
   });
 
   // Brand-locked product + service list
@@ -481,7 +501,7 @@ INTERNAL_COVERAGE: OK
 Person details:
 - Age range: ${ageRange}
 - Primary cosmetic concern: ${primaryConcern}
-- Visitor question: ${visitorQuestion || 'none provided'}
+- Visitor question: ${visitorQuestion || "none provided"}
 
 Structured analysis context (do NOT print JSON; weave it into the letter):
 ${JSON.stringify(analysisContext, null, 2)}
@@ -494,27 +514,27 @@ If still missing, politely mention what you can see (lighting, overall vibe) wit
 `.trim();
 
   // 4) Generate with enforcement retries
-  const textModel = process.env.OPENAI_TEXT_MODEL || 'gpt-4.1-mini';
+  const textModel = process.env.OPENAI_TEXT_MODEL || "gpt-4.1-mini";
 
-  let full = '';
+  let full = "";
   for (let attempt = 1; attempt <= 3; attempt++) {
     const completion = await client.chat.completions.create({
       model: textModel,
       temperature: attempt === 1 ? 0.55 : 0.4,
       max_tokens: 2100,
       messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ]
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
     });
 
-    full = completion.choices?.[0]?.message?.content || '';
+    full = completion.choices?.[0]?.message?.content || "";
     if (hasCoverageLine(full) && hasSelfieDetailOkLine(full)) break;
 
-    console.warn('Report validation failed, retrying...', {
+    console.warn("Report validation failed, retrying...", {
       attempt,
       hasCoverage: hasCoverageLine(full),
-      hasSelfieDetail: hasSelfieDetailOkLine(full)
+      hasSelfieDetail: hasSelfieDetailOkLine(full),
     });
   }
 
@@ -526,28 +546,28 @@ If still missing, politely mention what you can see (lighting, overall vibe) wit
   const typeMatch = full.match(/FITZPATRICK_TYPE:\s*([IVX]+)/i);
   if (typeMatch) {
     fitzpatrickType = typeMatch[1].toUpperCase();
-    reportText = reportText.replace(typeMatch[0], '');
+    reportText = reportText.replace(typeMatch[0], "");
   }
 
   const summaryMatch = full.match(/FITZPATRICK_SUMMARY:\s*([\s\S]*?)(\n\s*\n|$)/i);
   if (summaryMatch) {
     fitzpatrickSummary = summaryMatch[1].trim();
-    reportText = reportText.replace(summaryMatch[0], '');
+    reportText = reportText.replace(summaryMatch[0], "");
   }
 
   reportText = stripInternalLines(reportText).trim();
-  const safeConcern = primaryConcern || 'Not specified';
+  const safeConcern = primaryConcern || "Not specified";
 
-  // 5) 4 aging images (kept)
+  // 5) 4 aging images (now returns data URLs if b64 is returned)
   const agingPreviewImages = await generateAgingPreviewImages({
     client,
     ageRange,
     primaryConcern,
-    fitzpatrickType
+    fitzpatrickType,
   });
 
-  // Build aging preview HTML (kept)
-  let agingPreviewHtml = '';
+  // Build aging preview HTML
+  let agingPreviewHtml = "";
   if (
     agingPreviewImages.noChange10 ||
     agingPreviewImages.noChange20 ||
@@ -573,7 +593,7 @@ If still missing, politely mention what you can see (lighting, overall vibe) wit
             <img src="${agingPreviewImages.noChange10}" alt="Approximate 10-year future if routine does not change" style="width: 100%; border-radius: 10px; border: 1px solid #E5E7EB;" />
             <p style="font-size: 11px; color: #4B5563; margin-top: 4px;">~10 years – minimal skincare changes</p>
           </div>`
-              : ''
+              : ""
           }
           ${
             agingPreviewImages.noChange20
@@ -582,7 +602,7 @@ If still missing, politely mention what you can see (lighting, overall vibe) wit
             <img src="${agingPreviewImages.noChange20}" alt="Approximate 20-year future if routine does not change" style="width: 100%; border-radius: 10px; border: 1px solid #E5E7EB;" />
             <p style="font-size: 11px; color: #4B5563; margin-top: 4px;">~20 years – minimal skincare changes</p>
           </div>`
-              : ''
+              : ""
           }
           ${
             agingPreviewImages.withCare10
@@ -591,7 +611,7 @@ If still missing, politely mention what you can see (lighting, overall vibe) wit
             <img src="${agingPreviewImages.withCare10}" alt="Approximate 10-year future with consistent skincare" style="width: 100%; border-radius: 10px; border: 1px solid #E5E7EB;" />
             <p style="font-size: 11px; color: #4B5563; margin-top: 4px;">~10 years – with consistent care</p>
           </div>`
-              : ''
+              : ""
           }
           ${
             agingPreviewImages.withCare20
@@ -600,14 +620,14 @@ If still missing, politely mention what you can see (lighting, overall vibe) wit
             <img src="${agingPreviewImages.withCare20}" alt="Approximate 20-year future with consistent skincare" style="width: 100%; border-radius: 10px; border: 1px solid #E5E7EB;" />
             <p style="font-size: 11px; color: #4B5563; margin-top: 4px;">~20 years – with consistent care</p>
           </div>`
-              : ''
+              : ""
           }
         </div>
       </div>
     `;
   }
 
-  // Visitor email HTML (kept)
+  // Visitor email HTML
   const visitorHtml = `
     <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111827; line-height: 1.5; background-color: #F9FAFB; padding: 20px;">
       <div style="max-width: 680px; margin: 0 auto; background-color: #FFFFFF; border-radius: 12px; border: 1px solid #E5E7EB; padding: 20px 24px;">
@@ -624,7 +644,7 @@ If still missing, politely mention what you can see (lighting, overall vibe) wit
           <p style="font-size: 12px; color: #6B7280; margin: 0 0 6px 0;">The photo you shared:</p>
           <img src="${photoDataUrl}" alt="Your uploaded skin photo" style="max-width: 210px; border-radius: 10px; border: 1px solid #E5E7EB;" />
         </div>`
-            : ''
+            : ""
         }
 
         ${
@@ -635,17 +655,17 @@ If still missing, politely mention what you can see (lighting, overall vibe) wit
           ${
             fitzpatrickType
               ? `<p style="font-size: 13px; font-weight: 600; color: #92400E; margin: 0 0 4px 0;">Type ${fitzpatrickType}</p>`
-              : ''
+              : ""
           }
           ${
             fitzpatrickSummary
               ? `<p style="font-size: 13px; color: #92400E; margin: 0;">${fitzpatrickSummary}</p>`
-              : ''
+              : ""
           }
-          ${fitzpatrickType ? renderFitzpatrickScaleHtml(fitzpatrickType) : ''}
+          ${fitzpatrickType ? renderFitzpatrickScaleHtml(fitzpatrickType) : ""}
           <p style="font-size: 11px; color: #92400E; margin-top: 8px;">This is a visual, cosmetic estimate only and is not a medical diagnosis.</p>
         </div>`
-            : ''
+            : ""
         }
 
         ${agingPreviewHtml}
@@ -664,8 +684,8 @@ If still missing, politely mention what you can see (lighting, overall vibe) wit
     </div>
   `;
 
-  // Clinic email HTML (kept)
-  const clinicEmail = process.env.RESEND_CLINIC_EMAIL || 'contact@drlazuk.com';
+  // Clinic email HTML
+  const clinicEmail = process.env.RESEND_CLINIC_EMAIL || "contact@drlazuk.com";
 
   const clinicHtml = `
     <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111827; line-height: 1.5; background-color: #F9FAFB; padding: 16px;">
@@ -676,9 +696,13 @@ If still missing, politely mention what you can see (lighting, overall vibe) wit
           <li><strong>Email:</strong> ${email}</li>
           <li><strong>Age Range:</strong> ${ageRange}</li>
           <li><strong>Primary Concern:</strong> ${safeConcern}</li>
-          ${fitzpatrickType ? `<li><strong>Fitzpatrick Estimate:</strong> Type ${fitzpatrickType}</li>` : ''}
+          ${fitzpatrickType ? `<li><strong>Fitzpatrick Estimate:</strong> Type ${fitzpatrickType}</li>` : ""}
         </ul>
-        ${fitzpatrickSummary ? `<p style="font-size: 13px; margin-bottom: 12px;"><strong>Fitzpatrick Summary:</strong> ${fitzpatrickSummary}</p>` : ''}
+        ${
+          fitzpatrickSummary
+            ? `<p style="font-size: 13px; margin-bottom: 12px;"><strong>Fitzpatrick Summary:</strong> ${fitzpatrickSummary}</p>`
+            : ""
+        }
 
         ${
           photoDataUrl
@@ -687,7 +711,7 @@ If still missing, politely mention what you can see (lighting, overall vibe) wit
           <p style="font-size: 12px; color: #6B7280; margin: 0 0 6px 0;">Visitor photo (data URL):</p>
           <img src="${photoDataUrl}" alt="Uploaded skin photo" style="max-width: 210px; border-radius: 10px; border: 1px solid #E5E7EB;" />
         </div>`
-            : ''
+            : ""
         }
 
         ${agingPreviewHtml}
@@ -702,14 +726,14 @@ If still missing, politely mention what you can see (lighting, overall vibe) wit
   await Promise.all([
     sendEmailWithResend({
       to: email,
-      subject: 'Your Dr. Lazuk Virtual Skin Analysis Report',
-      html: visitorHtml
+      subject: "Your Dr. Lazuk Virtual Skin Analysis Report",
+      html: visitorHtml,
     }),
     sendEmailWithResend({
       to: clinicEmail,
-      subject: 'New Skincare Analysis Guest',
-      html: clinicHtml
-    })
+      subject: "New Skincare Analysis Guest",
+      html: clinicHtml,
+    }),
   ]);
 
   // Response to frontend
@@ -719,13 +743,9 @@ If still missing, politely mention what you can see (lighting, overall vibe) wit
     fitzpatrickType: fitzpatrickType || null,
     fitzpatrickSummary: fitzpatrickSummary || null,
     agingPreviewImages,
-    // Helpful for debugging: confirms whether we had/enriched image analysis
     _debug: {
       usedIncomingImageAnalysis: !!incomingImageAnalysis,
-      enrichedWithVision
-    }
+      enrichedWithVision,
+    },
   });
 };
-
-
-
