@@ -1,6 +1,7 @@
 // pages/ask.js
 // Dedicated page for the Ask-Dr-Lazuk Q&A feature,
 // wired to api/ask-dr-lazuk.js
+// Now supports OPTIONAL selfie upload (photoDataUrl).
 
 import { useState } from "react";
 import { QAForm } from "../components/QAForm";
@@ -8,6 +9,8 @@ import { OutputCard } from "../components/OutputCard";
 
 export default function AskPage() {
   const [question, setQuestion] = useState("");
+  const [photoDataUrl, setPhotoDataUrl] = useState(null);
+
   const [output, setOutput] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
@@ -24,7 +27,6 @@ export default function AskPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          // Your backend expects: { messages, isFirstReply }
           messages: [
             {
               role: "user",
@@ -32,6 +34,8 @@ export default function AskPage() {
             },
           ],
           isFirstReply: true,
+          // ✅ Optional selfie for personalized cosmetic context
+          photoDataUrl: photoDataUrl || null,
         }),
       });
 
@@ -48,9 +52,7 @@ export default function AskPage() {
       setOutput(data.reply || "");
     } catch (err) {
       console.error("Ask Dr Lazuk error:", err);
-      setErrorMsg(
-        err.message || "Something went wrong while asking Dr. Lazuk."
-      );
+      setErrorMsg(err.message || "Something went wrong while asking Dr. Lazuk.");
     } finally {
       setLoading(false);
     }
@@ -96,6 +98,8 @@ export default function AskPage() {
           onChange={setQuestion}
           onSubmit={handleAsk}
           loading={loading}
+          photoDataUrl={photoDataUrl}
+          onPhotoSelected={setPhotoDataUrl}
         />
 
         {errorMsg && (
@@ -115,4 +119,3 @@ export default function AskPage() {
     </div>
   );
 }
-
