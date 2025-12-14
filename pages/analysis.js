@@ -6,8 +6,8 @@ import { ImageUploader } from "../components/ImageUploader";
 import { FitzpatrickDetector } from "../components/FitzpatrickDetector";
 
 export default function AnalysisPage() {
-  // These should be your REAL inputs to generate-report now
   const [form, setForm] = useState({
+    firstName: "",
     email: "",
     ageRange: "",
     primaryConcern: "",
@@ -16,11 +16,9 @@ export default function AnalysisPage() {
 
   const [imageBase64, setImageBase64] = useState(null);
 
-  // Optional client-side image analysis result
   const [imageAnalysis, setImageAnalysis] = useState(null);
   const [fitzpatrickType, setFitzpatrickType] = useState(null);
 
-  // Output from generate-report
   const [output, setOutput] = useState("");
   const [fitzpatrickSummary, setFitzpatrickSummary] = useState(null);
   const [agingPreviewImages, setAgingPreviewImages] = useState(null);
@@ -37,66 +35,59 @@ export default function AnalysisPage() {
     setAgingPreviewImages(null);
 
     try {
+      const firstName = String(form.firstName || "").trim();
       const email = String(form.email || "").trim();
       const ageRange = String(form.ageRange || "").trim();
       const primaryConcern = String(form.primaryConcern || "").trim();
       const visitorQuestion = String(form.visitorQuestion || "").trim();
 
-      if (!email || !email.includes("@")) {
-        throw new Error("Please enter a valid email address.");
-      }
-      if (!ageRange || !primaryConcern) {
-        throw new Error("Please select an age range and primary concern.");
-      }
+      if (!firstName) throw new Error("Please enter your first name.");
+      if (!email || !email.includes("@")) throw new Error("Please enter a valid email address.");
+      if (!ageRange || !primaryConcern) throw new Error("Please select an age range and primary concern.");
+
+      // Selfie is REQUIRED (per your direction)
+      if (!imageBase64) throw new Error("Please upload a selfie to generate your detailed analysis.");
 
       let localImageAnalysis = imageAnalysis;
 
-      // 1) Optional: analyze image client-side for earlier Fitzpatrick UI + pass-through richness
-      if (imageBase64) {
-        const analyzeRes = await fetch("/api/analyzeImage", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            imageBase64,
-            notes: visitorQuestion || "",
-          }),
-        });
+      // Optional: pre-analyze selfie for early UI feedback (Fitz display)
+      const analyzeRes = await fetch("/api/analyzeImage", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          imageBase64,
+          notes: visitorQuestion || "",
+        }),
+      });
 
-        const analyzeData = await analyzeRes.json().catch(() => ({}));
-
-        if (!analyzeRes.ok) {
-          throw new Error(
-            analyzeData?.error || "Something went wrong while analyzing the image."
-          );
-        }
-
-        // Store for UI + pass to generate-report (optional)
-        localImageAnalysis = analyzeData;
-        setImageAnalysis(analyzeData);
-
-        if (analyzeData?.fitzpatrickType) {
-          setFitzpatrickType(analyzeData.fitzpatrickType);
-        }
+      const analyzeData = await analyzeRes.json().catch(() => ({}));
+      if (!analyzeRes.ok) {
+        throw new Error(analyzeData?.error || "Something went wrong while analyzing the image.");
       }
 
-      // 2) Generate report (this is the NEW canonical endpoint)
+      localImageAnalysis = analyzeData;
+      setImageAnalysis(analyzeData);
+
+      if (analyzeData?.fitzpatrickType) {
+        setFitzpatrickType(analyzeData.fitzpatrickType);
+      }
+
+      // Generate report (canonical endpoint)
       const response = await fetch("/api/generate-report", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          firstName,
           email,
           ageRange,
           primaryConcern,
           visitorQuestion: visitorQuestion || null,
-          photoDataUrl: imageBase64 || null,
-          // Optional: pass along the analysis result to reduce server work
-          // Your server will enrich with vision if missing/weak.
-          imageAnalysis: localImageAnalysis || null,
+          photoDataUrl: imageBase64,          // ✅ mandatory
+          imageAnalysis: localImageAnalysis,  // optional pass-through
         }),
       });
 
       const data = await response.json().catch(() => ({}));
-
       if (!response.ok || !data.ok) {
         throw new Error(
           data?.message ||
@@ -142,15 +133,13 @@ export default function AnalysisPage() {
           Personalized Skin Analysis
         </h1>
         <p style={{ color: "#666", marginBottom: "20px" }}>
-          Upload a photo (optional), and receive a full narrative letter from Dr. Lazuk via email.
+          Upload your selfie and receive a full narrative letter from Dr. Lazuk via email.
         </p>
 
-        <ImageUploader onImageSelected={setImageBase64} />
+        <ImageUploader onImageSelected={setImageBase64} required />
 
-        {/* Fitzpatrick display (only when detected/returned) */}
         <FitzpatrickDetector type={fitzpatrickType} />
 
-        {/* IMPORTANT: AnalysisForm must now collect email/ageRange/primaryConcern/visitorQuestion */}
         <AnalysisForm
           values={form}
           onChange={setForm}
@@ -164,7 +153,6 @@ export default function AnalysisPage() {
           </p>
         )}
 
-        {/* Show Fitz summary if returned */}
         {fitzpatrickSummary ? (
           <div
             style={{
@@ -185,7 +173,7 @@ export default function AnalysisPage() {
           </div>
         ) : null}
 
-        {/* Show aging preview images if returned */}
+        {/* Optional: show the aging images returned to the PAGE too */}
         {agingPreviewImages ? (
           <div style={{ marginTop: "16px" }}>
             <div style={{ fontWeight: 700, marginBottom: "8px" }}>
