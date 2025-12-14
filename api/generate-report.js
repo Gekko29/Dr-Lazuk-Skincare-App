@@ -872,14 +872,14 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
           <p style="font-size: 12px; color: #6B7280;">
             With care,<br/>
             Dr. Lazuk Esthetics® &amp; Dr. Lazuk Cosmetics®<br/>
-            <a href="mailto:contact@drlazuk.com" style="color: #111827; text-decoration: underline;">contact@drlazuk.com</a>
+            <a href="mailto:contact@skindoctor.ai" style="color: #111827; text-decoration: underline;">contact@drlazuk.com</a>
           </p>
         </div>
       </div>
     `;
 
     // Clinic email HTML
-    const clinicEmail = process.env.RESEND_CLINIC_EMAIL || "contact@drlazuk.com";
+    const clinicEmail = process.env.RESEND_CLINIC_EMAIL || "contact@skindoctor.ai";
     const safeConcern = cleanPrimaryConcern || "Not specified";
 
     const clinicHtml = `
