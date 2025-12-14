@@ -1,6 +1,6 @@
 // components/AnalysisForm.js
-// Form for the NEW generate-report inputs:
-// email, ageRange, primaryConcern, visitorQuestion
+// Form for generate-report inputs:
+// firstName, email, ageRange, primaryConcern, visitorQuestion
 
 import React from "react";
 
@@ -17,6 +17,15 @@ export function AnalysisForm({ values, onChange, onSubmit, loading }) {
       <p style={{ color: "#777", marginBottom: "16px" }}>
         This creates your personalized report and sends it to your email.
       </p>
+
+      <LabelInput
+        label="First Name"
+        type="text"
+        value={values.firstName}
+        onChange={setField("firstName")}
+        placeholder="e.g., Mark"
+        required
+      />
 
       <LabelInput
         label="Email"
@@ -162,6 +171,10 @@ function LabelTextarea({ label, value, onChange, placeholder }) {
           fontFamily: "inherit",
         }}
       />
+    </div>
+  );
+}
+
     </div>
   );
 }
