@@ -124,7 +124,10 @@ function textToHtmlParagraphs(text) {
   // Convert double newlines into paragraph breaks
   const parts = safe.split(/\n\s*\n/g);
   return parts
-    .map((p) => `<p style="margin: 0 0 12px 0; font-size: 13px; color: #111827; white-space: pre-wrap;">${p}</p>`)
+    .map(
+      (p) =>
+        `<p style="margin: 0 0 12px 0; font-size: 13px; color: #111827; white-space: pre-wrap;">${p}</p>`
+    )
     .join("");
 }
 
@@ -501,7 +504,10 @@ async function buildAnalysisContext({
 
   const tags = [];
   if (raw.wearingGlasses) tags.push("glasses");
-  if (raw.eyeColor && raw.eyeColor !== "unknown") tags.push(`${rawraw.eyeColor} eyes`.replace("R", "r")); // safe cosmetic tag
+
+  // ✅ FIX: rawraw.eyeColor typo + remove odd replace hack
+  if (raw.eyeColor && raw.eyeColor !== "unknown") tags.push(`${raw.eyeColor} eyes`);
+
   if (raw.clothingColor && raw.clothingColor !== "unknown") tags.push(`${raw.clothingColor} top`);
 
   const form = {
@@ -872,7 +878,7 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
           <p style="font-size: 12px; color: #6B7280;">
             With care,<br/>
             Dr. Lazuk Esthetics® &amp; Dr. Lazuk Cosmetics®<br/>
-            <a href="mailto:contact@skindoctor.ai" style="color: #111827; text-decoration: underline;">contact@drlazuk.com</a>
+            <a href="mailto:contact@skindoctor.ai" style="color: #111827; text-decoration: underline;">contact@skindoctor.ai</a>
           </p>
         </div>
       </div>
@@ -941,7 +947,8 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
   } catch (err) {
     console.error("generate-report error:", err);
 
-    const status = err?.status || err?.code === "cooldown_active" ? 429 : 500;
+    // ✅ FIX: operator precedence bug
+    const status = err?.status ? err.status : err?.code === "cooldown_active" ? 429 : 500;
 
     return res.status(status).json({
       ok: false,
