@@ -7,7 +7,7 @@
 // ✅ US-only geo gate
 // ✅ Strong vision enrichment if incoming imageAnalysis is weak/missing
 // ✅ Enforces greeting "Dear <firstName>,", bans "Dear You"
-// ✅ Generates 4 aging preview images
+// ✅ Generates 4 aging preview images USING THE SELFIE as the base (OpenAI Images Edits)
 // ✅ Fixes email image rendering by converting selfie dataURL -> PUBLIC URL (Cloudinary or Vercel Blob)
 // ✅ Places the 4 aging images NEAR THE END of the letter: just above Dr. Lazuk’s closing note/signature
 // ✅ Keeps CommonJS compatibility (no top-level ESM imports)
@@ -121,7 +121,6 @@ function escapeHtml(str) {
 // Render plaintext letter into HTML preserving line breaks
 function textToHtmlParagraphs(text) {
   const safe = escapeHtml(text || "");
-  // Convert double newlines into paragraph breaks
   const parts = safe.split(/\n\s*\n/g);
   return parts
     .map(
@@ -132,7 +131,6 @@ function textToHtmlParagraphs(text) {
 }
 
 // Insert aging preview block "near the end" — just above Dr. Lazuk’s closing lines.
-// We do this by splitting at the last occurrence of the closing quote line.
 function splitForAgingPlacement(reportText) {
   const t = String(reportText || "").trim();
   if (!t) return { before: "", closing: "" };
@@ -141,11 +139,9 @@ function splitForAgingPlacement(reportText) {
   const idx = t.lastIndexOf(needle);
 
   if (idx === -1) {
-    // If we can't find it, treat entire report as "before"
     return { before: t, closing: "" };
   }
 
-  // Include the closing line + everything after it as "closing"
   const before = t.slice(0, idx).trimEnd();
   const closing = t.slice(idx).trimStart();
   return { before, closing };
@@ -171,25 +167,18 @@ function parseDataUrl(dataUrl) {
 }
 
 async function uploadToCloudinary(dataUrl) {
-  // Requires:
-  // CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
   const apiKey = process.env.CLOUDINARY_API_KEY;
   const apiSecret = process.env.CLOUDINARY_API_SECRET;
-
   if (!cloudName || !apiKey || !apiSecret) return null;
 
   const form = new URLSearchParams();
-  // Cloudinary supports sending the data URL directly as "file"
   form.set("file", dataUrl);
 
-  // Signed upload
   const timestamp = Math.floor(Date.now() / 1000);
   form.set("timestamp", String(timestamp));
   form.set("folder", "drlazuk/visitor-selfies");
 
-  // Signature: SHA1 of "folder=...&timestamp=..." + api_secret
-  // Note: Use node crypto (built-in)
   const crypto = require("crypto");
   const toSign = `folder=${form.get("folder")}&timestamp=${timestamp}${apiSecret}`;
   const signature = crypto.createHash("sha1").update(toSign).digest("hex");
@@ -211,8 +200,6 @@ async function uploadToCloudinary(dataUrl) {
 }
 
 async function uploadToVercelBlob(dataUrl) {
-  // Optional: requires @vercel/blob and BLOB_READ_WRITE_TOKEN
-  // Docs: https://vercel.com/docs/storage/vercel-blob
   if (!process.env.BLOB_READ_WRITE_TOKEN) return null;
 
   try {
@@ -246,19 +233,15 @@ async function uploadToVercelBlob(dataUrl) {
 async function ensureEmailSafeImageUrl(photoDataUrl) {
   if (!photoDataUrl) return null;
 
-  // If it's already a normal URL, keep it.
   if (typeof photoDataUrl === "string" && !isDataUrl(photoDataUrl)) return photoDataUrl;
 
-  // If it's a data URL, attempt to upload.
   if (isDataUrl(photoDataUrl)) {
-    // Prefer Cloudinary if configured, else Vercel Blob
     const viaCloudinary = await uploadToCloudinary(photoDataUrl);
     if (viaCloudinary) return viaCloudinary;
 
     const viaBlob = await uploadToVercelBlob(photoDataUrl);
     if (viaBlob) return viaBlob;
 
-    // Fallback (may not render in many email clients)
     console.warn("No image upload provider configured. Email clients may block data URLs.");
     return photoDataUrl;
   }
@@ -267,55 +250,115 @@ async function ensureEmailSafeImageUrl(photoDataUrl) {
 }
 
 // -------------------------
-// 4 aging preview images
+// 4 aging preview images (SELFIE-BASED via OpenAI Images Edits)
 // -------------------------
-async function generateAgingPreviewImages({ client, ageRange, primaryConcern, fitzpatrickType }) {
+async function generateAgingPreviewImages({ ageRange, primaryConcern, fitzpatrickType, photoDataUrl }) {
+  if (!process.env.OPENAI_API_KEY) {
+    return { noChange10: null, noChange20: null, withCare10: null, withCare20: null };
+  }
+
+  // If for some reason selfie isn't a data URL, we can still try to use it as input
+  // by downloading it, but for now we enforce selfie required upstream.
+  if (!photoDataUrl) {
+    return { noChange10: null, noChange20: null, withCare10: null, withCare20: null };
+  }
+
   const baseAgeText = ageRange ? `who is currently in the ${ageRange} age range` : "adult";
   const concernText = primaryConcern
     ? `with a primary cosmetic concern of ${primaryConcern}`
     : "with common cosmetic skin concerns";
-  const fitzText = fitzpatrickType ? `with Fitzpatrick type ${fitzpatrickType}` : "with a realistic skin tone and texture";
+  const fitzText = fitzpatrickType
+    ? `with Fitzpatrick type ${fitzpatrickType}`
+    : "with a realistic skin tone and texture";
 
-  // Bias enforcement:
+  // Bias enforcement (your rules)
   const baseStyleNoChange =
     "ultra-realistic portrait, neutral expression, studio lighting, no makeup, no filters, no retouching, no beautification, no flattering bias, no skin smoothing, subtle signs of aging rendered honestly but respectfully, realistic pores and texture";
   const baseStyleWithCare =
     'ultra-realistic portrait, neutral expression, studio lighting, minimal/no makeup, no heavy filters, tasteful and slight "well-cared-for" bias allowed (subtle, not fake), realistic pores and texture, realistic aging but clearly supported by consistent skincare and sun protection (no plastic-smooth skin)';
 
+  // IMPORTANT: we explicitly tell the image editor to preserve identity and facial structure.
   const prompts = {
-    noChange10: `A ${baseAgeText} ${concernText}, ${fitzText}, imagined about 10 years in the future if they do not meaningfully improve their skincare routine — more pronounced fine lines, duller tone, more visible sun and lifestyle effects, but still treated respectfully as a real human. ${baseStyleNoChange}.`,
-    noChange20: `A ${baseAgeText} ${concernText}, ${fitzText}, imagined about 20 years in the future with minimal skincare support — deeper wrinkles, more sagging, more uneven pigment and sun markings, but still dignified and human, no caricature. ${baseStyleNoChange}.`,
-    withCare10: `A ${baseAgeText} ${concernText}, ${fitzText}, imagined about 10 years in the future if they follow a gentle, consistent, dermatologist-guided skincare routine with sun protection, hydration, and barrier support — smoother texture, healthier glow, more even tone, realistic aging but clearly well cared-for skin. ${baseStyleWithCare}.`,
-    withCare20: `A ${baseAgeText} ${concernText}, ${fitzText}, imagined about 20 years in the future with consistent skincare, sun protection, and healthy lifestyle habits — naturally aged but radiant, balanced skin, softened lines, graceful aging, no unrealistic perfection. ${baseStyleWithCare}.`,
+    noChange10: `Using the SAME PERSON from the provided selfie (preserve identity, facial structure, ethnicity, and features), show them about 10 years in the future if they do not meaningfully improve skincare — more pronounced fine lines, duller tone, more visible sun and lifestyle effects, still dignified and human. ${fitzText}. ${baseStyleNoChange}.`,
+    noChange20: `Using the SAME PERSON from the provided selfie (preserve identity, facial structure, ethnicity, and features), show them about 20 years in the future with minimal skincare support — deeper wrinkles, more sagging, more uneven pigment and sun markings, still dignified, no caricature. ${fitzText}. ${baseStyleNoChange}.`,
+    withCare10: `Using the SAME PERSON from the provided selfie (preserve identity, facial structure, ethnicity, and features), show them about 10 years in the future if they follow a gentle, consistent dermatologist-guided routine with sun protection — healthier glow, more even tone, refined texture, realistic aging but clearly well cared-for. ${fitzText}. ${baseStyleWithCare}.`,
+    withCare20: `Using the SAME PERSON from the provided selfie (preserve identity, facial structure, ethnicity, and features), show them about 20 years in the future with consistent skincare, sun protection, and healthy lifestyle — naturally aged but radiant, balanced skin, softened lines, graceful aging, no unrealistic perfection. ${fitzText}. ${baseStyleWithCare}.`,
   };
 
   try {
-    const size = "1024x1024";
+    const edited = await generateEditsFromSelfie({
+      photoDataUrl,
+      prompts,
+      size: "1024x1024",
+    });
 
-    const [imgNo10, imgNo20, imgCare10, imgCare20] = await Promise.all([
-      client.images.generate({ model: "gpt-image-1", prompt: prompts.noChange10, size }),
-      client.images.generate({ model: "gpt-image-1", prompt: prompts.noChange20, size }),
-      client.images.generate({ model: "gpt-image-1", prompt: prompts.withCare10, size }),
-      client.images.generate({ model: "gpt-image-1", prompt: prompts.withCare20, size }),
-    ]);
-
-    return {
-      noChange10: imgNo10?.data?.[0]?.url || null,
-      noChange20: imgNo20?.data?.[0]?.url || null,
-      withCare10: imgCare10?.data?.[0]?.url || null,
-      withCare20: imgCare20?.data?.[0]?.url || null,
-    };
+    return edited;
   } catch (err) {
-    console.error("Error generating aging preview images:", err);
+    console.error("Error generating selfie-based aging preview images:", err);
     return { noChange10: null, noChange20: null, withCare10: null, withCare20: null };
   }
+}
+
+// Calls OpenAI Images Edits endpoint directly (multipart/form-data)
+// so we can reliably pass an input image (selfie) and preserve identity.
+async function generateEditsFromSelfie({ photoDataUrl, prompts, size = "1024x1024" }) {
+  const parsed = parseDataUrl(photoDataUrl);
+  if (!parsed) {
+    throw new Error("Selfie must be a valid data URL (data:image/...;base64,...)");
+  }
+
+  const buf = Buffer.from(parsed.b64, "base64");
+  const mime = parsed.mime || "image/png";
+  const filename = mime.includes("png") ? "selfie.png" : "selfie.jpg";
+
+  const headers = {
+    Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+  };
+
+  // Helper to call edits with the same selfie buffer
+  async function oneEdit(prompt) {
+    const form = new FormData();
+    form.append("model", "gpt-image-1");
+    form.append("prompt", prompt);
+    form.append("size", size);
+    // Prefer URL output if available
+    form.append("response_format", "url");
+    // Attach selfie as the base image
+    form.append("image", new Blob([buf], { type: mime }), filename);
+
+    const res = await fetch("https://api.openai.com/v1/images/edits", {
+      method: "POST",
+      headers,
+      body: form,
+    });
+
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      throw new Error(`OpenAI images/edits failed (${res.status}): ${txt}`);
+    }
+
+    const json = await res.json().catch(() => ({}));
+    const d0 = json?.data?.[0] || null;
+    // Support either url or b64_json fallback
+    if (d0?.url) return d0.url;
+    if (d0?.b64_json) return `data:image/png;base64,${d0.b64_json}`;
+    return null;
+  }
+
+  const [noChange10, noChange20, withCare10, withCare20] = await Promise.all([
+    oneEdit(prompts.noChange10),
+    oneEdit(prompts.noChange20),
+    oneEdit(prompts.withCare10),
+    oneEdit(prompts.withCare20),
+  ]);
+
+  return { noChange10, noChange20, withCare10, withCare20 };
 }
 
 function buildAgingPreviewHtml(agingPreviewImages) {
   if (!agingPreviewImages) return "";
 
   const { noChange10, noChange20, withCare10, withCare20 } = agingPreviewImages;
-
   if (!noChange10 && !noChange20 && !withCare10 && !withCare20) return "";
 
   return `
@@ -504,10 +547,7 @@ async function buildAnalysisContext({
 
   const tags = [];
   if (raw.wearingGlasses) tags.push("glasses");
-
-  // ✅ FIX: rawraw.eyeColor typo + remove odd replace hack
   if (raw.eyeColor && raw.eyeColor !== "unknown") tags.push(`${raw.eyeColor} eyes`);
-
   if (raw.clothingColor && raw.clothingColor !== "unknown") tags.push(`${raw.clothingColor} top`);
 
   const form = {
@@ -819,12 +859,12 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
 
     reportText = stripInternalLines(reportText).trim();
 
-    // 5) Generate aging preview images
+    // 5) Generate SELFIE-based aging preview images
     const agingPreviewImages = await generateAgingPreviewImages({
-      client,
       ageRange: cleanAgeRange,
       primaryConcern: cleanPrimaryConcern,
       fitzpatrickType,
+      photoDataUrl, // IMPORTANT: use original selfie dataURL as base for edits
     });
 
     const agingPreviewHtml = buildAgingPreviewHtml(agingPreviewImages);
@@ -832,9 +872,7 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
     // Place aging block near the end, just above Dr. Lazuk’s closing note/signature.
     const { before, closing } = splitForAgingPlacement(reportText);
     const letterHtmlBody =
-      textToHtmlParagraphs(before) +
-      (agingPreviewHtml ? agingPreviewHtml : "") +
-      (closing ? textToHtmlParagraphs(closing) : "");
+      textToHtmlParagraphs(before) + (agingPreviewHtml ? agingPreviewHtml : "") + (closing ? textToHtmlParagraphs(closing) : "");
 
     // Visitor email HTML — selfie image ALWAYS included (mandatory)
     const visitorHtml = `
@@ -947,7 +985,6 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
   } catch (err) {
     console.error("generate-report error:", err);
 
-    // ✅ FIX: operator precedence bug
     const status = err?.status ? err.status : err?.code === "cooldown_active" ? 429 : 500;
 
     return res.status(status).json({
@@ -957,4 +994,5 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
     });
   }
 };
+
 
