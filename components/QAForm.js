@@ -1,8 +1,8 @@
 // components/QAForm.js
-// Reusable form for Ask-Dr-Lazuk Q&A.
-// Now supports OPTIONAL selfie upload (photoDataUrl).
+// Reusable form for Ask-Dr-Lazuk Q&A + OPTIONAL selfie upload.
 
 import React from "react";
+import { ImageUploader } from "./ImageUploader";
 
 export function QAForm({
   question,
@@ -12,56 +12,44 @@ export function QAForm({
   photoDataUrl,
   onPhotoSelected,
 }) {
-  function handleFileChange(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64 = reader.result;
-      if (onPhotoSelected) onPhotoSelected(base64);
-    };
-    reader.readAsDataURL(file);
-  }
-
   return (
     <form onSubmit={onSubmit}>
       <h2 style={{ fontSize: "1.2rem", marginBottom: "8px" }}>
         Ask Dr. Lazuk a Skincare Question
       </h2>
-      <p style={{ color: "#777", marginBottom: "16px" }}>
-        Type your question below. Optionally upload a selfie to help me tailor my
-        answer cosmetically.
-      </p>
 
-      {/* Optional selfie */}
-      <div style={{ marginBottom: "12px" }}>
-        <label style={{ display: "block", fontWeight: 500, marginBottom: "4px" }}>
-          Optional selfie (for cosmetic context)
-        </label>
-        <input type="file" accept="image/*" onChange={handleFileChange} />
-        {photoDataUrl ? (
-          <div
-            style={{
-              marginTop: "10px",
-              borderRadius: "12px",
-              overflow: "hidden",
-              maxWidth: "220px",
-              border: "1px solid #eee",
-            }}
-          >
-            <img
-              src={photoDataUrl}
-              alt="Selfie preview"
-              style={{ width: "100%", display: "block" }}
-            />
-          </div>
-        ) : null}
+      <div
+        style={{
+          border: "1px solid #E5E7EB",
+          background: "#F9FAFB",
+          borderRadius: "12px",
+          padding: "12px 14px",
+          marginBottom: "14px",
+          color: "#374151",
+          fontSize: "0.92rem",
+          lineHeight: 1.45,
+        }}
+      >
+        <strong>Optional:</strong> Upload a selfie if you’d like a more personalized,
+        appearance-based response (for example: redness vs. dryness vs. texture). This is
+        cosmetic education only — no medical diagnosis.
       </div>
 
-      {/* Question */}
+      <ImageUploader
+        onImageSelected={onPhotoSelected}
+        required={false}
+        showNotices={false} // ✅ hide analysis-only notices here
+        title="Optional selfie (for more personalized context)"
+      />
+
       <div style={{ marginBottom: "12px" }}>
-        <label style={{ display: "block", fontWeight: 500, marginBottom: "4px" }}>
+        <label
+          style={{
+            display: "block",
+            fontWeight: 500,
+            marginBottom: "4px",
+          }}
+        >
           Your question
         </label>
         <textarea
@@ -100,3 +88,4 @@ export function QAForm({
     </form>
   );
 }
+
