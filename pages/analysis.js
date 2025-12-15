@@ -26,7 +26,7 @@ export default function AnalysisPage() {
   const [fitzpatrickSummary, setFitzpatrickSummary] = useState(null);
   const [agingPreviewImages, setAgingPreviewImages] = useState(null);
 
-  // NEW: Dermatology Engine (structured, clinician-style output)
+  // Dermatology Engine (structured, clinician-style output)
   const [dermEngine, setDermEngine] = useState(null);
 
   const [loading, setLoading] = useState(false);
@@ -58,26 +58,32 @@ export default function AnalysisPage() {
       let localImageAnalysis = imageAnalysis;
 
       // 1) Pre-analyze selfie for early UI feedback (Fitz display)
-      // (This is optional; generate-report will enrich with vision if needed.)
-      const analyzeRes = await fetch("/api/analyzeImage", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          imageBase64,
-          notes: visitorQuestion || "",
-        }),
-      });
+      // IMPORTANT: Do not let this block the main report flow.
+      try {
+        const analyzeRes = await fetch("/api/analyzeImage", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            imageBase64,
+            notes: visitorQuestion || "",
+          }),
+        });
 
-      const analyzeData = await analyzeRes.json().catch(() => ({}));
-      if (!analyzeRes.ok) {
-        throw new Error(analyzeData?.error || "Something went wrong while analyzing the image.");
-      }
+        const analyzeData = await analyzeRes.json().catch(() => ({}));
 
-      localImageAnalysis = analyzeData;
-      setImageAnalysis(analyzeData);
+        if (analyzeRes.ok) {
+          localImageAnalysis = analyzeData;
+          setImageAnalysis(analyzeData);
 
-      if (analyzeData?.fitzpatrickType) {
-        setFitzpatrickType(analyzeData.fitzpatrickType);
+          if (analyzeData?.fitzpatrickType) {
+            setFitzpatrickType(analyzeData.fitzpatrickType);
+          }
+        } else {
+          // Soft fail: proceed to generate-report (it can enrich with vision)
+          console.warn("analyzeImage failed; proceeding to generate-report:", analyzeData);
+        }
+      } catch (analyzeErr) {
+        console.warn("analyzeImage exception; proceeding to generate-report:", analyzeErr);
       }
 
       // 2) Generate report (canonical endpoint)
@@ -109,7 +115,7 @@ export default function AnalysisPage() {
       setFitzpatrickSummary(data.fitzpatrickSummary || null);
       setAgingPreviewImages(data.agingPreviewImages || null);
 
-      // NEW: Derm Engine output (structured JSON)
+      // Derm Engine output (structured JSON)
       setDermEngine(data.dermEngine || null);
     } catch (err) {
       console.error(err);
@@ -118,6 +124,37 @@ export default function AnalysisPage() {
       setLoading(false);
     }
   }
+
+  // Helper: robustly extract aging trajectory snapshot (keys may vary)
+  function getAgingTrajectorySnapshot(engine) {
+    const f = engine?.framework_15_point || engine?.framework15 || engine?.framework || null;
+    if (!f || typeof f !== "object") return null;
+
+    const traj =
+      f["15_aging_trajectory"] ||
+      f["15. Aging trajectory"] ||
+      f["15. Aging Trajectory"] ||
+      f["Aging trajectory"] ||
+      f["Aging Trajectory"] ||
+      f["aging_trajectory"] ||
+      f["agingTrajectory"] ||
+      null;
+
+    if (!traj) return null;
+
+    const dominantDriver =
+      traj?.dominant_driver ||
+      traj?.dominantDriver ||
+      traj?.driver ||
+      (typeof traj === "string" ? traj : null) ||
+      null;
+
+    return {
+      dominantDriver: dominantDriver || "—",
+    };
+  }
+
+  const agingTraj = getAgingTrajectorySnapshot(dermEngine);
 
   return (
     <div
@@ -257,8 +294,8 @@ export default function AnalysisPage() {
           </div>
         ) : null}
 
-        {/* NEW: Dermatologist Confidence & Clinical Context */}
-        {dermEngine?.meta ? (
+        {/* Dermatologist Confidence & Clinical Context (show even if meta is missing / parse errors) */}
+        {dermEngine ? (
           <div
             style={{
               marginTop: "20px",
@@ -272,7 +309,13 @@ export default function AnalysisPage() {
               Dermatologist Review Notes
             </div>
 
-            {typeof dermEngine.meta.confidence_score_0_100 === "number" ? (
+            {dermEngine?.ok === false ? (
+              <p style={{ margin: "0 0 8px", fontSize: "13px", color: "#b00020" }}>
+                Dermatology Engine note: structured output was unavailable for this run.
+              </p>
+            ) : null}
+
+            {typeof dermEngine?.meta?.confidence_score_0_100 === "number" ? (
               <p style={{ margin: "0 0 6px", fontSize: "13px", color: "#374151" }}>
                 <strong>Assessment confidence:</strong>{" "}
                 {dermEngine.meta.confidence_score_0_100}%{" "}
@@ -280,13 +323,13 @@ export default function AnalysisPage() {
               </p>
             ) : null}
 
-            {Array.isArray(dermEngine.meta.limitations) && dermEngine.meta.limitations.length > 0 ? (
+            {Array.isArray(dermEngine?.meta?.limitations) && dermEngine.meta.limitations.length > 0 ? (
               <p style={{ margin: "0 0 6px", fontSize: "13px", color: "#374151" }}>
                 <strong>Limitations noted:</strong> {dermEngine.meta.limitations.join(", ")}
               </p>
             ) : null}
 
-            {Array.isArray(dermEngine.negative_findings) && dermEngine.negative_findings.length > 0 ? (
+            {Array.isArray(dermEngine?.negative_findings) && dermEngine.negative_findings.length > 0 ? (
               <div style={{ marginTop: "8px" }}>
                 <div style={{ fontWeight: 600, fontSize: "13px", marginBottom: "4px", color: "#111827" }}>
                   What I did not see
@@ -299,11 +342,9 @@ export default function AnalysisPage() {
               </div>
             ) : null}
 
-            {/* Aging trajectory snapshot (if present) */}
-            {dermEngine.framework_15_point?.["15_aging_trajectory"] ? (
+            {agingTraj ? (
               <div style={{ marginTop: "8px", fontSize: "13px", color: "#374151" }}>
-                <strong>Dominant aging driver:</strong>{" "}
-                {dermEngine.framework_15_point["15_aging_trajectory"]?.dominant_driver || "—"}
+                <strong>Dominant aging driver:</strong> {agingTraj.dominantDriver}
               </div>
             ) : null}
 
@@ -318,3 +359,4 @@ export default function AnalysisPage() {
     </div>
   );
 }
+
