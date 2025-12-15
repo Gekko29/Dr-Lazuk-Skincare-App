@@ -18,6 +18,8 @@ export function ImageUploader({
   maxFileMB = 8,
   maxSidePx = 1200, // keeps payload smaller while preserving detail
   jpegQuality = 0.85,
+  // Safety guard: if the final dataURL gets huge, block it (helps avoid Vercel body size issues)
+  maxOutputMB = 3.5,
 }) {
   const inputRef = useRef(null);
 
@@ -26,13 +28,22 @@ export function ImageUploader({
   const [error, setError] = useState("");
 
   const maxBytes = useMemo(() => maxFileMB * 1024 * 1024, [maxFileMB]);
+  const maxOutBytes = useMemo(() => maxOutputMB * 1024 * 1024, [maxOutputMB]);
 
-  function reset() {
+  function clearPreviewOnly() {
     setPreview(null);
     setFileName("");
-    setError("");
-    if (inputRef.current) inputRef.current.value = "";
     if (onImageSelected) onImageSelected(null);
+  }
+
+  function resetAll() {
+    setError("");
+    clearPreviewOnly();
+    if (inputRef.current) inputRef.current.value = "";
+  }
+
+  function resetInputOnly() {
+    if (inputRef.current) inputRef.current.value = "";
   }
 
   async function handleFileChange(e) {
@@ -41,9 +52,13 @@ export function ImageUploader({
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // If they previously uploaded something and now pick a bad file,
+    // we clear the previous preview so they don't think it's still accepted.
+    clearPreviewOnly();
+
     // Basic validations
     if (!file.type || !file.type.startsWith("image/")) {
-      setError("Please upload an image file (JPG, PNG, HEIC, etc.).");
+      setError("Please upload an image file (JPG or PNG recommended).");
       resetInputOnly();
       return;
     }
@@ -59,17 +74,36 @@ export function ImageUploader({
     try {
       const dataUrl = await fileToOptimizedDataUrl(file, { maxSidePx, jpegQuality });
 
+      // Guard against unexpectedly large base64 payloads
+      const approxBytes = estimateDataUrlBytes(dataUrl);
+      if (approxBytes > maxOutBytes) {
+        setError(
+          `That photo still came through too large after optimization. Please try a closer selfie or a smaller image (or lower max size).`
+        );
+        resetInputOnly();
+        clearPreviewOnly();
+        return;
+      }
+
       setPreview(dataUrl);
       if (onImageSelected) onImageSelected(dataUrl);
     } catch (err) {
       console.error("Image processing error:", err);
-      setError("We couldn’t process that image. Please try a different photo.");
-      resetInputOnly();
-    }
-  }
 
-  function resetInputOnly() {
-    if (inputRef.current) inputRef.current.value = "";
+      const msg = String(err?.message || "").toLowerCase();
+
+      // Common HEIC/HEIF decode limitation in browsers
+      if (msg.includes("decode") || msg.includes("heic") || msg.includes("heif")) {
+        setError(
+          "This photo format can’t be processed in your browser (common with HEIC). Please upload a JPG or PNG version."
+        );
+      } else {
+        setError("We couldn’t process that image. Please try a different photo.");
+      }
+
+      resetInputOnly();
+      clearPreviewOnly();
+    }
   }
 
   return (
@@ -136,12 +170,13 @@ export function ImageUploader({
             border: "1px solid #E5E7EB",
             background: "#fff",
           }}
+          aria-label="Upload selfie image"
         />
 
         {preview ? (
           <button
             type="button"
-            onClick={reset}
+            onClick={resetAll}
             style={{
               padding: "8px 12px",
               borderRadius: "999px",
@@ -162,7 +197,7 @@ export function ImageUploader({
             Selected: <strong style={{ color: "#111827" }}>{fileName}</strong>
           </span>
         ) : (
-          <span>Accepted: JPG/PNG/HEIC. Max {maxFileMB}MB.</span>
+          <span>Accepted: JPG/PNG (HEIC may not work in all browsers). Max {maxFileMB}MB.</span>
         )}
       </div>
 
@@ -183,11 +218,7 @@ export function ImageUploader({
             background: "#fff",
           }}
         >
-          <img
-            src={preview}
-            alt="Selfie preview"
-            style={{ width: "100%", display: "block" }}
-          />
+          <img src={preview} alt="Selfie preview" style={{ width: "100%", display: "block" }} />
         </div>
       ) : null}
     </div>
@@ -201,6 +232,7 @@ function fileToOptimizedDataUrl(file, { maxSidePx = 1200, jpegQuality = 0.85 } =
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
+    img.decoding = "async";
 
     img.onload = () => {
       try {
@@ -208,8 +240,8 @@ function fileToOptimizedDataUrl(file, { maxSidePx = 1200, jpegQuality = 0.85 } =
 
         // Scale down if needed
         const scale = Math.min(1, maxSidePx / Math.max(width, height));
-        const outW = Math.round(width * scale);
-        const outH = Math.round(height * scale);
+        const outW = Math.max(1, Math.round(width * scale));
+        const outH = Math.max(1, Math.round(height * scale));
 
         const canvas = document.createElement("canvas");
         canvas.width = outW;
@@ -232,12 +264,23 @@ function fileToOptimizedDataUrl(file, { maxSidePx = 1200, jpegQuality = 0.85 } =
       }
     };
 
-    img.onerror = (e) => {
+    img.onerror = () => {
       URL.revokeObjectURL(url);
-      reject(e);
+      reject(new Error("Image decode failed (format may be unsupported in this browser)."));
     };
 
     img.src = url;
   });
+}
+
+// Roughly estimate decoded bytes of a dataURL (base64)
+function estimateDataUrlBytes(dataUrl) {
+  if (!dataUrl || typeof dataUrl !== "string") return 0;
+  const idx = dataUrl.indexOf("base64,");
+  if (idx === -1) return dataUrl.length;
+  const b64 = dataUrl.slice(idx + "base64,".length);
+  // base64 expands ~4/3; decoded bytes ~ (len * 3/4) minus padding
+  const padding = (b64.endsWith("==") ? 2 : b64.endsWith("=") ? 1 : 0);
+  return Math.floor((b64.length * 3) / 4) - padding;
 }
 
