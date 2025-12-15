@@ -59,13 +59,23 @@ const BAR_COLORS = [
 function normalizeFitzType(type) {
   if (type === null || type === undefined) return null;
 
-  // number or numeric string
+  // number
+  if (typeof type === "number" && Number.isFinite(type) && type >= 1 && type <= 6) return type;
+
+  // numeric string (strict-ish)
+  if (typeof type === "string") {
+    const t = type.trim();
+    if (/^[1-6]$/.test(t)) return Number(t);
+    const roman = t.toUpperCase();
+    if (ROMAN_TO_NUM[roman]) return ROMAN_TO_NUM[roman];
+    return null;
+  }
+
+  // fallback coercion
   const asNum = Number(type);
   if (Number.isFinite(asNum) && asNum >= 1 && asNum <= 6) return asNum;
 
-  // roman numeral
-  const roman = String(type).trim().toUpperCase();
-  return ROMAN_TO_NUM[roman] || null;
+  return null;
 }
 
 export function FitzpatrickDetector({
@@ -84,12 +94,12 @@ export function FitzpatrickDetector({
       ? "Estimated from your photo."
       : detectedBy === "manual"
       ? "Selected from your inputs."
-      : detectedBy === "custom"
-      ? null
       : null;
 
   return (
     <div
+      role="status"
+      aria-live="polite"
       style={{
         marginTop: "14px",
         padding: "14px 16px",
@@ -130,6 +140,7 @@ export function FitzpatrickDetector({
             return (
               <div
                 key={segmentType}
+                aria-label={`Type ${segmentType}${isActive ? " (selected)" : ""}`}
                 title={`Type ${segmentType}`}
                 style={{
                   height: "10px",
@@ -174,4 +185,5 @@ export function FitzpatrickDetector({
     </div>
   );
 }
+
 
