@@ -11,6 +11,12 @@
 // ✅ Fixes email image rendering by converting selfie dataURL -> PUBLIC URL (Cloudinary or Vercel Blob)
 // ✅ Places the 4 aging images NEAR THE END of the letter: just above Dr. Lazuk’s closing note/signature
 // ✅ Keeps CommonJS compatibility (no top-level ESM imports)
+//
+// ADDITIONS (NO SUBTRACTIONS):
+// ✅ Adds Dermatology Engine JSON (observations vs interpretation, structured differential thinking,
+//    negative findings, confidence/limitations, two-signal evidence map, risk amplifiers, trajectory)
+// ✅ Appends dermEngine to API response (additive field)
+// ✅ (Optional) Includes dermEngine JSON block in CLINIC email only (visitor email remains unchanged)
 
 const path = require("path");
 const { pathToFileURL } = require("url");
@@ -29,6 +35,167 @@ async function getBuildAnalysis() {
   const fileUrl = pathToFileURL(path.join(__dirname, "..", "lib", "analysis.js")).href;
   const mod = await import(fileUrl);
   return mod.buildAnalysis;
+}
+
+// -------------------------
+// ADD: Dermatology Engine (Structured JSON, additive only)
+// -------------------------
+const DERM_ENGINE_SYSTEM = `
+You are Dr. Lazuk’s Dermatology-Grade Visual Skin Assessment Engine.
+
+Task:
+Perform a VISUAL-ONLY dermatologic-style skin assessment from the provided face photo(s) and the visitor’s form data. You must follow structured dermatologist reasoning:
+observe → interpret (non-diagnostic) → consider differentials → note negative findings → state confidence/limitations → provide trajectory and plan.
+
+Hard rules (must follow):
+1) VISUAL ONLY: Do not claim you used touch, dermoscopy, palpation, labs, biopsy, Wood’s lamp, or tools not provided.
+   No medical diagnosis. No disease naming as definitive. Use “suggestive of / consistent with / may indicate.”
+2) TWO-SIGNAL RULE: Do not assert any clinical interpretation unless supported by at least TWO independent visual cues.
+   If only one cue exists, mark it “low confidence.”
+3) OBSERVATION ≠ INTERPRETATION: Always separate what is seen (objective) from what it suggests (clinical meaning).
+4) NEGATIVE FINDINGS REQUIRED: Include “what I do NOT see.”
+5) CONSERVATIVE LANGUAGE: Avoid certainty. Avoid fear-based language. Focus on education + prevention + skincare guidance.
+6) CONFIDENCE & LIMITATIONS REQUIRED: Score confidence (0–100). List limitations (lighting, angle, makeup, glasses, resolution, shadows, facial hair, expression).
+7) FITZPATRICK-AWARE: Discuss pigmentation/irritation sensitivity in a Fitzpatrick-aware, non-diagnostic way.
+8) SAFETY: If something appears potentially urgent, do NOT diagnose. Advise prompt in-person evaluation.
+9) OUTPUT MUST BE VALID JSON ONLY. No markdown. No extra text.
+
+Voice:
+Clinical, dermatologist-like, structured, calm, and precise.
+`.trim();
+
+function buildDermEngineUserPrompt({
+  firstName,
+  email,
+  ageRange,
+  primaryConcern,
+  visitorQuestion,
+  analysisContext,
+  imageAnalysis,
+}) {
+  return `
+Visitor form data:
+- firstName: ${firstName || ""}
+- email: ${email || ""}
+- ageRange: ${ageRange || ""}
+- primaryConcern: ${primaryConcern || ""}
+- visitorQuestion: ${visitorQuestion || ""}
+
+Context you may use (do not repeat verbatim; use for specificity):
+- analysisContext_json: ${JSON.stringify(analysisContext || {}, null, 2)}
+- imageAnalysis_json: ${JSON.stringify(imageAnalysis || {}, null, 2)}
+
+15-point framework headings (keep these exact keys in the JSON under framework_15_point):
+1. Skin type (Fitzpatrick-aware)
+2. Barrier integrity
+3. Inflammation markers
+4. Pigment distribution
+5. Wrinkle patterning (static vs dynamic)
+6. Pore morphology
+7. Texture irregularity
+8. Vascular cues
+9. Acne morphology
+10. Photoaging indicators
+11. Hydration signals
+12. Sebum activity
+13. Symmetry and regional variation
+14. Environmental stress indicators
+15. Aging trajectory
+
+New dermatologist cognition elements (must be included in JSON):
+- Observed Visual Findings (objective)
+- Clinical Interpretation (non-diagnostic)
+- Structured Differential Considerations (most consistent / also consider / less likely + why)
+- Negative Findings (what is NOT seen)
+- Confidence & Limitations (0–100 + reasons)
+- Two-Signal Evidence Map (each interpretation must list 2+ cues)
+- Risk Amplifiers (e.g., Fitzpatrick + inflammation + UV cues)
+- Trajectory Forecast (90 days + 6–12 months if unchanged)
+
+Return JSON only using this top-level shape:
+{
+  "meta": {...},
+  "personalization": {...},
+  "observed_visual_findings": [...],
+  "two_signal_evidence_map": [...],
+  "clinical_interpretation_non_diagnostic": [...],
+  "structured_differential_considerations": {...},
+  "negative_findings": [...],
+  "risk_amplifiers": [...],
+  "framework_15_point": {...},
+  "visitor_question_answer": {...},
+  "next_steps_summary": {...}
+}
+`.trim();
+}
+
+function safeJsonParse(maybeJsonText) {
+  try {
+    if (!maybeJsonText) return null;
+    const t = String(maybeJsonText).trim();
+    const s = t.indexOf("{");
+    const e = t.lastIndexOf("}");
+    if (s === -1 || e === -1) return null;
+    return JSON.parse(t.slice(s, e + 1));
+  } catch {
+    return null;
+  }
+}
+
+async function runDermatologyEngine({
+  client,
+  photoDataUrl,
+  firstName,
+  email,
+  ageRange,
+  primaryConcern,
+  visitorQuestion,
+  analysisContext,
+  imageAnalysis,
+}) {
+  // Uses vision-capable model because it must actually evaluate the selfie visually.
+  const dermModel = process.env.OPENAI_DERM_ENGINE_MODEL || process.env.OPENAI_VISION_MODEL || "gpt-4o-mini";
+
+  const userText = buildDermEngineUserPrompt({
+    firstName,
+    email,
+    ageRange,
+    primaryConcern,
+    visitorQuestion,
+    analysisContext,
+    imageAnalysis,
+  });
+
+  try {
+    const resp = await client.chat.completions.create({
+      model: dermModel,
+      temperature: 0.15,
+      max_tokens: 1700,
+      messages: [
+        { role: "system", content: DERM_ENGINE_SYSTEM },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: userText },
+            // IMPORTANT: use the original selfie data URL or URL
+            { type: "image_url", image_url: { url: photoDataUrl } },
+          ],
+        },
+      ],
+    });
+
+    const text = resp?.choices?.[0]?.message?.content || "";
+    const parsed = safeJsonParse(text);
+
+    if (!parsed) {
+      return { ok: false, parse_error: true, raw: text };
+    }
+
+    return { ok: true, data: parsed };
+  } catch (err) {
+    console.error("Dermatology Engine error:", err);
+    return { ok: false, error: true, message: err?.message || "Dermatology Engine failed" };
+  }
 }
 
 // -------------------------
@@ -713,6 +880,25 @@ module.exports = async function handler(req, res) {
       imageAnalysis,
     });
 
+    // -------------------------
+    // ADD: Dermatology Engine run (structured JSON; additive)
+    // -------------------------
+    // IMPORTANT: Uses the ORIGINAL selfie (photoDataUrl) so the model truly evaluates what the visitor uploaded.
+    // If you prefer, swap to (emailSafeSelfieUrl || photoDataUrl). But dataURL is fine for vision.
+    const dermEngineResult = await runDermatologyEngine({
+      client,
+      photoDataUrl, // keep original; required selfie
+      firstName: cleanFirstName,
+      email: cleanEmail,
+      ageRange: cleanAgeRange,
+      primaryConcern: cleanPrimaryConcern,
+      visitorQuestion: cleanVisitorQuestion || null,
+      analysisContext,
+      imageAnalysis,
+    });
+
+    const dermEngine = dermEngineResult?.ok ? dermEngineResult.data : dermEngineResult;
+
     // Brand-locked product + service list
     const productList = `
 - Beneficial Face Cleanser with Centella Asiatica (Dermo Complex): soothing, barrier-supporting cleanser for sensitive or redness-prone skin.
@@ -926,6 +1112,14 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
     const clinicEmail = process.env.RESEND_CLINIC_EMAIL || "contact@skindoctor.ai";
     const safeConcern = cleanPrimaryConcern || "Not specified";
 
+    // ADD: Include derm engine JSON for internal QA/trust (clinic only)
+    const dermEngineClinicBlock = `
+      <div style="margin-top: 14px; padding: 12px 14px; border-radius: 10px; border: 1px dashed #D1D5DB; background: #FAFAFA;">
+        <p style="margin:0 0 8px 0; font-size: 12px; color: #374151;"><strong>Dermatology Engine (Structured JSON)</strong> — internal QA / audit snapshot</p>
+        <pre style="margin:0; font-size: 11px; color: #111827; white-space: pre-wrap;">${escapeHtml(JSON.stringify(dermEngine || {}, null, 2))}</pre>
+      </div>
+    `;
+
     const clinicHtml = `
       <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111827; line-height: 1.5; background-color: #F9FAFB; padding: 16px;">
         <div style="max-width: 680px; margin: 0 auto; background-color: #FFFFFF; border-radius: 12px; border: 1px solid #E5E7EB; padding: 20px 24px;">
@@ -949,6 +1143,8 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
           <div style="margin-top: 10px;">
             ${letterHtmlBody}
           </div>
+
+          ${dermEngineClinicBlock}
         </div>
       </div>
     `;
@@ -975,11 +1171,19 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
       fitzpatrickSummary: fitzpatrickSummary || null,
       agingPreviewImages,
       selfieUrlForEmail: emailSafeSelfieUrl || null,
+
+      // ADD: Dermatology Engine payload (structured JSON)
+      dermEngine: dermEngine || null,
+
       _debug: {
         usedIncomingImageAnalysis: !!incomingImageAnalysis,
         enrichedWithVision,
         emailSelfieIsDataUrl: isDataUrl(photoDataUrl),
         emailSelfieUploaded: !!emailSafeSelfieUrl && !isDataUrl(emailSafeSelfieUrl),
+
+        // ADD: derm engine debug flags
+        dermEngineOk: !!(dermEngineResult && dermEngineResult.ok),
+        dermEngineModel: process.env.OPENAI_DERM_ENGINE_MODEL || process.env.OPENAI_VISION_MODEL || "gpt-4o-mini",
       },
     });
   } catch (err) {
@@ -994,5 +1198,6 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
     });
   }
 };
+
 
 
