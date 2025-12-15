@@ -1,5 +1,5 @@
 // pages/analysis.js
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { AnalysisForm } from "../components/AnalysisForm";
 import { OutputCard } from "../components/OutputCard";
 import { ImageUploader } from "../components/ImageUploader";
@@ -32,6 +32,8 @@ export default function AnalysisPage() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
+  const hasSelfie = useMemo(() => !!imageBase64, [imageBase64]);
+
   async function handleGenerate(e) {
     e.preventDefault();
     setLoading(true);
@@ -50,7 +52,8 @@ export default function AnalysisPage() {
 
       if (!firstName) throw new Error("Please enter your first name.");
       if (!email || !email.includes("@")) throw new Error("Please enter a valid email address.");
-      if (!ageRange || !primaryConcern) throw new Error("Please select an age range and primary concern.");
+      if (!ageRange || !primaryConcern)
+        throw new Error("Please select an age range and primary concern.");
 
       // Selfie is REQUIRED (per your direction)
       if (!imageBase64) throw new Error("Please upload a selfie to generate your detailed analysis.");
@@ -111,6 +114,7 @@ export default function AnalysisPage() {
       }
 
       setOutput(data.report || "");
+      // generate-report may return Roman (I–VI); analyzeImage returns numeric (1–6). Detector supports both.
       setFitzpatrickType(data.fitzpatrickType || fitzpatrickType || null);
       setFitzpatrickSummary(data.fitzpatrickSummary || null);
       setAgingPreviewImages(data.agingPreviewImages || null);
@@ -177,51 +181,49 @@ export default function AnalysisPage() {
           padding: "24px 24px 32px",
         }}
       >
-        <h1 style={{ fontSize: "1.75rem", marginBottom: "4px", fontWeight: 600 }}>
+        <h1 style={{ fontSize: "1.75rem", marginBottom: "4px", fontWeight: 700 }}>
           Personalized Skin Analysis
         </h1>
-        <p style={{ color: "#666", marginBottom: "14px" }}>
+        <p style={{ color: "#6B7280", marginBottom: "14px", fontSize: "13px" }}>
           Upload your selfie and receive a full narrative letter from Dr. Lazuk via email.
         </p>
 
-        {/* REQUIRED messaging on camera/upload page */}
-        <div
-          style={{
-            border: "1px solid #E5E7EB",
-            background: "#F9FAFB",
-            padding: "12px 14px",
-            borderRadius: "12px",
-            marginBottom: "12px",
-            color: "#374151",
-            fontSize: "13px",
-            lineHeight: 1.45,
-          }}
-        >
-          <div style={{ fontWeight: 700, marginBottom: "6px", color: "#111827" }}>
-            Before you begin
-          </div>
-          <div style={{ marginBottom: "6px" }}>
-            <strong>USA only:</strong> This detailed virtual skin analysis is currently available only to visitors in the United States.
-          </div>
-          <div style={{ marginBottom: "6px" }}>
-            <strong>One analysis every 30 days:</strong> To keep results meaningful and prevent “routine hopping,” we limit detailed reports to once per 30 days per email.
-          </div>
-          <div>
-            <strong>Timing:</strong> Your detailed analysis typically completes in <strong>30–60 seconds</strong>, depending on traffic.
-          </div>
-        </div>
-
-        {/* Selfie uploader (mandatory) */}
-        <ImageUploader onImageSelected={setImageBase64} required />
+        {/* Selfie uploader (mandatory) — show notices here (avoid duplicate block on page) */}
+        <ImageUploader
+          onImageSelected={setImageBase64}
+          required
+          showNotices={true}
+          title="Upload your selfie"
+        />
 
         {/* Fitzpatrick display (only when detected/returned) */}
-        <FitzpatrickDetector type={fitzpatrickType} />
+        <FitzpatrickDetector type={fitzpatrickType} detectedBy="auto" />
 
-        <AnalysisForm values={form} onChange={setForm} onSubmit={handleGenerate} loading={loading} />
+        <AnalysisForm
+          values={form}
+          onChange={setForm}
+          onSubmit={handleGenerate}
+          loading={loading}
+          selfieRequired={true}
+          hasSelfie={hasSelfie}
+        />
 
-        {errorMsg && (
-          <p style={{ marginTop: "16px", color: "#b00020", fontSize: "0.9rem" }}>{errorMsg}</p>
-        )}
+        {errorMsg ? (
+          <div
+            style={{
+              marginTop: "14px",
+              border: "1px solid rgba(176,0,32,0.25)",
+              background: "rgba(176,0,32,0.06)",
+              borderRadius: "12px",
+              padding: "10px 12px",
+              color: "#b00020",
+              fontSize: "13px",
+              fontWeight: 700,
+            }}
+          >
+            {errorMsg}
+          </div>
+        ) : null}
 
         {/* Fitz summary if returned */}
         {fitzpatrickSummary ? (
@@ -230,14 +232,14 @@ export default function AnalysisPage() {
               marginTop: "16px",
               border: "1px solid #FCD34D",
               background: "#FFFBEB",
-              borderRadius: "10px",
+              borderRadius: "12px",
               padding: "12px 14px",
             }}
           >
-            <div style={{ fontWeight: 700, marginBottom: "4px", color: "#92400E" }}>
+            <div style={{ fontWeight: 900, marginBottom: "4px", color: "#92400E" }}>
               Fitzpatrick Skin Type (Cosmetic Estimate)
             </div>
-            <div style={{ color: "#92400E", fontSize: "0.95rem" }}>
+            <div style={{ color: "#92400E", fontSize: "13px", lineHeight: 1.45 }}>
               {fitzpatrickType ? `Type ${fitzpatrickType}. ` : ""}
               {fitzpatrickSummary}
             </div>
@@ -247,7 +249,7 @@ export default function AnalysisPage() {
         {/* Optional: show aging preview images on the page too */}
         {agingPreviewImages ? (
           <div style={{ marginTop: "16px" }}>
-            <div style={{ fontWeight: 700, marginBottom: "8px" }}>
+            <div style={{ fontWeight: 900, marginBottom: "8px", color: "#111827" }}>
               Your Skin’s Future Story — A Preview
             </div>
 
@@ -266,28 +268,28 @@ export default function AnalysisPage() {
                 <img
                   src={agingPreviewImages.noChange10}
                   alt="~10 years minimal skincare changes"
-                  style={{ width: "100%", borderRadius: "10px", border: "1px solid #eee" }}
+                  style={{ width: "100%", borderRadius: "12px", border: "1px solid #E5E7EB" }}
                 />
               ) : null}
               {agingPreviewImages.noChange20 ? (
                 <img
                   src={agingPreviewImages.noChange20}
                   alt="~20 years minimal skincare changes"
-                  style={{ width: "100%", borderRadius: "10px", border: "1px solid #eee" }}
+                  style={{ width: "100%", borderRadius: "12px", border: "1px solid #E5E7EB" }}
                 />
               ) : null}
               {agingPreviewImages.withCare10 ? (
                 <img
                   src={agingPreviewImages.withCare10}
                   alt="~10 years with consistent care"
-                  style={{ width: "100%", borderRadius: "10px", border: "1px solid #eee" }}
+                  style={{ width: "100%", borderRadius: "12px", border: "1px solid #E5E7EB" }}
                 />
               ) : null}
               {agingPreviewImages.withCare20 ? (
                 <img
                   src={agingPreviewImages.withCare20}
                   alt="~20 years with consistent care"
-                  style={{ width: "100%", borderRadius: "10px", border: "1px solid #eee" }}
+                  style={{ width: "100%", borderRadius: "12px", border: "1px solid #E5E7EB" }}
                 />
               ) : null}
             </div>
@@ -305,12 +307,12 @@ export default function AnalysisPage() {
               padding: "14px 16px",
             }}
           >
-            <div style={{ fontWeight: 700, marginBottom: "6px", color: "#111827" }}>
+            <div style={{ fontWeight: 900, marginBottom: "6px", color: "#111827" }}>
               Dermatologist Review Notes
             </div>
 
             {dermEngine?.ok === false ? (
-              <p style={{ margin: "0 0 8px", fontSize: "13px", color: "#b00020" }}>
+              <p style={{ margin: "0 0 8px", fontSize: "13px", color: "#b00020", fontWeight: 800 }}>
                 Dermatology Engine note: structured output was unavailable for this run.
               </p>
             ) : null}
@@ -331,7 +333,7 @@ export default function AnalysisPage() {
 
             {Array.isArray(dermEngine?.negative_findings) && dermEngine.negative_findings.length > 0 ? (
               <div style={{ marginTop: "8px" }}>
-                <div style={{ fontWeight: 600, fontSize: "13px", marginBottom: "4px", color: "#111827" }}>
+                <div style={{ fontWeight: 800, fontSize: "13px", marginBottom: "4px", color: "#111827" }}>
                   What I did not see
                 </div>
                 <ul style={{ margin: 0, paddingLeft: "18px", fontSize: "13px", color: "#374151" }}>
@@ -359,4 +361,5 @@ export default function AnalysisPage() {
     </div>
   );
 }
+
 
