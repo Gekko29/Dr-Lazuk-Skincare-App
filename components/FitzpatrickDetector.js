@@ -1,6 +1,13 @@
 // components/FitzpatrickDetector.js
-// Fitzpatrick skin type display with color bar + friendly description.
+// Fitzpatrick skin type display with subtle scale + cosmetic disclaimer.
 // Accepts numeric (1–6) OR Roman ("I"–"VI").
+//
+// Updates:
+// ✅ Cleaner, more premium UI + smaller footprint
+// ✅ Explicit “cosmetic estimate” disclaimer (non-diagnostic)
+// ✅ Works with "1", 1, "I", "iv", etc.
+// ✅ Doesn’t show anything if type is null/invalid
+// ✅ Optional "detectedBy" label (auto/manual/custom)
 
 import React from "react";
 
@@ -8,62 +15,64 @@ const TYPES = {
   1: {
     label: "Type I",
     description:
-      "Very fair skin, always burns, never tans. Needs very high, consistent sun protection and gentle actives.",
+      "Very fair skin that burns easily and rarely tans. Prioritize daily broad-spectrum SPF and gentle actives.",
   },
   2: {
     label: "Type II",
     description:
-      "Fair skin, usually burns, tans minimally. Daily broad-spectrum SPF is essential, plus cautious use of peels and lasers.",
+      "Fair skin that usually burns and tans lightly. Daily SPF and careful pacing with stronger actives are key.",
   },
   3: {
     label: "Type III",
     description:
-      "Medium/light skin, sometimes burns, gradually tans. Can usually tolerate more active treatments with proper protection.",
+      "Medium/light skin that may burn and gradually tans. Often tolerates actives well with consistent sun protection.",
   },
   4: {
     label: "Type IV",
     description:
-      "Olive/light brown skin, rarely burns, tans easily. Great candidate for many esthetic procedures with careful pigment management.",
+      "Olive/light brown skin that rarely burns and tans easily. Keep pigment-supporting care in mind with procedures.",
   },
   5: {
     label: "Type V",
     description:
-      "Brown skin, very rarely burns, tans very easily. Needs special attention to pigmentary risks with lasers, peels, and heat-based treatments.",
+      "Brown skin that very rarely burns and tans very easily. Use pigment-safe settings and calm-barrier strategies.",
   },
   6: {
     label: "Type VI",
     description:
-      "Deeply pigmented dark brown to black skin, almost never burns. High priority on pigment-safe parameters for all energy devices.",
+      "Deeply pigmented skin that almost never burns. Prioritize pigment-safe parameters for heat-based treatments.",
   },
 };
 
 const ROMAN_TO_NUM = { I: 1, II: 2, III: 3, IV: 4, V: 5, VI: 6 };
 
-// Simple gradient from very fair → very deep
+// Neutral “tone scale” (not literal skin color)
 const BAR_COLORS = [
-  "#ffe5e0", // I
-  "#ffd2b3", // II
-  "#ffecb3", // III
-  "#e0ffb3", // IV
-  "#b3ffd9", // V
-  "#80c7ff", // VI
+  "#F3F4F6", // I
+  "#E5E7EB", // II
+  "#D1D5DB", // III
+  "#9CA3AF", // IV
+  "#6B7280", // V
+  "#374151", // VI
 ];
 
 function normalizeFitzType(type) {
   if (type === null || type === undefined) return null;
 
-  // numeric string or number
+  // number or numeric string
   const asNum = Number(type);
   if (Number.isFinite(asNum) && asNum >= 1 && asNum <= 6) return asNum;
 
-  // roman
+  // roman numeral
   const roman = String(type).trim().toUpperCase();
-  if (ROMAN_TO_NUM[roman]) return ROMAN_TO_NUM[roman];
-
-  return null;
+  return ROMAN_TO_NUM[roman] || null;
 }
 
-export function FitzpatrickDetector({ type, detectedBy = "auto" }) {
+export function FitzpatrickDetector({
+  type,
+  detectedBy = "auto", // "auto" | "manual" | "custom"
+  showDisclaimer = true,
+}) {
   const numeric = normalizeFitzType(type);
   if (!numeric) return null;
 
@@ -72,44 +81,47 @@ export function FitzpatrickDetector({ type, detectedBy = "auto" }) {
 
   const detectedLabel =
     detectedBy === "auto"
-      ? "Detected automatically based on your photo."
+      ? "Estimated from your photo."
       : detectedBy === "manual"
-      ? "Selected based on your answers."
+      ? "Selected from your inputs."
+      : detectedBy === "custom"
+      ? null
       : null;
 
   return (
     <div
       style={{
-        marginTop: "20px",
+        marginTop: "14px",
         padding: "14px 16px",
-        borderRadius: "12px",
-        background: "#faf5f5",
-        border: "1px solid #e4d5d5",
+        borderRadius: "14px",
+        border: "1px solid #E5E7EB",
+        background: "#FFFFFF",
+        boxShadow: "0 6px 18px rgba(0,0,0,0.04)",
       }}
     >
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
+          gap: "12px",
           alignItems: "baseline",
-          marginBottom: "10px",
+          marginBottom: "8px",
         }}
       >
-        <strong>Fitzpatrick Skin Type</strong>
-        <span style={{ fontWeight: 600, fontSize: "0.95rem", color: "#444" }}>
-          {info.label} (Type {numeric})
-        </span>
+        <div style={{ fontWeight: 900, color: "#111827" }}>Fitzpatrick Skin Type</div>
+        <div style={{ fontWeight: 800, color: "#111827" }}>{info.label}</div>
       </div>
 
-      {/* Color bar */}
+      {/* Scale */}
       <div style={{ marginBottom: "10px" }}>
         <div
+          aria-label="Fitzpatrick scale I through VI"
           style={{
             display: "grid",
             gridTemplateColumns: "repeat(6, 1fr)",
             borderRadius: "999px",
             overflow: "hidden",
-            border: "1px solid #e0d0d0",
+            border: "1px solid #E5E7EB",
           }}
         >
           {BAR_COLORS.map((color, index) => {
@@ -118,25 +130,25 @@ export function FitzpatrickDetector({ type, detectedBy = "auto" }) {
             return (
               <div
                 key={segmentType}
+                title={`Type ${segmentType}`}
                 style={{
                   height: "10px",
                   background: color,
-                  opacity: isActive ? 1 : 0.5,
-                  boxShadow: isActive
-                    ? "0 0 0 2px rgba(0,0,0,0.12) inset"
-                    : "none",
+                  opacity: isActive ? 1 : 0.35,
+                  boxShadow: isActive ? "0 0 0 2px rgba(0,0,0,0.18) inset" : "none",
                 }}
               />
             );
           })}
         </div>
+
         <div
           style={{
             display: "flex",
             justifyContent: "space-between",
-            fontSize: "0.75rem",
-            marginTop: "4px",
-            color: "#777",
+            fontSize: "11px",
+            marginTop: "5px",
+            color: "#6B7280",
           }}
         >
           <span>Type I</span>
@@ -144,15 +156,22 @@ export function FitzpatrickDetector({ type, detectedBy = "auto" }) {
         </div>
       </div>
 
-      <p style={{ margin: "0 0 4px", fontSize: "0.9rem", color: "#555" }}>
+      <p style={{ margin: "0 0 6px", fontSize: "13px", color: "#374151", lineHeight: 1.5 }}>
         {info.description}
       </p>
 
       {detectedLabel ? (
-        <p style={{ margin: 0, fontSize: "0.8rem", color: "#888" }}>
+        <p style={{ margin: "0 0 6px", fontSize: "12px", color: "#6B7280" }}>
           {detectedLabel}
+        </p>
+      ) : null}
+
+      {showDisclaimer ? (
+        <p style={{ margin: 0, fontSize: "11px", color: "#9CA3AF" }}>
+          Cosmetic estimate only — not a medical diagnosis.
         </p>
       ) : null}
     </div>
   );
 }
+
