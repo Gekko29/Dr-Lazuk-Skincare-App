@@ -26,6 +26,9 @@ export default function AnalysisPage() {
   const [fitzpatrickSummary, setFitzpatrickSummary] = useState(null);
   const [agingPreviewImages, setAgingPreviewImages] = useState(null);
 
+  // NEW: Dermatology Engine (structured, clinician-style output)
+  const [dermEngine, setDermEngine] = useState(null);
+
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -36,6 +39,7 @@ export default function AnalysisPage() {
     setOutput("");
     setFitzpatrickSummary(null);
     setAgingPreviewImages(null);
+    setDermEngine(null);
 
     try {
       const firstName = String(form.firstName || "").trim();
@@ -104,6 +108,9 @@ export default function AnalysisPage() {
       setFitzpatrickType(data.fitzpatrickType || fitzpatrickType || null);
       setFitzpatrickSummary(data.fitzpatrickSummary || null);
       setAgingPreviewImages(data.agingPreviewImages || null);
+
+      // NEW: Derm Engine output (structured JSON)
+      setDermEngine(data.dermEngine || null);
     } catch (err) {
       console.error(err);
       setErrorMsg(err?.message || "Something went wrong while generating the analysis letter.");
@@ -250,10 +257,64 @@ export default function AnalysisPage() {
           </div>
         ) : null}
 
+        {/* NEW: Dermatologist Confidence & Clinical Context */}
+        {dermEngine?.meta ? (
+          <div
+            style={{
+              marginTop: "20px",
+              border: "1px solid #E5E7EB",
+              background: "#F9FAFB",
+              borderRadius: "12px",
+              padding: "14px 16px",
+            }}
+          >
+            <div style={{ fontWeight: 700, marginBottom: "6px", color: "#111827" }}>
+              Dermatologist Review Notes
+            </div>
+
+            {typeof dermEngine.meta.confidence_score_0_100 === "number" ? (
+              <p style={{ margin: "0 0 6px", fontSize: "13px", color: "#374151" }}>
+                <strong>Assessment confidence:</strong>{" "}
+                {dermEngine.meta.confidence_score_0_100}%{" "}
+                {dermEngine.meta.confidence_label ? `(${dermEngine.meta.confidence_label})` : ""}
+              </p>
+            ) : null}
+
+            {Array.isArray(dermEngine.meta.limitations) && dermEngine.meta.limitations.length > 0 ? (
+              <p style={{ margin: "0 0 6px", fontSize: "13px", color: "#374151" }}>
+                <strong>Limitations noted:</strong> {dermEngine.meta.limitations.join(", ")}
+              </p>
+            ) : null}
+
+            {Array.isArray(dermEngine.negative_findings) && dermEngine.negative_findings.length > 0 ? (
+              <div style={{ marginTop: "8px" }}>
+                <div style={{ fontWeight: 600, fontSize: "13px", marginBottom: "4px", color: "#111827" }}>
+                  What I did not see
+                </div>
+                <ul style={{ margin: 0, paddingLeft: "18px", fontSize: "13px", color: "#374151" }}>
+                  {dermEngine.negative_findings.slice(0, 4).map((nf, i) => (
+                    <li key={i}>{nf?.not_observed || String(nf)}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            {/* Aging trajectory snapshot (if present) */}
+            {dermEngine.framework_15_point?.["15_aging_trajectory"] ? (
+              <div style={{ marginTop: "8px", fontSize: "13px", color: "#374151" }}>
+                <strong>Dominant aging driver:</strong>{" "}
+                {dermEngine.framework_15_point["15_aging_trajectory"]?.dominant_driver || "—"}
+              </div>
+            ) : null}
+
+            <p style={{ marginTop: "8px", fontSize: "11px", color: "#6B7280" }}>
+              This assessment is based on visual pattern recognition only and is not a medical diagnosis.
+            </p>
+          </div>
+        ) : null}
+
         <OutputCard title="Dr. Lazuk Letter" value={output} />
       </div>
     </div>
   );
 }
-
-
