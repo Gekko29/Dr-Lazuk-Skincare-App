@@ -2,8 +2,7 @@
 // Form for generate-report inputs:
 // firstName, email, ageRange, primaryConcern, visitorQuestion
 //
-// NOTE: Your original file had a stray/unmatched closing block at the bottom.
-// This version fixes that + improves UX while staying compatible with your current pages/analysis.js.
+// Fixes stray/unmatched closing block + improves UX while staying compatible with pages/analysis.js.
 
 import React, { useMemo } from "react";
 
@@ -12,13 +11,19 @@ export function AnalysisForm({
   onChange,
   onSubmit,
   loading,
-  // Optional (non-breaking): if you pass these later, the button can enforce “selfie required”
+  // Optional (non-breaking): if you pass these, the button can enforce “selfie required”
   selfieRequired = false,
-  hasSelfie = true,
+  hasSelfie, // if undefined, we infer from values or allow submit unless selfieRequired=true
 }) {
   const setField = (field) => (e) => {
     onChange({ ...values, [field]: e.target.value });
   };
+
+  // If caller didn't pass hasSelfie, infer best-effort:
+  // - If selfieRequired is true and hasSelfie is undefined => treat as false (safer)
+  // - Otherwise do not block the button based on selfie
+  const effectiveHasSelfie =
+    typeof hasSelfie === "boolean" ? hasSelfie : selfieRequired ? false : true;
 
   const canSubmit = useMemo(() => {
     if (loading) return false;
@@ -29,24 +34,39 @@ export function AnalysisForm({
     const concernOk = String(values.primaryConcern || "").trim().length > 0;
 
     if (!firstNameOk || !emailOk || !ageOk || !concernOk) return false;
-    if (selfieRequired && !hasSelfie) return false;
+    if (selfieRequired && !effectiveHasSelfie) return false;
 
     return true;
-  }, [loading, values, selfieRequired, hasSelfie]);
+  }, [loading, values, selfieRequired, effectiveHasSelfie]);
 
   const submitLabel = loading ? "Generating..." : "Generate & Email My Report";
+
   const helper =
-    selfieRequired && !hasSelfie
+    selfieRequired && !effectiveHasSelfie
       ? "Please upload a selfie above to generate your report."
       : "This creates your personalized report and sends it to your email.";
 
   return (
     <form onSubmit={onSubmit} style={{ marginTop: "8px" }}>
-      <h2 style={{ fontSize: "1.2rem", marginBottom: "6px", fontWeight: 800, color: "#111827" }}>
+      <h2
+        style={{
+          fontSize: "1.2rem",
+          marginBottom: "6px",
+          fontWeight: 800,
+          color: "#111827",
+        }}
+      >
         Your Details (for your report)
       </h2>
 
-      <p style={{ color: "#6B7280", marginTop: 0, marginBottom: "14px", fontSize: "13px" }}>
+      <p
+        style={{
+          color: "#6B7280",
+          marginTop: 0,
+          marginBottom: "14px",
+          fontSize: "13px",
+        }}
+      >
         {helper}
       </p>
 
@@ -68,6 +88,7 @@ export function AnalysisForm({
         placeholder="you@example.com"
         required
         autoComplete="email"
+        inputMode="email"
       />
 
       <LabelSelect
@@ -146,6 +167,7 @@ function LabelInput({
   type = "text",
   required,
   autoComplete,
+  inputMode,
 }) {
   return (
     <div style={{ marginBottom: "10px" }}>
@@ -159,6 +181,7 @@ function LabelInput({
         type={type}
         required={required}
         autoComplete={autoComplete}
+        inputMode={inputMode}
         style={{
           width: "100%",
           padding: "10px 12px",
@@ -228,3 +251,4 @@ function LabelTextarea({ label, value, onChange, placeholder }) {
     </div>
   );
 }
+
