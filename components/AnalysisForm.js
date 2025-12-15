@@ -1,21 +1,53 @@
 // components/AnalysisForm.js
 // Form for generate-report inputs:
 // firstName, email, ageRange, primaryConcern, visitorQuestion
+//
+// NOTE: Your original file had a stray/unmatched closing block at the bottom.
+// This version fixes that + improves UX while staying compatible with your current pages/analysis.js.
 
-import React from "react";
+import React, { useMemo } from "react";
 
-export function AnalysisForm({ values, onChange, onSubmit, loading }) {
+export function AnalysisForm({
+  values,
+  onChange,
+  onSubmit,
+  loading,
+  // Optional (non-breaking): if you pass these later, the button can enforce “selfie required”
+  selfieRequired = false,
+  hasSelfie = true,
+}) {
   const setField = (field) => (e) => {
     onChange({ ...values, [field]: e.target.value });
   };
 
+  const canSubmit = useMemo(() => {
+    if (loading) return false;
+
+    const firstNameOk = String(values.firstName || "").trim().length > 0;
+    const emailOk = String(values.email || "").trim().includes("@");
+    const ageOk = String(values.ageRange || "").trim().length > 0;
+    const concernOk = String(values.primaryConcern || "").trim().length > 0;
+
+    if (!firstNameOk || !emailOk || !ageOk || !concernOk) return false;
+    if (selfieRequired && !hasSelfie) return false;
+
+    return true;
+  }, [loading, values, selfieRequired, hasSelfie]);
+
+  const submitLabel = loading ? "Generating..." : "Generate & Email My Report";
+  const helper =
+    selfieRequired && !hasSelfie
+      ? "Please upload a selfie above to generate your report."
+      : "This creates your personalized report and sends it to your email.";
+
   return (
     <form onSubmit={onSubmit} style={{ marginTop: "8px" }}>
-      <h2 style={{ fontSize: "1.2rem", marginBottom: "8px" }}>
+      <h2 style={{ fontSize: "1.2rem", marginBottom: "6px", fontWeight: 800, color: "#111827" }}>
         Your Details (for your report)
       </h2>
-      <p style={{ color: "#777", marginBottom: "16px" }}>
-        This creates your personalized report and sends it to your email.
+
+      <p style={{ color: "#6B7280", marginTop: 0, marginBottom: "14px", fontSize: "13px" }}>
+        {helper}
       </p>
 
       <LabelInput
@@ -25,6 +57,7 @@ export function AnalysisForm({ values, onChange, onSubmit, loading }) {
         onChange={setField("firstName")}
         placeholder="e.g., Mark"
         required
+        autoComplete="given-name"
       />
 
       <LabelInput
@@ -34,6 +67,7 @@ export function AnalysisForm({ values, onChange, onSubmit, loading }) {
         onChange={setField("email")}
         placeholder="you@example.com"
         required
+        autoComplete="email"
       />
 
       <LabelSelect
@@ -79,29 +113,43 @@ export function AnalysisForm({ values, onChange, onSubmit, loading }) {
 
       <button
         type="submit"
-        disabled={loading}
+        disabled={!canSubmit}
         style={{
-          marginTop: "16px",
-          padding: "10px 18px",
+          marginTop: "14px",
+          padding: "11px 18px",
           borderRadius: "999px",
-          border: "none",
-          cursor: loading ? "not-allowed" : "pointer",
-          background: "#222",
+          border: "1px solid #111827",
+          cursor: canSubmit ? "pointer" : "not-allowed",
+          background: canSubmit ? "#111827" : "#9CA3AF",
           color: "#fff",
-          fontWeight: 500,
-          minWidth: "220px",
+          fontWeight: 800,
+          minWidth: "240px",
         }}
       >
-        {loading ? "Generating..." : "Generate & Email My Report"}
+        {submitLabel}
       </button>
+
+      {!canSubmit && !loading ? (
+        <p style={{ marginTop: "10px", fontSize: "12px", color: "#6B7280" }}>
+          Tip: complete all required fields{selfieRequired ? " and upload a selfie" : ""} to enable the button.
+        </p>
+      ) : null}
     </form>
   );
 }
 
-function LabelInput({ label, value, onChange, placeholder, type = "text", required }) {
+function LabelInput({
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+  required,
+  autoComplete,
+}) {
   return (
     <div style={{ marginBottom: "10px" }}>
-      <label style={{ display: "block", fontWeight: 500, marginBottom: "4px" }}>
+      <label style={{ display: "block", fontWeight: 700, marginBottom: "4px", color: "#111827" }}>
         {label}
       </label>
       <input
@@ -110,12 +158,15 @@ function LabelInput({ label, value, onChange, placeholder, type = "text", requir
         placeholder={placeholder}
         type={type}
         required={required}
+        autoComplete={autoComplete}
         style={{
           width: "100%",
-          padding: "10px",
-          borderRadius: "10px",
-          border: "1px solid #ddd",
+          padding: "10px 12px",
+          borderRadius: "12px",
+          border: "1px solid #E5E7EB",
           fontFamily: "inherit",
+          background: "#fff",
+          outline: "none",
         }}
       />
     </div>
@@ -125,7 +176,7 @@ function LabelInput({ label, value, onChange, placeholder, type = "text", requir
 function LabelSelect({ label, value, onChange, options, required }) {
   return (
     <div style={{ marginBottom: "10px" }}>
-      <label style={{ display: "block", fontWeight: 500, marginBottom: "4px" }}>
+      <label style={{ display: "block", fontWeight: 700, marginBottom: "4px", color: "#111827" }}>
         {label}
       </label>
       <select
@@ -134,11 +185,12 @@ function LabelSelect({ label, value, onChange, options, required }) {
         required={required}
         style={{
           width: "100%",
-          padding: "10px",
-          borderRadius: "10px",
-          border: "1px solid #ddd",
+          padding: "10px 12px",
+          borderRadius: "12px",
+          border: "1px solid #E5E7EB",
           fontFamily: "inherit",
           background: "#fff",
+          outline: "none",
         }}
       >
         {options.map((o) => (
@@ -154,7 +206,7 @@ function LabelSelect({ label, value, onChange, options, required }) {
 function LabelTextarea({ label, value, onChange, placeholder }) {
   return (
     <div style={{ marginBottom: "10px" }}>
-      <label style={{ display: "block", fontWeight: 500, marginBottom: "4px" }}>
+      <label style={{ display: "block", fontWeight: 700, marginBottom: "4px", color: "#111827" }}>
         {label}
       </label>
       <textarea
@@ -165,17 +217,14 @@ function LabelTextarea({ label, value, onChange, placeholder }) {
         style={{
           width: "100%",
           resize: "vertical",
-          padding: "10px",
-          borderRadius: "10px",
-          border: "1px solid #ddd",
+          padding: "10px 12px",
+          borderRadius: "12px",
+          border: "1px solid #E5E7EB",
           fontFamily: "inherit",
+          background: "#fff",
+          outline: "none",
         }}
       />
-    </div>
-  );
-}
-
-
     </div>
   );
 }
