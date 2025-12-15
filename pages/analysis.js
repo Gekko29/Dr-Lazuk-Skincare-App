@@ -14,11 +14,14 @@ export default function AnalysisPage() {
     visitorQuestion: "",
   });
 
+  // Selfie (MANDATORY)
   const [imageBase64, setImageBase64] = useState(null);
 
+  // Optional pre-analysis (for early Fitz UI feedback)
   const [imageAnalysis, setImageAnalysis] = useState(null);
   const [fitzpatrickType, setFitzpatrickType] = useState(null);
 
+  // Output from generate-report
   const [output, setOutput] = useState("");
   const [fitzpatrickSummary, setFitzpatrickSummary] = useState(null);
   const [agingPreviewImages, setAgingPreviewImages] = useState(null);
@@ -50,7 +53,8 @@ export default function AnalysisPage() {
 
       let localImageAnalysis = imageAnalysis;
 
-      // Optional: pre-analyze selfie for early UI feedback (Fitz display)
+      // 1) Pre-analyze selfie for early UI feedback (Fitz display)
+      // (This is optional; generate-report will enrich with vision if needed.)
       const analyzeRes = await fetch("/api/analyzeImage", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -72,7 +76,7 @@ export default function AnalysisPage() {
         setFitzpatrickType(analyzeData.fitzpatrickType);
       }
 
-      // Generate report (canonical endpoint)
+      // 2) Generate report (canonical endpoint)
       const response = await fetch("/api/generate-report", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -82,8 +86,8 @@ export default function AnalysisPage() {
           ageRange,
           primaryConcern,
           visitorQuestion: visitorQuestion || null,
-          photoDataUrl: imageBase64,          // ✅ mandatory
-          imageAnalysis: localImageAnalysis,  // optional pass-through
+          photoDataUrl: imageBase64, // ✅ mandatory
+          imageAnalysis: localImageAnalysis || null, // optional pass-through
         }),
       });
 
@@ -132,27 +136,50 @@ export default function AnalysisPage() {
         <h1 style={{ fontSize: "1.75rem", marginBottom: "4px", fontWeight: 600 }}>
           Personalized Skin Analysis
         </h1>
-        <p style={{ color: "#666", marginBottom: "20px" }}>
+        <p style={{ color: "#666", marginBottom: "14px" }}>
           Upload your selfie and receive a full narrative letter from Dr. Lazuk via email.
         </p>
 
+        {/* REQUIRED messaging on camera/upload page */}
+        <div
+          style={{
+            border: "1px solid #E5E7EB",
+            background: "#F9FAFB",
+            padding: "12px 14px",
+            borderRadius: "12px",
+            marginBottom: "12px",
+            color: "#374151",
+            fontSize: "13px",
+            lineHeight: 1.45,
+          }}
+        >
+          <div style={{ fontWeight: 700, marginBottom: "6px", color: "#111827" }}>
+            Before you begin
+          </div>
+          <div style={{ marginBottom: "6px" }}>
+            <strong>USA only:</strong> This detailed virtual skin analysis is currently available only to visitors in the United States.
+          </div>
+          <div style={{ marginBottom: "6px" }}>
+            <strong>One analysis every 30 days:</strong> To keep results meaningful and prevent “routine hopping,” we limit detailed reports to once per 30 days per email.
+          </div>
+          <div>
+            <strong>Timing:</strong> Your detailed analysis typically completes in <strong>30–60 seconds</strong>, depending on traffic.
+          </div>
+        </div>
+
+        {/* Selfie uploader (mandatory) */}
         <ImageUploader onImageSelected={setImageBase64} required />
 
+        {/* Fitzpatrick display (only when detected/returned) */}
         <FitzpatrickDetector type={fitzpatrickType} />
 
-        <AnalysisForm
-          values={form}
-          onChange={setForm}
-          onSubmit={handleGenerate}
-          loading={loading}
-        />
+        <AnalysisForm values={form} onChange={setForm} onSubmit={handleGenerate} loading={loading} />
 
         {errorMsg && (
-          <p style={{ marginTop: "16px", color: "#b00020", fontSize: "0.9rem" }}>
-            {errorMsg}
-          </p>
+          <p style={{ marginTop: "16px", color: "#b00020", fontSize: "0.9rem" }}>{errorMsg}</p>
         )}
 
+        {/* Fitz summary if returned */}
         {fitzpatrickSummary ? (
           <div
             style={{
@@ -173,12 +200,17 @@ export default function AnalysisPage() {
           </div>
         ) : null}
 
-        {/* Optional: show the aging images returned to the PAGE too */}
+        {/* Optional: show aging preview images on the page too */}
         {agingPreviewImages ? (
           <div style={{ marginTop: "16px" }}>
             <div style={{ fontWeight: 700, marginBottom: "8px" }}>
               Your Skin’s Future Story — A Preview
             </div>
+
+            <p style={{ marginTop: 0, color: "#6B7280", fontSize: "12px" }}>
+              These are AI-generated visualizations for cosmetic education and entertainment only — not medical predictions.
+            </p>
+
             <div
               style={{
                 display: "grid",
