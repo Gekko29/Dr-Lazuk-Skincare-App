@@ -645,6 +645,66 @@ async function generateAgingPreviewImages({ ageRange, primaryConcern, fitzpatric
     return { noChange10: null, noChange20: null, withCare10: null, withCare20: null };
   }
 }
+// -------------------------
+// HTML block: Aging Preview Images (EMAIL)
+// -------------------------
+function buildAgingPreviewHtml(agingPreviewImages) {
+  if (!agingPreviewImages) return "";
+
+  const { noChange10, noChange20, withCare10, withCare20 } = agingPreviewImages || {};
+  if (!noChange10 && !noChange20 && !withCare10 && !withCare20) return "";
+
+  return `
+    <div style="margin: 18px 0 18px 0; padding: 14px 14px 16px; border-radius: 10px; border: 1px solid #E5E7EB; background-color: #F9FAFB;">
+      <h2 style="font-size: 15px; font-weight: 700; margin: 0 0 6px;">
+        Your Skin’s Future Story — A Preview
+      </h2>
+      <p style="font-size: 12px; color: #4B5563; margin: 0 0 10px;">
+        These images are AI-generated visualizations created for cosmetic education and entertainment only.
+        They are not medical predictions and may not reflect your actual future appearance.
+        Their purpose is simply to show how lifestyle and skincare choices might influence the overall impression of aging over time.
+      </p>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 8px;">
+        ${
+          noChange10
+            ? `<div>
+                <img src="${noChange10}" alt="Approximate 10-year future if routine does not change" style="width: 100%; border-radius: 10px; border: 1px solid #E5E7EB;" />
+                <p style="font-size: 11px; color: #4B5563; margin: 6px 0 0;">~10 years – minimal skincare changes</p>
+              </div>`
+            : ""
+        }
+
+        ${
+          noChange20
+            ? `<div>
+                <img src="${noChange20}" alt="Approximate 20-year future if routine does not change" style="width: 100%; border-radius: 10px; border: 1px solid #E5E7EB;" />
+                <p style="font-size: 11px; color: #4B5563; margin: 6px 0 0;">~20 years – minimal skincare changes</p>
+              </div>`
+            : ""
+        }
+
+        ${
+          withCare10
+            ? `<div>
+                <img src="${withCare10}" alt="Approximate 10-year future with consistent skincare" style="width: 100%; border-radius: 10px; border: 1px solid #E5E7EB;" />
+                <p style="font-size: 11px; color: #4B5563; margin: 6px 0 0;">~10 years – with consistent care</p>
+              </div>`
+            : ""
+        }
+
+        ${
+          withCare20
+            ? `<div>
+                <img src="${withCare20}" alt="Approximate 20-year future with consistent skincare" style="width: 100%; border-radius: 10px; border: 1px solid #E5E7EB;" />
+                <p style="font-size: 11px; color: #4B5563; margin: 6px 0 0;">~20 years – with consistent care</p>
+              </div>`
+            : ""
+        }
+      </div>
+    </div>
+  `;
+}
 
 // Calls OpenAI Images Edits endpoint directly (multipart/form-data)
 async function generateEditsFromSelfie({ photoDataUrl, prompts, size = "1024x1024" }) {
@@ -664,10 +724,7 @@ async function generateEditsFromSelfie({ photoDataUrl, prompts, size = "1024x102
     form.append("size", size);
 
     // IMPORTANT: gpt-image-1 does NOT support `response_format`
-    // It returns base64 in `b64_json` by default, which we convert to a data URL.
-    // (Your existing "normalize to public URLs" step can still upload these.)
-    // form.append("response_format", "url"); // <-- REMOVE / DO NOT USE
-
+    // It returns base64 in `b64_json` by default.
     form.append("image", new Blob([buf], { type: mime }), filename);
 
     const res = await fetch("https://api.openai.com/v1/images/edits", {
@@ -684,11 +741,8 @@ async function generateEditsFromSelfie({ photoDataUrl, prompts, size = "1024x102
     const json = await res.json().catch(() => ({}));
     const d0 = json?.data?.[0] || null;
 
-    // Prefer b64 output (most reliable for gpt-image-1)
     if (d0?.b64_json) return `data:image/png;base64,${d0.b64_json}`;
-
-    // Fallback (rare/legacy)
-    if (d0?.url) return d0.url;
+    if (d0?.url) return d0.url; // fallback (rare)
 
     return null;
   }
@@ -702,8 +756,6 @@ async function generateEditsFromSelfie({ photoDataUrl, prompts, size = "1024x102
 
   return { noChange10, noChange20, withCare10, withCare20 };
 }
-
-
 // -------------------------
 // Vision analysis (enforced)
 // -------------------------
