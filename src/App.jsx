@@ -122,7 +122,7 @@ const DermatologyApp = () => {
   const [cameraActive, setCameraActive] = useState(false);
   const [capturedImage, setCapturedImage] = useState(null);
 
-  // ✅ NEW: first name is required by the API
+  // ✅ required by backend
   const [firstName, setFirstName] = useState('');
 
   const [userEmail, setUserEmail] = useState('');
@@ -421,7 +421,7 @@ const DermatologyApp = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          firstName: firstName, // ✅ REQUIRED by backend
+          firstName: firstName,
           email: userEmail,
           ageRange,
           primaryConcern,
@@ -433,17 +433,18 @@ const DermatologyApp = () => {
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok || !data.ok) {
-        // Prefer the backend message when available (super helpful)
         const msg = data?.message || data?.error || 'Error generating report';
         throw new Error(msg);
       }
 
+      // ✅ NEW: store aging preview images so UI can render them
       setAnalysisReport({
         report: data.report,
         recommendedProducts: getRecommendedProducts(primaryConcern),
         recommendedServices: getRecommendedServices(primaryConcern),
         fitzpatrickType: data.fitzpatrickType || null,
-        fitzpatrickSummary: data.fitzpatrickSummary || null
+        fitzpatrickSummary: data.fitzpatrickSummary || null,
+        agingPreviewImages: data.agingPreviewImages || null
       });
 
       console.log('Analysis generated for:', userEmail, ageRange, primaryConcern);
@@ -532,7 +533,7 @@ const DermatologyApp = () => {
     setPrimaryConcern('');
     setVisitorQuestion('');
     setUserEmail('');
-    setFirstName(''); // ✅ reset
+    setFirstName('');
   };
 
   useEffect(() => {
@@ -614,7 +615,6 @@ const DermatologyApp = () => {
                   <h2 className="text-2xl font-bold text-gray-900">Virtual Skin Analysis</h2>
                 </div>
 
-                {/* Disclaimer – entertainment only, no medical advice */}
                 <div className="bg-gray-100 border border-gray-300 p-4 mb-4 flex items-start gap-3">
                   <Info className="text-gray-700 flex-shrink-0 mt-0.5" size={20} />
                   <p className="text-sm text-gray-800">
@@ -774,10 +774,10 @@ const DermatologyApp = () => {
                   </div>
                   <p className="text-gray-300 mb-6">
                     Enter your first name and email to receive your complete cosmetic report with
-                    product and treatment recommendations. A copy will also be sent to our clinic team.
+                    product and treatment recommendations. A copy will also be sent to our clinic
+                    team.
                   </p>
                   <div className="space-y-4">
-                    {/* ✅ NEW: First Name */}
                     <input
                       type="text"
                       value={firstName}
@@ -825,6 +825,78 @@ const DermatologyApp = () => {
                     New Analysis
                   </button>
                 </div>
+
+                {/* ✅ NEW: Aging Preview Images (if backend returned them) */}
+                {analysisReport.agingPreviewImages &&
+                  (analysisReport.agingPreviewImages.noChange10 ||
+                    analysisReport.agingPreviewImages.noChange20 ||
+                    analysisReport.agingPreviewImages.withCare10 ||
+                    analysisReport.agingPreviewImages.withCare20) && (
+                    <div className="bg-gray-50 border-2 border-gray-900 p-6">
+                      <h4 className="text-xl font-bold text-gray-900 mb-2">
+                        Your Skin’s Future Story — A Preview
+                      </h4>
+                      <p className="text-sm text-gray-700 mb-4">
+                        These images are AI-generated visualizations for cosmetic education and
+                        entertainment only. They are not medical predictions and may not reflect your
+                        actual future appearance.
+                      </p>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {analysisReport.agingPreviewImages.noChange10 && (
+                          <div>
+                            <img
+                              src={analysisReport.agingPreviewImages.noChange10}
+                              alt="~10 years – minimal skincare changes"
+                              className="w-full border border-gray-300"
+                            />
+                            <p className="text-xs text-gray-700 mt-2">
+                              ~10 years – minimal skincare changes
+                            </p>
+                          </div>
+                        )}
+
+                        {analysisReport.agingPreviewImages.noChange20 && (
+                          <div>
+                            <img
+                              src={analysisReport.agingPreviewImages.noChange20}
+                              alt="~20 years – minimal skincare changes"
+                              className="w-full border border-gray-300"
+                            />
+                            <p className="text-xs text-gray-700 mt-2">
+                              ~20 years – minimal skincare changes
+                            </p>
+                          </div>
+                        )}
+
+                        {analysisReport.agingPreviewImages.withCare10 && (
+                          <div>
+                            <img
+                              src={analysisReport.agingPreviewImages.withCare10}
+                              alt="~10 years – with consistent care"
+                              className="w-full border border-gray-300"
+                            />
+                            <p className="text-xs text-gray-700 mt-2">
+                              ~10 years – with consistent care
+                            </p>
+                          </div>
+                        )}
+
+                        {analysisReport.agingPreviewImages.withCare20 && (
+                          <div>
+                            <img
+                              src={analysisReport.agingPreviewImages.withCare20}
+                              alt="~20 years – with consistent care"
+                              className="w-full border border-gray-300"
+                            />
+                            <p className="text-xs text-gray-700 mt-2">
+                              ~20 years – with consistent care
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                 {/* Fitzpatrick Card */}
                 {(analysisReport.fitzpatrickType || analysisReport.fitzpatrickSummary) && (
@@ -1014,6 +1086,7 @@ const DermatologyApp = () => {
 };
 
 export default DermatologyApp;
+
 
 
 
