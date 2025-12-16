@@ -121,6 +121,10 @@ const DermatologyApp = () => {
   const [step, setStep] = useState('photo');
   const [cameraActive, setCameraActive] = useState(false);
   const [capturedImage, setCapturedImage] = useState(null);
+
+  // ✅ NEW: first name is required by the API
+  const [firstName, setFirstName] = useState('');
+
   const [userEmail, setUserEmail] = useState('');
   const [ageRange, setAgeRange] = useState('');
   const [primaryConcern, setPrimaryConcern] = useState('');
@@ -417,6 +421,7 @@ const DermatologyApp = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          firstName: firstName, // ✅ REQUIRED by backend
           email: userEmail,
           ageRange,
           primaryConcern,
@@ -425,10 +430,12 @@ const DermatologyApp = () => {
         })
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
 
-      if (!data.ok) {
-        throw new Error(data.error || 'Error generating report');
+      if (!response.ok || !data.ok) {
+        // Prefer the backend message when available (super helpful)
+        const msg = data?.message || data?.error || 'Error generating report';
+        throw new Error(msg);
       }
 
       setAnalysisReport({
@@ -446,15 +453,22 @@ const DermatologyApp = () => {
     } catch (error) {
       console.error('Analysis error:', error);
       setEmailSubmitting(false);
-      alert('There was an error. Please try again.');
+      alert(error?.message || 'There was an error. Please try again.');
     }
   };
 
   const handleEmailSubmit = async () => {
+    const fn = String(firstName || '').trim();
+    if (!fn) {
+      alert('Please enter your first name');
+      return;
+    }
+
     if (!userEmail || !userEmail.includes('@')) {
       alert('Please enter a valid email address');
       return;
     }
+
     await performAnalysis();
   };
 
@@ -518,6 +532,7 @@ const DermatologyApp = () => {
     setPrimaryConcern('');
     setVisitorQuestion('');
     setUserEmail('');
+    setFirstName(''); // ✅ reset
   };
 
   useEffect(() => {
@@ -758,10 +773,20 @@ const DermatologyApp = () => {
                     <h3 className="text-2xl font-bold">Get Your Analysis</h3>
                   </div>
                   <p className="text-gray-300 mb-6">
-                    Enter your email to receive your complete cosmetic report with product and
-                    treatment recommendations. A copy will also be sent to our clinic team.
+                    Enter your first name and email to receive your complete cosmetic report with
+                    product and treatment recommendations. A copy will also be sent to our clinic team.
                   </p>
                   <div className="space-y-4">
+                    {/* ✅ NEW: First Name */}
+                    <input
+                      type="text"
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && handleEmailSubmit()}
+                      placeholder="First name"
+                      className="w-full px-4 py-3 bg-white text-gray-900 border-2"
+                    />
+
                     <input
                       type="email"
                       value={userEmail}
@@ -989,5 +1014,6 @@ const DermatologyApp = () => {
 };
 
 export default DermatologyApp;
+
 
 
