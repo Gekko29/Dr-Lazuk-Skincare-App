@@ -12,6 +12,55 @@ import {
   Loader
 } from 'lucide-react';
 
+/* ---------------------------
+   Google Analytics (GA4) — inline helpers (NO extra files)
+   Requires:
+   - VITE_GA_MEASUREMENT_ID in env
+   - gtag snippet installed in index.html
+---------------------------- */
+const GA_ID = import.meta.env?.VITE_GA_MEASUREMENT_ID;
+
+const gaEvent = (name, params = {}) => {
+  try {
+    if (!GA_ID) return;
+    if (typeof window === 'undefined') return;
+    if (typeof window.gtag !== 'function') return;
+    window.gtag('event', name, params);
+  } catch {
+    // never block UX
+  }
+};
+
+const gaPageView = (path, title) => {
+  try {
+    if (!GA_ID) return;
+    if (typeof window === 'undefined') return;
+    if (typeof window.gtag !== 'function') return;
+
+    window.gtag('event', 'page_view', {
+      page_location: window.location.href,
+      page_path: path,
+      page_title: title || document.title
+    });
+  } catch {
+    // never block UX
+  }
+};
+
+const getGaClientId = () => {
+  return new Promise((resolve) => {
+    try {
+      if (!GA_ID) return resolve(null);
+      if (typeof window === 'undefined') return resolve(null);
+      if (typeof window.gtag !== 'function') return resolve(null);
+
+      window.gtag('get', GA_ID, 'client_id', (cid) => resolve(cid || null));
+    } catch {
+      resolve(null);
+    }
+  });
+};
+
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
 // Helper: check if user is locked out due to repeated non-face attempts
@@ -122,7 +171,7 @@ const DermatologyApp = () => {
   const [cameraActive, setCameraActive] = useState(false);
   const [capturedImage, setCapturedImage] = useState(null);
 
-  // ✅ required by backend
+  // ✅ NEW: first name is required by the API
   const [firstName, setFirstName] = useState('');
 
   const [userEmail, setUserEmail] = useState('');
@@ -317,9 +366,18 @@ const DermatologyApp = () => {
     return estheticServices.filter((s) => s.recommendFor.includes(concern)).slice(0, 2);
   };
 
+  // Track page views when user navigates tabs/steps
+  useEffect(() => {
+    const path = `/app/${activeTab}/${step}`;
+    gaPageView(path, `DermatologyApp - ${activeTab} - ${step}`);
+  }, [activeTab, step]);
+
   const startCamera = async () => {
+    gaEvent('camera_start_clicked', { step });
+
     const lock = getFaceLockStatus();
     if (lock.locked) {
+      gaEvent('face_locked', { step });
       alert(lock.message);
       return;
     }
@@ -332,8 +390,10 @@ const DermatologyApp = () => {
         videoRef.current.srcObject = stream;
         streamRef.current = stream;
         setCameraActive(true);
+        gaEvent('camera_started', { step });
       }
     } catch (err) {
+      gaEvent('camera_error', { step });
       alert('Unable to access camera. Please ensure camera permissions are granted.');
     }
   };
@@ -344,11 +404,15 @@ const DermatologyApp = () => {
       streamRef.current = null;
     }
     setCameraActive(false);
+    gaEvent('camera_stopped', { step });
   };
 
   const capturePhoto = async () => {
+    gaEvent('camera_capture_clicked', { step });
+
     const lock = getFaceLockStatus();
     if (lock.locked) {
+      gaEvent('face_locked', { step });
       alert(lock.message);
       return;
     }
@@ -364,6 +428,7 @@ const DermatologyApp = () => {
       const faceFound = await detectFaceInImageElement(canvas);
       if (!faceFound) {
         const result = registerFaceFailure();
+        gaEvent('face_not_detected', { source: 'camera', lockedNow: !!result.lockedNow });
         alert(result.message);
         stopCamera();
         return;
@@ -374,15 +439,19 @@ const DermatologyApp = () => {
       setCapturedImage(imageData);
       stopCamera();
       setStep('questions');
+      gaEvent('selfie_captured', { source: 'camera' });
     }
   };
 
   const handleFileUpload = async (e) => {
+    gaEvent('upload_clicked', { step });
+
     const file = e.target.files[0];
     if (!file) return;
 
     const lock = getFaceLockStatus();
     if (lock.locked) {
+      gaEvent('face_locked', { step });
       alert(lock.message);
       return;
     }
@@ -394,6 +463,7 @@ const DermatologyApp = () => {
       const faceFound = await detectFaceFromDataUrl(dataUrl);
       if (!faceFound) {
         const result = registerFaceFailure();
+        gaEvent('face_not_detected', { source: 'upload', lockedNow: !!result.lockedNow });
         alert(result.message);
         return;
       }
@@ -401,32 +471,51 @@ const DermatologyApp = () => {
       clearFaceFailures();
       setCapturedImage(dataUrl);
       setStep('questions');
+      gaEvent('selfie_uploaded', { source: 'upload' });
     };
     reader.readAsDataURL(file);
   };
 
   const handleQuestionsSubmit = () => {
     if (!ageRange || !primaryConcern) {
+      gaEvent('questions_incomplete', { ageRangeFilled: !!ageRange, concernFilled: !!primaryConcern });
       alert('Please answer all required questions');
       return;
     }
+
+    gaEvent('questions_submitted', { ageRange, primaryConcern });
     setStep('email');
   };
 
   const performAnalysis = async () => {
     setEmailSubmitting(true);
 
+    const gaClientId = await getGaClientId();
+
+    // Track intent
+    gaEvent('analysis_submit', {
+      primaryConcern,
+      ageRange,
+      hasVisitorQuestion: !!(visitorQuestion || '').trim(),
+      hasFirstName: !!(firstName || '').trim(),
+      hasEmail: !!(userEmail || '').trim(),
+      hasSelfie: !!capturedImage
+    });
+
     try {
       const response = await fetch('/api/generate-report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          firstName: firstName,
+          firstName: firstName, // ✅ REQUIRED by backend
           email: userEmail,
           ageRange,
           primaryConcern,
           visitorQuestion,
-          photoDataUrl: capturedImage
+          photoDataUrl: capturedImage,
+
+          // Optional: helpful for backend-side GA stitching if you later add Measurement Protocol
+          gaClientId
         })
       });
 
@@ -434,20 +523,35 @@ const DermatologyApp = () => {
 
       if (!response.ok || !data.ok) {
         const msg = data?.message || data?.error || 'Error generating report';
+        gaEvent('analysis_error', {
+          primaryConcern,
+          ageRange,
+          message: String(msg).slice(0, 120)
+        });
         throw new Error(msg);
       }
 
-      // ✅ NEW: store aging preview images so UI can render them
       setAnalysisReport({
         report: data.report,
         recommendedProducts: getRecommendedProducts(primaryConcern),
         recommendedServices: getRecommendedServices(primaryConcern),
         fitzpatrickType: data.fitzpatrickType || null,
-        fitzpatrickSummary: data.fitzpatrickSummary || null,
-        agingPreviewImages: data.agingPreviewImages || null
+        fitzpatrickSummary: data.fitzpatrickSummary || null
       });
 
       console.log('Analysis generated for:', userEmail, ageRange, primaryConcern);
+
+      gaEvent('analysis_success', {
+        primaryConcern,
+        ageRange,
+        hasFitz: !!(data.fitzpatrickType || data.fitzpatrickSummary),
+        hasAgingPreviews: !!(
+          data?.agingPreviewImages?.noChange10 ||
+          data?.agingPreviewImages?.noChange20 ||
+          data?.agingPreviewImages?.withCare10 ||
+          data?.agingPreviewImages?.withCare20
+        )
+      });
 
       setEmailSubmitting(false);
       setStep('results');
@@ -461,15 +565,18 @@ const DermatologyApp = () => {
   const handleEmailSubmit = async () => {
     const fn = String(firstName || '').trim();
     if (!fn) {
+      gaEvent('email_step_error', { reason: 'missing_first_name' });
       alert('Please enter your first name');
       return;
     }
 
     if (!userEmail || !userEmail.includes('@')) {
+      gaEvent('email_step_error', { reason: 'invalid_email' });
       alert('Please enter a valid email address');
       return;
     }
 
+    gaEvent('email_step_submitted', { hasFirstName: true, hasEmail: true });
     await performAnalysis();
   };
 
@@ -482,6 +589,8 @@ const DermatologyApp = () => {
     setChatMessages(newHistory);
     setInputMessage('');
     setChatLoading(true);
+
+    gaEvent('chat_send', { chars: userMsg.length });
 
     try {
       const res = await fetch('/api/ask-dr-lazuk', {
@@ -497,6 +606,11 @@ const DermatologyApp = () => {
 
       if (!res.ok || !data.ok) {
         console.error('ask-dr-lazuk error:', data);
+
+        gaEvent('chat_error', {
+          message: String(data?.message || 'backend_error').slice(0, 120)
+        });
+
         setChatMessages((prev) => [
           ...prev,
           {
@@ -510,9 +624,13 @@ const DermatologyApp = () => {
         return;
       }
 
+      gaEvent('chat_success', { replyChars: String(data.reply || '').length });
       setChatMessages((prev) => [...prev, { role: 'assistant', content: data.reply }]);
     } catch (error) {
       console.error('Chat error:', error);
+
+      gaEvent('chat_error', { message: 'network_or_exception' });
+
       setChatMessages((prev) => [
         ...prev,
         {
@@ -526,6 +644,8 @@ const DermatologyApp = () => {
   };
 
   const resetAnalysis = () => {
+    gaEvent('analysis_reset', { fromStep: step });
+
     setCapturedImage(null);
     setAnalysisReport(null);
     setStep('photo');
@@ -533,7 +653,7 @@ const DermatologyApp = () => {
     setPrimaryConcern('');
     setVisitorQuestion('');
     setUserEmail('');
-    setFirstName('');
+    setFirstName(''); // ✅ reset
   };
 
   useEffect(() => {
@@ -569,7 +689,10 @@ const DermatologyApp = () => {
         <div className="max-w-6xl mx-auto px-4 py-3">
           <div className="flex gap-2">
             <button
-              onClick={() => setActiveTab('home')}
+              onClick={() => {
+                setActiveTab('home');
+                gaEvent('tab_changed', { tab: 'home' });
+              }}
               className={`flex items-center gap-2 px-6 py-3 font-medium transition-all ${
                 activeTab === 'home'
                   ? 'bg-gray-900 text-white'
@@ -580,7 +703,10 @@ const DermatologyApp = () => {
               <span>Skin Analysis</span>
             </button>
             <button
-              onClick={() => setActiveTab('chat')}
+              onClick={() => {
+                setActiveTab('chat');
+                gaEvent('tab_changed', { tab: 'chat' });
+              }}
               className={`flex items-center gap-2 px-6 py-3 font-medium transition-all ${
                 activeTab === 'chat'
                   ? 'bg-gray-900 text-white'
@@ -591,7 +717,10 @@ const DermatologyApp = () => {
               <span>Ask Dr. Lazuk</span>
             </button>
             <button
-              onClick={() => setActiveTab('education')}
+              onClick={() => {
+                setActiveTab('education');
+                gaEvent('tab_changed', { tab: 'education' });
+              }}
               className={`flex items-center gap-2 px-6 py-3 font-medium transition-all ${
                 activeTab === 'education'
                   ? 'bg-gray-900 text-white'
@@ -615,6 +744,7 @@ const DermatologyApp = () => {
                   <h2 className="text-2xl font-bold text-gray-900">Virtual Skin Analysis</h2>
                 </div>
 
+                {/* Disclaimer – entertainment only, no medical advice */}
                 <div className="bg-gray-100 border border-gray-300 p-4 mb-4 flex items-start gap-3">
                   <Info className="text-gray-700 flex-shrink-0 mt-0.5" size={20} />
                   <p className="text-sm text-gray-800">
@@ -643,7 +773,10 @@ const DermatologyApp = () => {
                       <span className="font-bold text-gray-900 text-lg">Use Camera</span>
                     </button>
                     <button
-                      onClick={() => fileInputRef.current?.click()}
+                      onClick={() => {
+                        gaEvent('upload_open_picker', { step });
+                        fileInputRef.current?.click();
+                      }}
                       className="flex flex-col items-center justify-center p-12 border-2 border-dashed border-gray-400 hover:border-gray-900 hover:bg-gray-50 transition-all"
                     >
                       <Upload size={56} className="text-gray-900 mb-4" />
@@ -774,10 +907,10 @@ const DermatologyApp = () => {
                   </div>
                   <p className="text-gray-300 mb-6">
                     Enter your first name and email to receive your complete cosmetic report with
-                    product and treatment recommendations. A copy will also be sent to our clinic
-                    team.
+                    product and treatment recommendations. A copy will also be sent to our clinic team.
                   </p>
                   <div className="space-y-4">
+                    {/* ✅ NEW: First Name */}
                     <input
                       type="text"
                       value={firstName}
@@ -826,78 +959,6 @@ const DermatologyApp = () => {
                   </button>
                 </div>
 
-                {/* ✅ NEW: Aging Preview Images (if backend returned them) */}
-                {analysisReport.agingPreviewImages &&
-                  (analysisReport.agingPreviewImages.noChange10 ||
-                    analysisReport.agingPreviewImages.noChange20 ||
-                    analysisReport.agingPreviewImages.withCare10 ||
-                    analysisReport.agingPreviewImages.withCare20) && (
-                    <div className="bg-gray-50 border-2 border-gray-900 p-6">
-                      <h4 className="text-xl font-bold text-gray-900 mb-2">
-                        Your Skin’s Future Story — A Preview
-                      </h4>
-                      <p className="text-sm text-gray-700 mb-4">
-                        These images are AI-generated visualizations for cosmetic education and
-                        entertainment only. They are not medical predictions and may not reflect your
-                        actual future appearance.
-                      </p>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        {analysisReport.agingPreviewImages.noChange10 && (
-                          <div>
-                            <img
-                              src={analysisReport.agingPreviewImages.noChange10}
-                              alt="~10 years – minimal skincare changes"
-                              className="w-full border border-gray-300"
-                            />
-                            <p className="text-xs text-gray-700 mt-2">
-                              ~10 years – minimal skincare changes
-                            </p>
-                          </div>
-                        )}
-
-                        {analysisReport.agingPreviewImages.noChange20 && (
-                          <div>
-                            <img
-                              src={analysisReport.agingPreviewImages.noChange20}
-                              alt="~20 years – minimal skincare changes"
-                              className="w-full border border-gray-300"
-                            />
-                            <p className="text-xs text-gray-700 mt-2">
-                              ~20 years – minimal skincare changes
-                            </p>
-                          </div>
-                        )}
-
-                        {analysisReport.agingPreviewImages.withCare10 && (
-                          <div>
-                            <img
-                              src={analysisReport.agingPreviewImages.withCare10}
-                              alt="~10 years – with consistent care"
-                              className="w-full border border-gray-300"
-                            />
-                            <p className="text-xs text-gray-700 mt-2">
-                              ~10 years – with consistent care
-                            </p>
-                          </div>
-                        )}
-
-                        {analysisReport.agingPreviewImages.withCare20 && (
-                          <div>
-                            <img
-                              src={analysisReport.agingPreviewImages.withCare20}
-                              alt="~20 years – with consistent care"
-                              className="w-full border border-gray-300"
-                            />
-                            <p className="text-xs text-gray-700 mt-2">
-                              ~20 years – with consistent care
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
                 {/* Fitzpatrick Card */}
                 {(analysisReport.fitzpatrickType || analysisReport.fitzpatrickSummary) && (
                   <div className="bg-amber-50 border-2 border-amber-200 p-6">
@@ -942,6 +1003,14 @@ const DermatologyApp = () => {
                           href={p.url}
                           target="_blank"
                           rel="noopener noreferrer"
+                          onClick={() =>
+                            gaEvent('product_click', {
+                              productName: p.name,
+                              category: p.category,
+                              price: p.price,
+                              primaryConcern
+                            })
+                          }
                           className="block text-center bg-gray-900 text-white py-2 font-bold hover:bg-gray-800"
                         >
                           View
@@ -972,6 +1041,12 @@ const DermatologyApp = () => {
                         </div>
                         <a
                           href="mailto:contact@skindoctor.ai"
+                          onClick={() =>
+                            gaEvent('book_appointment_click', {
+                              serviceName: s.name,
+                              primaryConcern
+                            })
+                          }
                           className="block text-center bg-blue-600 text-white py-3 font-bold hover:bg-blue-700"
                         >
                           Book Appointment
@@ -1062,6 +1137,7 @@ const DermatologyApp = () => {
                   </div>
                   <a
                     href="mailto:contact@skindoctor.ai"
+                    onClick={() => gaEvent('services_learn_more_click', { serviceName: s.name })}
                     className="block text-center bg-gray-900 text-white py-3 font-bold hover:bg-gray-800"
                   >
                     Learn More
@@ -1086,6 +1162,7 @@ const DermatologyApp = () => {
 };
 
 export default DermatologyApp;
+
 
 
 
