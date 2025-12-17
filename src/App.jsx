@@ -18,18 +18,7 @@ import {
    - VITE_GA_MEASUREMENT_ID in env
    - gtag snippet installed in index.html
 ---------------------------- */
-const GA_ID = import.meta.env?.VITE_GA_MEASUREMENT_ID;
-
-const gaEvent = (name, params = {}) => {
-  try {
-    if (!GA_ID) return;
-    if (typeof window === 'undefined') return;
-    if (typeof window.gtag !== 'function') return;
-    window.gtag('event', name, params);
-  } catch {
-    // never block UX
-  }
-};
+import { gaEvent, gaPageView } from "./lib/ga";
 
 const gaPageView = (path, title) => {
   try {
