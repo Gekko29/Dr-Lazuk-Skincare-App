@@ -14,7 +14,7 @@ import {
 
 // ✅ Google Analytics (GA4) — single source of truth
 // Uses VITE_GA_MEASUREMENT_ID from env, and expects window.gtag to be initialized in main.jsx
-import { gaEvent, gaPageView, getGaClientId } from "./lib/ga";
+import { gaEvent, gaPageView, getGaClientId } from "../lib/ga";
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
