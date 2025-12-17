@@ -12,43 +12,9 @@ import {
   Loader
 } from 'lucide-react';
 
-/* ---------------------------
-   Google Analytics (GA4) — inline helpers (NO extra files)
-   Requires:
-   - VITE_GA_MEASUREMENT_ID in env
-   - gtag snippet installed in index.html
----------------------------- */
-import { gaEvent, gaPageView } from "./lib/ga";
-
-const gaPageView = (path, title) => {
-  try {
-    if (!GA_ID) return;
-    if (typeof window === 'undefined') return;
-    if (typeof window.gtag !== 'function') return;
-
-    window.gtag('event', 'page_view', {
-      page_location: window.location.href,
-      page_path: path,
-      page_title: title || document.title
-    });
-  } catch {
-    // never block UX
-  }
-};
-
-const getGaClientId = () => {
-  return new Promise((resolve) => {
-    try {
-      if (!GA_ID) return resolve(null);
-      if (typeof window === 'undefined') return resolve(null);
-      if (typeof window.gtag !== 'function') return resolve(null);
-
-      window.gtag('get', GA_ID, 'client_id', (cid) => resolve(cid || null));
-    } catch {
-      resolve(null);
-    }
-  });
-};
+// ✅ Google Analytics (GA4) — single source of truth
+// Uses VITE_GA_MEASUREMENT_ID from env, and expects window.gtag to be initialized in main.jsx
+import { gaEvent, gaPageView, getGaClientId } from "./lib/ga";
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -153,28 +119,6 @@ const detectFaceFromDataUrl = (dataUrl) => {
     img.src = dataUrl;
   });
 };
-
-const GA_ID = import.meta.env.VITE_GA_MEASUREMENT_ID;
-
-function gaEvent(name, params = {}) {
-  if (!GA_ID) return;
-  if (typeof window === "undefined") return;
-  if (typeof window.gtag !== "function") return;
-
-  window.gtag("event", name, params);
-}
-
-function gaPageView(path) {
-  if (!GA_ID) return;
-  if (typeof window === "undefined") return;
-  if (typeof window.gtag !== "function") return;
-
-  window.gtag("event", "page_view", {
-    page_title: document.title,
-    page_location: window.location.href,
-    page_path: path || window.location.pathname,
-  });
-}
 
 const DermatologyApp = () => {
   const [activeTab, setActiveTab] = useState('home');
