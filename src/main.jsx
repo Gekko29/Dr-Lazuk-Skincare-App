@@ -15,8 +15,10 @@ if (GA_ID) {
   // Init gtag
   window.dataLayer = window.dataLayer || [];
   function gtag(){ window.dataLayer.push(arguments); }
+  window.gtag = gtag; // ✅ make available to ga.js
+
   gtag("js", new Date());
-  gtag("config", GA_ID, { send_page_view: true });
+  gtag("config", GA_ID, { send_page_view: false }); // ✅ SPA-safe
 } else {
   console.warn("Missing VITE_GA_MEASUREMENT_ID");
 }
