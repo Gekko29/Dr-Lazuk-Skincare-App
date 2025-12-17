@@ -165,6 +165,28 @@ const detectFaceFromDataUrl = (dataUrl) => {
   });
 };
 
+const GA_ID = import.meta.env.VITE_GA_MEASUREMENT_ID;
+
+function gaEvent(name, params = {}) {
+  if (!GA_ID) return;
+  if (typeof window === "undefined") return;
+  if (typeof window.gtag !== "function") return;
+
+  window.gtag("event", name, params);
+}
+
+function gaPageView(path) {
+  if (!GA_ID) return;
+  if (typeof window === "undefined") return;
+  if (typeof window.gtag !== "function") return;
+
+  window.gtag("event", "page_view", {
+    page_title: document.title,
+    page_location: window.location.href,
+    page_path: path || window.location.pathname,
+  });
+}
+
 const DermatologyApp = () => {
   const [activeTab, setActiveTab] = useState('home');
   const [step, setStep] = useState('photo');
