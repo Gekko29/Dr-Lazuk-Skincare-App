@@ -4,19 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Dr. Lazuk AI Facial Skincare Analysis</title>
-    <meta name="description" content="Get a personalized facial skincare analysis from Dr. Lazuk. Deep AI-powered skin assessment with professional product recommendations, treatments, and routines. As a bonus, see predictive aging photos of what your future could look like in 10, 20 years!">
+    <meta
+      name="description"
+      content="Get a personalized facial skincare analysis from Dr. Lazuk. Deep AI-powered skin assessment with professional product recommendations, treatments, and routines. As a bonus, see predictive aging photos of what your future could look like in 10, 20 years!"
+    />
 
-    <!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=%VITE_GA_MEASUREMENT_ID%"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-
-  // IMPORTANT for SPAs: we’ll send page_view manually
-  gtag('js', new Date());
-  gtag('config', '%VITE_GA_MEASUREMENT_ID%', { send_page_view: false });
-</script>
-
+    <!-- Google tag (gtag.js) - loaded by App via VITE_GA_MEASUREMENT_ID -->
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      window.gtag = gtag;
+    </script>
   </head>
   <body>
     <div id="root"></div>
