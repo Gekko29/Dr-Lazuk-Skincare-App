@@ -18,6 +18,225 @@ import { gaEvent, gaPageView, getGaClientId } from "../lib/ga";
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
+/* ---------------------------
+   Aging Preview Downloads
+   - Adds skindoctor.ai watermark (bottom-right ~10%)
+   - Adds Identity Lock™ badge (top-left)
+   - Supports TikTok/Reels vertical export (1080x1920 with blurred background)
+---------------------------- */
+
+const IDENTITY_LOCK_TITLE = "Identity Lock™ Enabled";
+const IDENTITY_LOCK_BODY =
+  "This aging preview is calculated using your unique facial architecture, bone structure, and proportional markers — ensuring consistency across time-based projections.";
+const WATERMARK_TEXT = "skindoctor.ai";
+
+const loadImageForCanvas = (src) =>
+  new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous"; // Cloudinary typically OK; if tainted canvas, use a proxy endpoint later
+    img.referrerPolicy = "no-referrer";
+    img.onload = () => resolve(img);
+    img.onerror = (e) => reject(e);
+    img.src = src;
+  });
+
+const downloadCanvasPng = (canvas, filename) =>
+  new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) return reject(new Error("Failed to export image"));
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+        resolve(true);
+      },
+      "image/png",
+      1.0
+    );
+  });
+
+const roundRectPath = (ctx, x, y, w, h, r) => {
+  const radius = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + w, y, x + w, y + h, radius);
+  ctx.arcTo(x + w, y + h, x, y + h, radius);
+  ctx.arcTo(x, y + h, x, y, radius);
+  ctx.arcTo(x, y, x + w, y, radius);
+  ctx.closePath();
+};
+
+const wrapText = (ctx, text, maxWidth) => {
+  const words = String(text || "").split(" ");
+  const lines = [];
+  let line = "";
+
+  for (const word of words) {
+    const test = line ? `${line} ${word}` : word;
+    const { width } = ctx.measureText(test);
+    if (width <= maxWidth) line = test;
+    else {
+      if (line) lines.push(line);
+      line = word;
+    }
+  }
+  if (line) lines.push(line);
+
+  // soft cap to avoid huge badges on tiny images
+  if (lines.length > 6) {
+    const trimmed = lines.slice(0, 6);
+    trimmed[5] = trimmed[5].replace(/\.*$/, "") + "…";
+    return trimmed;
+  }
+  return lines;
+};
+
+const drawWatermark = (ctx, w, h, text) => {
+  const inset = w >= 900 ? 24 : 16;
+  const fontSize = w >= 900 ? 20 : 16;
+
+  ctx.save();
+  ctx.font = `600 ${fontSize}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial`;
+  ctx.textAlign = "right";
+  ctx.textBaseline = "bottom";
+
+  // subtle shadow; still elegant
+  ctx.shadowColor = "rgba(0,0,0,0.15)";
+  ctx.shadowBlur = 3;
+  ctx.shadowOffsetY = 1;
+
+  ctx.fillStyle = "rgba(255,255,255,0.10)"; // ~10%
+  ctx.fillText(text, w - inset, h - inset);
+  ctx.restore();
+};
+
+const drawIdentityLockBadge = (ctx, w, h, title, body) => {
+  const edge = w >= 900 ? 24 : 16;
+  const padX = w >= 900 ? 14 : 12;
+  const padY = w >= 900 ? 12 : 10;
+  const maxWidth = Math.floor(w * 0.55);
+
+  const titleSize = w >= 900 ? 18 : 15;
+  const bodySize = w >= 900 ? 14 : 12;
+  const fontFamily = "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+
+  ctx.save();
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
+
+  // Title measurements
+  ctx.font = `700 ${titleSize}px ${fontFamily}`;
+  const titleLineH = Math.ceil(titleSize * 1.25);
+
+  // Body wrapping
+  ctx.font = `400 ${bodySize}px ${fontFamily}`;
+  const bodyLines = wrapText(ctx, body, maxWidth - padX * 2);
+  const bodyLineH = Math.ceil(bodySize * 1.25);
+  const bodyHeight = bodyLines.length * bodyLineH;
+
+  const boxW = maxWidth;
+  const boxH = padY + titleLineH + 8 + bodyHeight + padY;
+
+  // Container
+  roundRectPath(ctx, edge, edge, boxW, boxH, 14);
+  ctx.fillStyle = "rgba(0,0,0,0.38)";
+  ctx.fill();
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = "rgba(255,255,255,0.20)";
+  ctx.stroke();
+
+  // Title
+  let x = edge + padX;
+  let y = edge + padY;
+
+  ctx.font = `700 ${titleSize}px ${fontFamily}`;
+  ctx.fillStyle = "rgba(255,255,255,0.95)";
+  ctx.fillText(title, x, y);
+
+  // Body
+  y += titleLineH + 8;
+  ctx.font = `400 ${bodySize}px ${fontFamily}`;
+  ctx.fillStyle = "rgba(255,255,255,0.88)";
+  for (const line of bodyLines) {
+    ctx.fillText(line, x, y);
+    y += bodyLineH;
+  }
+
+  ctx.restore();
+};
+
+const drawCoverBlurredBg = (ctx, img, w, h, { blur = 18, dim = 0.22 } = {}) => {
+  const iw = img.naturalWidth || img.width;
+  const ih = img.naturalHeight || img.height;
+
+  const scale = Math.max(w / iw, h / ih);
+  const sw = Math.ceil(w / scale);
+  const sh = Math.ceil(h / scale);
+  const sx = Math.floor((iw - sw) / 2);
+  const sy = Math.floor((ih - sh) / 2);
+
+  ctx.save();
+  ctx.filter = `blur(${blur}px)`;
+  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
+  ctx.filter = "none";
+
+  ctx.fillStyle = `rgba(0,0,0,${dim})`;
+  ctx.fillRect(0, 0, w, h);
+  ctx.restore();
+};
+
+const drawContainCentered = (ctx, img, w, h, { padding = 90 } = {}) => {
+  const iw = img.naturalWidth || img.width;
+  const ih = img.naturalHeight || img.height;
+
+  const availW = w - padding * 2;
+  const availH = h - padding * 2;
+
+  const scale = Math.min(availW / iw, availH / ih);
+  const dw = Math.floor(iw * scale);
+  const dh = Math.floor(ih * scale);
+
+  const dx = Math.floor((w - dw) / 2);
+  const dy = Math.floor((h - dh) / 2);
+
+  ctx.drawImage(img, 0, 0, iw, ih, dx, dy, dw, dh);
+};
+
+const buildCompositeCanvas = async ({ imageUrl, mode = "original" }) => {
+  const img = await loadImageForCanvas(imageUrl);
+
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas 2D context not available");
+
+  if (mode === "original") {
+    canvas.width = img.naturalWidth || img.width;
+    canvas.height = img.naturalHeight || img.height;
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  } else {
+    // TikTok/Reels vertical export
+    canvas.width = 1080;
+    canvas.height = 1920;
+
+    drawCoverBlurredBg(ctx, img, canvas.width, canvas.height, { blur: 18, dim: 0.22 });
+    drawContainCentered(ctx, img, canvas.width, canvas.height, { padding: 90 });
+  }
+
+  // Burn-in overlays
+  drawIdentityLockBadge(ctx, canvas.width, canvas.height, IDENTITY_LOCK_TITLE, IDENTITY_LOCK_BODY);
+  drawWatermark(ctx, canvas.width, canvas.height, WATERMARK_TEXT);
+
+  return canvas;
+};
+
+const downloadAgingPreview = async ({ imageUrl, mode, filename }) => {
+  const canvas = await buildCompositeCanvas({ imageUrl, mode });
+  await downloadCanvasPng(canvas, filename);
+};
+
 // Helper: check if user is locked out due to repeated non-face attempts
 const getFaceLockStatus = () => {
   const lockUntilStr =
@@ -491,7 +710,10 @@ const DermatologyApp = () => {
         recommendedProducts: getRecommendedProducts(primaryConcern),
         recommendedServices: getRecommendedServices(primaryConcern),
         fitzpatrickType: data.fitzpatrickType || null,
-        fitzpatrickSummary: data.fitzpatrickSummary || null
+        fitzpatrickSummary: data.fitzpatrickSummary || null,
+
+        // ✅ NEW: store aging preview images (Cloudinary URLs)
+        agingPreviewImages: data.agingPreviewImages || null
       });
 
       console.log('Analysis generated for:', userEmail, ageRange, primaryConcern);
@@ -936,6 +1158,110 @@ const DermatologyApp = () => {
                   </div>
                 )}
 
+                {/* Aging Previews (NEW) */}
+                {analysisReport?.agingPreviewImages && (
+                  <div className="bg-white border-2 border-gray-900 p-8">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <h4 className="font-bold text-gray-900 mb-1 text-2xl">Aging Previews</h4>
+                        <p className="text-sm text-gray-700">
+                          These images are AI-generated for cosmetic education. Downloads include the{" "}
+                          <strong>Identity Lock™</strong> badge and a subtle <strong>skindoctor.ai</strong> watermark.
+                        </p>
+                      </div>
+                    </div>
+
+                    {(() => {
+                      const ap = analysisReport.agingPreviewImages || {};
+                      const ordered = [
+                        ["noChange10", "10 Years (No Changes)"],
+                        ["noChange20", "20 Years (No Changes)"],
+                        ["withCare10", "10 Years (With Care)"],
+                        ["withCare20", "20 Years (With Care)"]
+                      ];
+
+                      const items = ordered
+                        .map(([key, label]) => (ap[key] ? { key, label, url: ap[key] } : null))
+                        .filter(Boolean);
+
+                      const extras = Object.entries(ap)
+                        .filter(([k, v]) => v && !ordered.some(([ok]) => ok === k))
+                        .map(([k, v]) => ({ key: k, label: k, url: v }));
+
+                      const all = [...items, ...extras];
+                      if (!all.length) return null;
+
+                      return (
+                        <div className="grid md:grid-cols-2 gap-6 mt-6">
+                          {all.map(({ key, label, url }) => (
+                            <div key={key} className="border p-4 bg-gray-50">
+                              <div className="flex items-center justify-between gap-3 mb-3">
+                                <h5 className="font-bold text-gray-900">{label}</h5>
+                              </div>
+
+                              <img
+                                src={url}
+                                alt={`Aging preview: ${label}`}
+                                className="w-full rounded-lg border border-gray-300"
+                                loading="lazy"
+                              />
+
+                              <div className="mt-4 flex flex-wrap gap-2">
+                                <button
+                                  className="px-4 py-2 bg-gray-900 text-white font-bold hover:bg-gray-800"
+                                  onClick={async () => {
+                                    gaEvent("aging_preview_download", { mode: "original", key, label });
+                                    try {
+                                      await downloadAgingPreview({
+                                        imageUrl: url,
+                                        mode: "original",
+                                        filename: `skindoctor-aging-${key}.png`
+                                      });
+                                    } catch (e) {
+                                      console.error("Download error:", e);
+                                      alert(
+                                        "Download failed. If this keeps happening, it may be a browser security/CORS issue with the image host."
+                                      );
+                                    }
+                                  }}
+                                >
+                                  Download
+                                </button>
+
+                                <button
+                                  className="px-4 py-2 bg-gray-300 text-gray-900 font-bold hover:bg-gray-400"
+                                  onClick={async () => {
+                                    gaEvent("aging_preview_download", { mode: "vertical", key, label });
+                                    try {
+                                      await downloadAgingPreview({
+                                        imageUrl: url,
+                                        mode: "vertical",
+                                        filename: `skindoctor-aging-${key}-tiktok-vertical.png`
+                                      });
+                                    } catch (e) {
+                                      console.error("Download error:", e);
+                                      alert(
+                                        "Download failed. If this keeps happening, it may be a browser security/CORS issue with the image host."
+                                      );
+                                    }
+                                  }}
+                                >
+                                  Download for TikTok / Reels
+                                </button>
+                              </div>
+
+                              <p className="mt-3 text-xs text-gray-600">
+                                Identity Lock™ Enabled: calculated using your unique facial architecture, bone structure,
+                                and proportional markers — ensuring consistency across time-based projections.
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+
                 <div className="bg-white border-2 border-gray-900 p-8">
                   <div className="prose prose-sm max-w-none text-gray-700 whitespace-pre-wrap">
                     {analysisReport.report}
@@ -1117,6 +1443,7 @@ const DermatologyApp = () => {
 };
 
 export default DermatologyApp;
+
 
 
 
