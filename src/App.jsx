@@ -1,5 +1,5 @@
 // src/App.jsx
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Camera,
   MessageCircle,
@@ -18,226 +18,194 @@ import { gaEvent, gaPageView, getGaClientId } from "../lib/ga";
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
-/* ---------------------------
-   Aging Preview Downloads
-   - Adds skindoctor.ai watermark (bottom-right ~10%)
-   - Adds Identity Lock™ badge (top-left)
-   - Supports TikTok/Reels vertical export (1080x1920 with blurred background)
----------------------------- */
+/* ---------------------------------------
+   Reflection Layer (Locked Copy)
+--------------------------------------- */
+const REFLECTION_SECTIONS = [
+  {
+    title: "Section 1 — Holding the Moment",
+    body:
+`If you’re feeling a little unsettled right now, that’s normal.
 
-const IDENTITY_LOCK_TITLE = "Identity Lock™ Enabled";
-const IDENTITY_LOCK_BODY =
-  "This aging preview is calculated using your unique facial architecture, bone structure, and proportional markers — ensuring consistency across time-based projections.";
-const WATERMARK_TEXT = "skindoctor.ai";
+What you just saw can bring up many emotions—surprise, curiosity, concern, even resistance. Some people feel a quiet moment of reflection. Others feel a jolt they weren’t expecting. There is no right or wrong reaction here.
 
-const loadImageForCanvas = (src) =>
-  new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = "anonymous"; // Cloudinary typically OK; if tainted canvas, use a proxy endpoint later
-    img.referrerPolicy = "no-referrer";
-    img.onload = () => resolve(img);
-    img.onerror = (e) => reject(e);
-    img.src = src;
-  });
+I want you to know something important:
 
-const downloadCanvasPng = (canvas, filename) =>
-  new Promise((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => {
-        if (!blob) return reject(new Error("Failed to export image"));
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = filename;
-        a.click();
-        URL.revokeObjectURL(url);
-        resolve(true);
-      },
-      "image/png",
-      1.0
-    );
-  });
+What you are seeing is not a verdict.
+It is not a prediction carved in stone.
+And it is certainly not a judgment.
 
-const roundRectPath = (ctx, x, y, w, h, r) => {
-  const radius = Math.min(r, w / 2, h / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + radius, y);
-  ctx.arcTo(x + w, y, x + w, y + h, radius);
-  ctx.arcTo(x + w, y + h, x, y + h, radius);
-  ctx.arcTo(x, y + h, x, y, radius);
-  ctx.arcTo(x, y, x + w, y, radius);
-  ctx.closePath();
-};
+What you’re seeing is a visual story—one possible path based on today’s data, today’s habits, today’s environment. Nothing more, and nothing less.
 
-const wrapText = (ctx, text, maxWidth) => {
-  const words = String(text || "").split(" ");
-  const lines = [];
-  let line = "";
+As a physician, I’ve spent decades studying faces, skin, and the quiet signals the body gives long before change becomes obvious. I can tell you this with confidence: the future of your skin is not decided by time alone. It is shaped—slowly, consistently—by care, protection, and intention.
 
-  for (const word of words) {
-    const test = line ? `${line} ${word}` : word;
-    const { width } = ctx.measureText(test);
-    if (width <= maxWidth) line = test;
-    else {
-      if (line) lines.push(line);
-      line = word;
+If there is one thing I want you to take from this moment, it’s this:
+
+Your face is not aging “toward” something.
+It is responding to how it is supported.
+
+And support can always be adjusted.
+
+You don’t need to act today.
+You don’t need to decide anything right now.
+You only need to understand that what you just saw represents possibility—not destiny.
+
+When you’re ready, the way forward is not about chasing youth.
+It’s about strengthening resilience.
+Protecting what’s already beautiful.
+And allowing your outer appearance to reflect the care you give yourself internally.
+
+Until then, take a breath.
+Let this information settle.`
+  },
+  {
+    title: "Section 2 — If You’re Wondering Whether This Future Is Changeable",
+    body:
+`It’s a fair question—and an important one.
+
+What you just saw represents one possible trajectory, not a fixed destination. Skin does not age in isolation, and it does not age uniformly. It responds—quietly and continuously—to how it is supported over time.
+
+In clinical practice, the most meaningful differences we see are not created by extremes. They come from consistency: protecting the skin barrier, minimizing chronic inflammation, supporting hydration, and reducing cumulative environmental stress.
+
+This is why two people of the same age can look remarkably different over time—not because one did “more,” but because their skin was supported differently.
+
+There is no single correct path forward.
+Some people focus on daily care.
+Some choose professional treatments.
+Some simply become more intentional and observant.
+
+All of these approaches can influence direction.
+
+What matters most is understanding this:
+
+The future of your skin is responsive—not predetermined.
+
+And responsiveness means you retain influence, at every stage.`
+  },
+  {
+    title: "Section 3 — If You’re Wondering How This Was Created",
+    body:
+`That question matters—and you deserve a clear answer.
+
+This experience was not created using a generic aging filter or a randomized model. Every image and insight was anchored to your own face, starting with the photo you provided.
+
+Rather than replacing your features, the system analyzed them—your facial structure, proportions, texture patterns, tone distribution, and visible environmental stress signals. From there, it calculated how those same features tend to evolve over time under similar conditions.
+
+The intention was never to create something dramatic.
+It was to create something recognizable.
+
+Technology alone does not decide how this information is presented.
+
+As a physician, my role is to ensure that what you see is framed responsibly, explained clearly, and never used to provoke fear or urgency. This is why the results are delivered as interpretation—not diagnosis, not judgment, and not instruction.
+
+This analysis exists to inform, not to persuade.`
+  },
+  {
+    title: "Section 4 — Why Revisiting This Over Time Can Be Meaningful",
+    body:
+`Skin does not change overnight—and neither does its direction.
+
+In medicine, we learn the most not from a single snapshot, but from patterns over time. What stabilizes. What shifts. What responds to care. Your skin follows the same principle.
+
+Revisiting this analysis periodically is not about watching for flaws or chasing perfection. It’s about understanding how your skin responds to the way you live, protect, and care for it.
+
+Over time, subtle changes become clearer:
+- whether hydration and texture are stabilizing
+- whether environmental stress is quieting or accumulating
+- whether your current level of support is sufficient
+
+These shifts are often difficult to notice day to day, but meaningful over months.
+
+By returning to this analysis when you feel ready, you’re not checking on your appearance—you’re observing your skin’s conversation with time.
+
+There is no required schedule.
+There is no expectation to act.
+
+But for those who choose to revisit, this becomes a way to stay informed, grounded, and thoughtful—making decisions based on evidence rather than emotion.
+
+A Final Thought
+
+Skin health is not a single moment.
+It’s a relationship—one that evolves with time, environment, and care.
+
+This tool exists to support that relationship.
+Nothing more.
+Nothing less.
+
+When you’re ready to listen again, it will be here.
+
+With care,
+Dr. Iryna Lazuk`
+  }
+];
+
+/* ---------------------------------------
+   Clinical-Style Intake (Locked Copy)
+--------------------------------------- */
+const CAPTURE_PREP_COPY = {
+  title: "Preparing for Your Analysis",
+  subtitle:
+    "To ensure the most accurate and meaningful results, a few simple steps matter.",
+  intro:
+    "To create an analysis that truly reflects your skin — not surface distractions — we need a clear, honest view of your face. This process does not judge appearance. It evaluates structure, tone, texture, and skin signals that can be obscured by makeup, lighting, or accessories.",
+  bullets: [
+    {
+      head: "Clean, makeup-free skin",
+      body:
+        "Please remove foundation, concealer, bronzer, blush, and tinted skincare. These products alter tone and texture and can interfere with accurate analysis."
+    },
+    {
+      head: "Natural, even lighting",
+      body:
+        "Face a window during daylight if possible. Avoid harsh overhead lighting or shadows, which can exaggerate or hide skin features."
+    },
+    {
+      head: "No filters, no enhancements",
+      body:
+        "Please do not use camera filters, beauty modes, or retouching. These distort natural proportions and surface detail."
+    },
+    {
+      head: "Hair pulled back, glasses removed",
+      body:
+        "Your full facial structure needs to be visible. Hair, frames, or accessories can obscure key landmarks used for analysis."
+    },
+    {
+      head: "Neutral expression",
+      body:
+        "Relax your face and look directly into the camera. Smiling or squinting changes how lines and contours appear."
+    },
+    {
+      head: "Comfortable distance",
+      body:
+        "Hold your phone about 12 inches (30 cm) away. Your face should fill the frame without being too close."
     }
-  }
-  if (line) lines.push(line);
-
-  // soft cap to avoid huge badges on tiny images
-  if (lines.length > 6) {
-    const trimmed = lines.slice(0, 6);
-    trimmed[5] = trimmed[5].replace(/\.*$/, "") + "…";
-    return trimmed;
-  }
-  return lines;
+  ],
+  outro:
+    "If the image doesn’t meet the quality needed for accurate analysis, the system may ask you to retake it. This isn’t an error — it’s how we protect the integrity of your results."
 };
 
-const drawWatermark = (ctx, w, h, text) => {
-  const inset = w >= 900 ? 24 : 16;
-  const fontSize = w >= 900 ? 20 : 16;
-
-  ctx.save();
-  ctx.font = `600 ${fontSize}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial`;
-  ctx.textAlign = "right";
-  ctx.textBaseline = "bottom";
-
-  // subtle shadow; still elegant
-  ctx.shadowColor = "rgba(0,0,0,0.15)";
-  ctx.shadowBlur = 3;
-  ctx.shadowOffsetY = 1;
-
-  ctx.fillStyle = "rgba(255,255,255,0.10)"; // ~10%
-  ctx.fillText(text, w - inset, h - inset);
-  ctx.restore();
+/* ---------------------------------------
+   Supportive Retake Messages (Locked)
+--------------------------------------- */
+const RETAKE_MESSAGES = {
+  low_light:
+    "It looks like you may be in shadow. To accurately assess skin tone and texture, we need a bit more natural light. Please try facing a window or moving to a brighter space and take the photo again.",
+  blurry:
+    "That image came through a little soft. For precise facial mapping, we need a sharp, focused view. Please hold your phone steady and try once more.",
+  framing:
+    "We need to see your features a bit more clearly. Please hold your phone about 12 inches (30 cm) away so your face fills the frame comfortably.",
+  obstructed:
+    "Part of your facial structure may be covered. Please pull hair back and remove glasses so we can accurately map your features.",
+  non_face:
+    "We could not detect a face in this photo. Please upload a clear, front-facing photo of your face with good lighting and minimal obstructions."
 };
 
-const drawIdentityLockBadge = (ctx, w, h, title, body) => {
-  const edge = w >= 900 ? 24 : 16;
-  const padX = w >= 900 ? 14 : 12;
-  const padY = w >= 900 ? 12 : 10;
-  const maxWidth = Math.floor(w * 0.55);
+const SUPPORTIVE_FOOTER_LINE =
+  "This step helps ensure your results are thoughtful, accurate, and meaningful.";
 
-  const titleSize = w >= 900 ? 18 : 15;
-  const bodySize = w >= 900 ? 14 : 12;
-  const fontFamily = "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
-
-  ctx.save();
-  ctx.textAlign = "left";
-  ctx.textBaseline = "top";
-
-  // Title measurements
-  ctx.font = `700 ${titleSize}px ${fontFamily}`;
-  const titleLineH = Math.ceil(titleSize * 1.25);
-
-  // Body wrapping
-  ctx.font = `400 ${bodySize}px ${fontFamily}`;
-  const bodyLines = wrapText(ctx, body, maxWidth - padX * 2);
-  const bodyLineH = Math.ceil(bodySize * 1.25);
-  const bodyHeight = bodyLines.length * bodyLineH;
-
-  const boxW = maxWidth;
-  const boxH = padY + titleLineH + 8 + bodyHeight + padY;
-
-  // Container
-  roundRectPath(ctx, edge, edge, boxW, boxH, 14);
-  ctx.fillStyle = "rgba(0,0,0,0.38)";
-  ctx.fill();
-  ctx.lineWidth = 1;
-  ctx.strokeStyle = "rgba(255,255,255,0.20)";
-  ctx.stroke();
-
-  // Title
-  let x = edge + padX;
-  let y = edge + padY;
-
-  ctx.font = `700 ${titleSize}px ${fontFamily}`;
-  ctx.fillStyle = "rgba(255,255,255,0.95)";
-  ctx.fillText(title, x, y);
-
-  // Body
-  y += titleLineH + 8;
-  ctx.font = `400 ${bodySize}px ${fontFamily}`;
-  ctx.fillStyle = "rgba(255,255,255,0.88)";
-  for (const line of bodyLines) {
-    ctx.fillText(line, x, y);
-    y += bodyLineH;
-  }
-
-  ctx.restore();
-};
-
-const drawCoverBlurredBg = (ctx, img, w, h, { blur = 18, dim = 0.22 } = {}) => {
-  const iw = img.naturalWidth || img.width;
-  const ih = img.naturalHeight || img.height;
-
-  const scale = Math.max(w / iw, h / ih);
-  const sw = Math.ceil(w / scale);
-  const sh = Math.ceil(h / scale);
-  const sx = Math.floor((iw - sw) / 2);
-  const sy = Math.floor((ih - sh) / 2);
-
-  ctx.save();
-  ctx.filter = `blur(${blur}px)`;
-  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
-  ctx.filter = "none";
-
-  ctx.fillStyle = `rgba(0,0,0,${dim})`;
-  ctx.fillRect(0, 0, w, h);
-  ctx.restore();
-};
-
-const drawContainCentered = (ctx, img, w, h, { padding = 90 } = {}) => {
-  const iw = img.naturalWidth || img.width;
-  const ih = img.naturalHeight || img.height;
-
-  const availW = w - padding * 2;
-  const availH = h - padding * 2;
-
-  const scale = Math.min(availW / iw, availH / ih);
-  const dw = Math.floor(iw * scale);
-  const dh = Math.floor(ih * scale);
-
-  const dx = Math.floor((w - dw) / 2);
-  const dy = Math.floor((h - dh) / 2);
-
-  ctx.drawImage(img, 0, 0, iw, ih, dx, dy, dw, dh);
-};
-
-const buildCompositeCanvas = async ({ imageUrl, mode = "original" }) => {
-  const img = await loadImageForCanvas(imageUrl);
-
-  const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Canvas 2D context not available");
-
-  if (mode === "original") {
-    canvas.width = img.naturalWidth || img.width;
-    canvas.height = img.naturalHeight || img.height;
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-  } else {
-    // TikTok/Reels vertical export
-    canvas.width = 1080;
-    canvas.height = 1920;
-
-    drawCoverBlurredBg(ctx, img, canvas.width, canvas.height, { blur: 18, dim: 0.22 });
-    drawContainCentered(ctx, img, canvas.width, canvas.height, { padding: 90 });
-  }
-
-  // Burn-in overlays
-  drawIdentityLockBadge(ctx, canvas.width, canvas.height, IDENTITY_LOCK_TITLE, IDENTITY_LOCK_BODY);
-  drawWatermark(ctx, canvas.width, canvas.height, WATERMARK_TEXT);
-
-  return canvas;
-};
-
-const downloadAgingPreview = async ({ imageUrl, mode, filename }) => {
-  const canvas = await buildCompositeCanvas({ imageUrl, mode });
-  await downloadCanvasPng(canvas, filename);
-};
-
-// Helper: check if user is locked out due to repeated non-face attempts
+/* ---------------------------------------
+   Helper: check if user is locked out due to repeated non-face attempts
+--------------------------------------- */
 const getFaceLockStatus = () => {
   const lockUntilStr =
     typeof window !== 'undefined' ? localStorage.getItem('dl_faceLockUntil') : null;
@@ -283,8 +251,7 @@ const registerFaceFailure = () => {
 
   return {
     lockedNow: false,
-    message:
-      'We could not detect a face in this photo. Please upload a clear, front-facing photo of your face with good lighting and minimal obstructions.'
+    message: RETAKE_MESSAGES.non_face
   };
 };
 
@@ -296,20 +263,22 @@ const clearFaceFailures = () => {
 
 // Face detection using the browser's FaceDetector API where available
 const detectFaceInImageElement = async (imgEl) => {
-  if (!imgEl) return false;
+  if (!imgEl) return { ok: false };
 
   if ('FaceDetector' in window) {
     try {
       const detector = new window.FaceDetector({ fastMode: true, maxDetectedFaces: 5 });
       const faces = await detector.detect(imgEl);
-      return faces.length > 0;
+      if (!faces || faces.length === 0) return { ok: false };
+      return { ok: true, faces };
     } catch (err) {
       console.error('FaceDetector error:', err);
-      return false;
+      // If FaceDetector errors, allow flow to continue (do not block UX)
+      return { ok: true, faces: null, softPass: true };
     }
   } else {
     // If FaceDetector is not supported, allow the image so the experience still works
-    return true;
+    return { ok: true, faces: null, softPass: true };
   }
 };
 
@@ -317,7 +286,7 @@ const detectFaceInImageElement = async (imgEl) => {
 const detectFaceFromDataUrl = (dataUrl) => {
   return new Promise((resolve) => {
     if (!('FaceDetector' in window)) {
-      resolve(true);
+      resolve({ ok: true, faces: null, softPass: true });
       return;
     }
 
@@ -326,34 +295,359 @@ const detectFaceFromDataUrl = (dataUrl) => {
       try {
         const detector = new window.FaceDetector({ fastMode: true, maxDetectedFaces: 5 });
         const faces = await detector.detect(img);
-        resolve(faces.length > 0);
+        resolve({ ok: faces.length > 0, faces });
       } catch (err) {
         console.error('FaceDetector error (upload):', err);
-        resolve(false);
+        resolve({ ok: true, faces: null, softPass: true });
       }
     };
     img.onerror = () => {
-      resolve(false);
+      resolve({ ok: false, faces: null });
     };
     img.src = dataUrl;
   });
 };
 
+/* ---------------------------------------
+   Lightweight Quality Checks (Client-side, privacy-safe)
+   - brightness check
+   - blur estimate
+   - face framing check (if FaceDetector provides bounding box)
+--------------------------------------- */
+const computeBrightnessAndBlur = (canvas) => {
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const { width, height } = canvas;
+
+  const imgData = ctx.getImageData(0, 0, width, height);
+  const data = imgData.data;
+
+  // Brightness (luma) mean
+  let sum = 0;
+  const n = width * height;
+
+  // Blur estimate: variance of simple gradient magnitude
+  // (not perfect, but good enough to catch very soft images)
+  let gradSum = 0;
+  let gradSumSq = 0;
+
+  const getL = (idx) => {
+    const r = data[idx];
+    const g = data[idx + 1];
+    const b = data[idx + 2];
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+
+  // sample every 2 pixels for speed
+  const step = 2;
+  for (let y = 1; y < height - 1; y += step) {
+    for (let x = 1; x < width - 1; x += step) {
+      const i = (y * width + x) * 4;
+      const l = getL(i);
+      sum += l;
+
+      const iL = (y * width + (x - 1)) * 4;
+      const iR = (y * width + (x + 1)) * 4;
+      const iU = ((y - 1) * width + x) * 4;
+      const iD = ((y + 1) * width + x) * 4;
+
+      const gx = getL(iR) - getL(iL);
+      const gy = getL(iD) - getL(iU);
+      const gmag = Math.sqrt(gx * gx + gy * gy);
+
+      gradSum += gmag;
+      gradSumSq += gmag * gmag;
+    }
+  }
+
+  const samples = Math.max(1, ((height - 2) / step) * ((width - 2) / step));
+  const meanBrightness = sum / n;
+
+  const gradMean = gradSum / samples;
+  const gradVar = gradSumSq / samples - gradMean * gradMean;
+
+  return {
+    meanBrightness, // 0..255 roughly
+    gradVar         // higher = sharper
+  };
+};
+
+const validateCapturedImage = async ({ dataUrl, faces }) => {
+  // Build a canvas to analyze brightness/blur
+  const img = new Image();
+  await new Promise((res, rej) => {
+    img.onload = res;
+    img.onerror = rej;
+    img.src = dataUrl;
+  });
+
+  const canvas = document.createElement('canvas');
+  const maxW = 640;
+  const scale = Math.min(1, maxW / img.width);
+  canvas.width = Math.floor(img.width * scale);
+  canvas.height = Math.floor(img.height * scale);
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+  const { meanBrightness, gradVar } = computeBrightnessAndBlur(canvas);
+
+  // 1) low light
+  if (meanBrightness < 70) {
+    return { ok: false, code: 'low_light', message: RETAKE_MESSAGES.low_light };
+  }
+
+  // 2) blur (very approximate)
+  if (gradVar < 60) {
+    return { ok: false, code: 'blurry', message: RETAKE_MESSAGES.blurry };
+  }
+
+  // 3) face framing check (if we have bounding boxes)
+  if (faces && Array.isArray(faces) && faces.length > 0 && faces[0]?.boundingBox) {
+    const bb = faces[0].boundingBox;
+    const faceArea = bb.width * bb.height;
+    const imgArea = img.width * img.height;
+    const ratio = faceArea / imgArea;
+
+    // Too small or too big: request framing adjustment
+    if (ratio < 0.10 || ratio > 0.70) {
+      return { ok: false, code: 'framing', message: RETAKE_MESSAGES.framing };
+    }
+  }
+
+  return { ok: true };
+};
+
+/* ---------------------------------------
+   Identity Lock Activation UI (Calm)
+--------------------------------------- */
+const IdentityLockOverlay = ({ onComplete }) => {
+  const steps = useMemo(
+    () => [
+      "Mapping facial structure…",
+      "Identifying proportional landmarks…",
+      "Calibrating analysis to your unique features…",
+      "Anchoring projections to your facial architecture…"
+    ],
+    []
+  );
+
+  const [idx, setIdx] = useState(0);
+
+  useEffect(() => {
+    const t1 = setInterval(() => {
+      setIdx((v) => (v + 1) % steps.length);
+    }, 900);
+
+    const t2 = setTimeout(() => {
+      onComplete?.();
+    }, 4200);
+
+    return () => {
+      clearInterval(t1);
+      clearTimeout(t2);
+    };
+  }, [steps.length, onComplete]);
+
+  return (
+    <div className="fixed inset-0 z-50 bg-white/90 backdrop-blur-sm flex items-center justify-center px-4">
+      <div className="max-w-lg w-full border border-gray-200 bg-white shadow-sm p-8">
+        <div className="flex items-center gap-3 mb-4">
+          <Loader className="animate-spin" size={22} />
+          <h3 className="text-xl font-bold text-gray-900">Activating Identity Lock™</h3>
+        </div>
+        <p className="text-sm text-gray-700 mb-4">
+          {steps[idx]}
+        </p>
+        <p className="text-xs text-gray-600">
+          This ensures your analysis and future projections remain specific to you — not a generic model.
+        </p>
+      </div>
+    </div>
+  );
+};
+
+/* ---------------------------------------
+   Identity Lock Badge + Modal
+--------------------------------------- */
+const IdentityLockBadge = ({ onClick, placement = "top-left" }) => {
+  const pos =
+    placement === "top-left"
+      ? "top-3 left-3"
+      : placement === "top-right"
+      ? "top-3 right-3"
+      : placement === "bottom-right"
+      ? "bottom-3 right-3"
+      : "bottom-3 left-3";
+
+  return (
+    <button
+      onClick={onClick}
+      className={`absolute ${pos} z-10 bg-white/85 backdrop-blur border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-900 shadow-sm hover:bg-white`}
+      title="Identity Lock™ Enabled"
+      type="button"
+    >
+      Identity Lock™ Enabled
+    </button>
+  );
+};
+
+const Modal = ({ title, body, onClose }) => {
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center px-4">
+      <div className="max-w-lg w-full bg-white border border-gray-200 shadow-lg p-6">
+        <div className="flex justify-between items-start gap-4">
+          <h3 className="text-lg font-bold text-gray-900">{title}</h3>
+          <button
+            onClick={onClose}
+            className="text-gray-700 hover:text-gray-900 font-bold"
+            type="button"
+          >
+            ✕
+          </button>
+        </div>
+        <p className="text-sm text-gray-700 mt-3 whitespace-pre-wrap">{body}</p>
+        <button
+          onClick={onClose}
+          className="mt-5 w-full bg-gray-900 text-white py-3 font-bold hover:bg-gray-800"
+          type="button"
+        >
+          Understood
+        </button>
+      </div>
+    </div>
+  );
+};
+
+/* ---------------------------------------
+   Reflection Layer (scroll-to-unlock Agency)
+--------------------------------------- */
+const ReflectionLayer = ({ onSeen }) => {
+  const containerRef = useRef(null);
+  const [seen, setSeen] = useState(false);
+
+  const onScroll = () => {
+    if (seen) return;
+    const el = containerRef.current;
+    if (!el) return;
+
+    const scrolled = el.scrollTop + el.clientHeight;
+    const threshold = el.scrollHeight * 0.9;
+
+    if (scrolled >= threshold) {
+      setSeen(true);
+      onSeen?.();
+    }
+  };
+
+  return (
+    <div className="border border-gray-200 bg-gray-50 p-6">
+      <h3 className="text-2xl font-bold text-gray-900 mb-2">A Message from Dr. Lazuk</h3>
+      <p className="text-sm text-gray-700 mb-6">
+        Take your time. This section is here so you can pause at your own readiness.
+      </p>
+
+      <div
+        ref={containerRef}
+        onScroll={onScroll}
+        className="max-h-[520px] overflow-y-auto bg-white border border-gray-200 p-6"
+      >
+        <div className="space-y-10">
+          {REFLECTION_SECTIONS.map((s, idx) => (
+            <div key={idx}>
+              <h4 className="text-lg font-bold text-gray-900 mb-3">{s.title}</h4>
+              <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                {s.body}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <p className="mt-4 text-xs text-gray-600">
+        When you’ve read through this, the next section will appear below — gently, without pressure.
+      </p>
+    </div>
+  );
+};
+
+/* ---------------------------------------
+   Agency Layer (ethical choice architecture)
+--------------------------------------- */
+const AgencyLayer = ({ onChoose }) => {
+  return (
+    <div className="border border-gray-200 bg-white p-6">
+      <h3 className="text-xl font-bold text-gray-900 mb-2">Possible Paths Forward</h3>
+      <p className="text-sm text-gray-700 mb-6">
+        Nothing here is required. Choose what feels supportive — or simply save this and return later.
+      </p>
+
+      <div className="grid md:grid-cols-3 gap-3">
+        <button
+          onClick={() => onChoose?.("understand")}
+          className="border-2 border-gray-300 hover:border-gray-900 hover:bg-gray-50 p-5 text-left"
+          type="button"
+        >
+          <p className="font-bold text-gray-900">Understand</p>
+          <p className="text-sm text-gray-700 mt-1">
+            Learn what the analysis is observing and why it matters.
+          </p>
+        </button>
+
+        <button
+          onClick={() => onChoose?.("observe")}
+          className="border-2 border-gray-300 hover:border-gray-900 hover:bg-gray-50 p-5 text-left"
+          type="button"
+        >
+          <p className="font-bold text-gray-900">Observe</p>
+          <p className="text-sm text-gray-700 mt-1">
+            Save this moment and revisit when you feel ready.
+          </p>
+        </button>
+
+        <button
+          onClick={() => onChoose?.("guidance")}
+          className="border-2 border-gray-300 hover:border-gray-900 hover:bg-gray-50 p-5 text-left"
+          type="button"
+        >
+          <p className="font-bold text-gray-900">Guidance</p>
+          <p className="text-sm text-gray-700 mt-1">
+            Explore a calm, barrier-first roadmap — when you choose.
+          </p>
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const DermatologyApp = () => {
   const [activeTab, setActiveTab] = useState('home');
+
+  // step is still used, but we enforce reflection/agency gating within results
   const [step, setStep] = useState('photo');
+
   const [cameraActive, setCameraActive] = useState(false);
   const [capturedImage, setCapturedImage] = useState(null);
 
   // ✅ NEW: first name is required by the API
   const [firstName, setFirstName] = useState('');
-
   const [userEmail, setUserEmail] = useState('');
   const [ageRange, setAgeRange] = useState('');
   const [primaryConcern, setPrimaryConcern] = useState('');
   const [visitorQuestion, setVisitorQuestion] = useState('');
   const [analysisReport, setAnalysisReport] = useState(null);
   const [emailSubmitting, setEmailSubmitting] = useState(false);
+
+  // New: capture guidance + validation status
+  const [captureGuidanceSeen, setCaptureGuidanceSeen] = useState(false);
+  const [captureSupportMessage, setCaptureSupportMessage] = useState(null);
+
+  // Identity Lock™ overlay + modal
+  const [identityLockActivating, setIdentityLockActivating] = useState(false);
+  const [identityLockEnabled, setIdentityLockEnabled] = useState(false);
+  const [identityLockModalOpen, setIdentityLockModalOpen] = useState(false);
+
+  // Reflection / agency gating
+  const [reflectionSeen, setReflectionSeen] = useState(false);
+  const [agencyChoice, setAgencyChoice] = useState(null);
 
   const [chatMessages, setChatMessages] = useState([
     {
@@ -546,13 +840,23 @@ const DermatologyApp = () => {
     gaPageView(path, `DermatologyApp - ${activeTab} - ${step}`);
   }, [activeTab, step]);
 
+  const beginCapture = () => {
+    setCaptureGuidanceSeen(true);
+    setCaptureSupportMessage(null);
+    gaEvent('capture_guidance_seen', { step: 'photo' });
+  };
+
+  const showSupportiveRetake = (message) => {
+    setCaptureSupportMessage(`${message}\n\n${SUPPORTIVE_FOOTER_LINE}`);
+  };
+
   const startCamera = async () => {
     gaEvent('camera_start_clicked', { step });
 
     const lock = getFaceLockStatus();
     if (lock.locked) {
       gaEvent('face_locked', { step });
-      alert(lock.message);
+      showSupportiveRetake(lock.message);
       return;
     }
 
@@ -568,7 +872,7 @@ const DermatologyApp = () => {
       }
     } catch (err) {
       gaEvent('camera_error', { step });
-      alert('Unable to access camera. Please ensure camera permissions are granted.');
+      showSupportiveRetake('Unable to access camera. Please ensure camera permissions are granted.');
     }
   };
 
@@ -581,13 +885,30 @@ const DermatologyApp = () => {
     gaEvent('camera_stopped', { step });
   };
 
+  const activateIdentityLockThen = (next) => {
+    setIdentityLockEnabled(false);
+    setIdentityLockActivating(true);
+    gaEvent('identity_lock_activation_started', { source: 'capture' });
+
+    // Overlay component will call onComplete
+    const complete = () => {
+      setIdentityLockActivating(false);
+      setIdentityLockEnabled(true);
+      gaEvent('identity_lock_activated', { source: 'capture' });
+      next?.();
+    };
+
+    return complete;
+  };
+
   const capturePhoto = async () => {
     gaEvent('camera_capture_clicked', { step });
+    setCaptureSupportMessage(null);
 
     const lock = getFaceLockStatus();
     if (lock.locked) {
       gaEvent('face_locked', { step });
-      alert(lock.message);
+      showSupportiveRetake(lock.message);
       return;
     }
 
@@ -599,26 +920,56 @@ const DermatologyApp = () => {
       const ctx = canvas.getContext('2d');
       ctx.drawImage(video, 0, 0);
 
-      const faceFound = await detectFaceInImageElement(canvas);
-      if (!faceFound) {
+      // Face check
+      const faceCheck = await detectFaceInImageElement(canvas);
+      if (!faceCheck.ok) {
         const result = registerFaceFailure();
         gaEvent('face_not_detected', { source: 'camera', lockedNow: !!result.lockedNow });
-        alert(result.message);
+        showSupportiveRetake(result.message);
         stopCamera();
         return;
       }
 
       clearFaceFailures();
       const imageData = canvas.toDataURL('image/jpeg');
+
+      // Quality checks (brightness / blur / framing)
+      try {
+        const q = await validateCapturedImage({
+          dataUrl: imageData,
+          faces: faceCheck.faces
+        });
+
+        if (!q.ok) {
+          gaEvent('retake_requested', { source: 'camera', reason: q.code });
+          showSupportiveRetake(q.message);
+          // Keep camera open so they can retry
+          return;
+        }
+      } catch (e) {
+        // If quality checks fail unexpectedly, do not block; proceed cautiously.
+        gaEvent('quality_check_soft_pass', { source: 'camera' });
+      }
+
       setCapturedImage(imageData);
       stopCamera();
-      setStep('questions');
+
+      // Identity Lock overlay, then proceed to questions
+      const onComplete = activateIdentityLockThen(() => {
+        setStep('questions');
+      });
+
+      // mount overlay; it will call onComplete automatically
+      setIdentityLockActivating(true);
+      window.setTimeout(() => onComplete(), 4200);
+
       gaEvent('selfie_captured', { source: 'camera' });
     }
   };
 
   const handleFileUpload = async (e) => {
     gaEvent('upload_clicked', { step });
+    setCaptureSupportMessage(null);
 
     const file = e.target.files[0];
     if (!file) return;
@@ -626,7 +977,7 @@ const DermatologyApp = () => {
     const lock = getFaceLockStatus();
     if (lock.locked) {
       gaEvent('face_locked', { step });
-      alert(lock.message);
+      showSupportiveRetake(lock.message);
       return;
     }
 
@@ -634,17 +985,42 @@ const DermatologyApp = () => {
     reader.onload = async (event) => {
       const dataUrl = event.target.result;
 
-      const faceFound = await detectFaceFromDataUrl(dataUrl);
-      if (!faceFound) {
+      const faceCheck = await detectFaceFromDataUrl(dataUrl);
+      if (!faceCheck.ok) {
         const result = registerFaceFailure();
         gaEvent('face_not_detected', { source: 'upload', lockedNow: !!result.lockedNow });
-        alert(result.message);
+        showSupportiveRetake(result.message);
         return;
       }
 
       clearFaceFailures();
+
+      // Quality checks (brightness / blur / framing)
+      try {
+        const q = await validateCapturedImage({
+          dataUrl,
+          faces: faceCheck.faces
+        });
+
+        if (!q.ok) {
+          gaEvent('retake_requested', { source: 'upload', reason: q.code });
+          showSupportiveRetake(q.message);
+          return;
+        }
+      } catch (e2) {
+        gaEvent('quality_check_soft_pass', { source: 'upload' });
+      }
+
       setCapturedImage(dataUrl);
-      setStep('questions');
+
+      // Identity Lock overlay, then proceed to questions
+      const onComplete = activateIdentityLockThen(() => {
+        setStep('questions');
+      });
+
+      setIdentityLockActivating(true);
+      window.setTimeout(() => onComplete(), 4200);
+
       gaEvent('selfie_uploaded', { source: 'upload' });
     };
     reader.readAsDataURL(file);
@@ -653,7 +1029,7 @@ const DermatologyApp = () => {
   const handleQuestionsSubmit = () => {
     if (!ageRange || !primaryConcern) {
       gaEvent('questions_incomplete', { ageRangeFilled: !!ageRange, concernFilled: !!primaryConcern });
-      alert('Please answer all required questions');
+      showSupportiveRetake('Please answer all required questions so Dr. Lazuk can tailor your analysis.');
       return;
     }
 
@@ -666,7 +1042,6 @@ const DermatologyApp = () => {
 
     const gaClientId = await getGaClientId();
 
-    // Track intent
     gaEvent('analysis_submit', {
       primaryConcern,
       ageRange,
@@ -681,14 +1056,12 @@ const DermatologyApp = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          firstName: firstName, // ✅ REQUIRED by backend
+          firstName: firstName,
           email: userEmail,
           ageRange,
           primaryConcern,
           visitorQuestion,
           photoDataUrl: capturedImage,
-
-          // Optional: helpful for backend-side GA stitching if you later add Measurement Protocol
           gaClientId
         })
       });
@@ -705,18 +1078,18 @@ const DermatologyApp = () => {
         throw new Error(msg);
       }
 
+      // Reset reflection/agency for new results
+      setReflectionSeen(false);
+      setAgencyChoice(null);
+
       setAnalysisReport({
         report: data.report,
         recommendedProducts: getRecommendedProducts(primaryConcern),
         recommendedServices: getRecommendedServices(primaryConcern),
         fitzpatrickType: data.fitzpatrickType || null,
         fitzpatrickSummary: data.fitzpatrickSummary || null,
-
-        // ✅ NEW: store aging preview images (Cloudinary URLs)
         agingPreviewImages: data.agingPreviewImages || null
       });
-
-      console.log('Analysis generated for:', userEmail, ageRange, primaryConcern);
 
       gaEvent('analysis_success', {
         primaryConcern,
@@ -735,7 +1108,7 @@ const DermatologyApp = () => {
     } catch (error) {
       console.error('Analysis error:', error);
       setEmailSubmitting(false);
-      alert(error?.message || 'There was an error. Please try again.');
+      showSupportiveRetake(error?.message || 'There was an error. Please try again.');
     }
   };
 
@@ -743,13 +1116,13 @@ const DermatologyApp = () => {
     const fn = String(firstName || '').trim();
     if (!fn) {
       gaEvent('email_step_error', { reason: 'missing_first_name' });
-      alert('Please enter your first name');
+      showSupportiveRetake('Please enter your first name.');
       return;
     }
 
     if (!userEmail || !userEmail.includes('@')) {
       gaEvent('email_step_error', { reason: 'invalid_email' });
-      alert('Please enter a valid email address');
+      showSupportiveRetake('Please enter a valid email address.');
       return;
     }
 
@@ -830,7 +1203,14 @@ const DermatologyApp = () => {
     setPrimaryConcern('');
     setVisitorQuestion('');
     setUserEmail('');
-    setFirstName(''); // ✅ reset
+    setFirstName('');
+    setCameraActive(false);
+    setCaptureGuidanceSeen(false);
+    setCaptureSupportMessage(null);
+    setIdentityLockEnabled(false);
+    setIdentityLockActivating(false);
+    setReflectionSeen(false);
+    setAgencyChoice(null);
   };
 
   useEffect(() => {
@@ -841,8 +1221,39 @@ const DermatologyApp = () => {
     };
   }, []);
 
+  const agingImages = useMemo(() => {
+    const p = analysisReport?.agingPreviewImages || {};
+    return [
+      { key: 'noChange10', label: '10 Years (No Change)', url: p.noChange10 || null },
+      { key: 'noChange20', label: '20 Years (No Change)', url: p.noChange20 || null },
+      { key: 'withCare10', label: '10 Years (With Care)', url: p.withCare10 || null },
+      { key: 'withCare20', label: '20 Years (With Care)', url: p.withCare20 || null }
+    ].filter((x) => !!x.url);
+  }, [analysisReport]);
+
   return (
     <div className="min-h-screen bg-white">
+      {/* Identity Lock Activation Overlay */}
+      {identityLockActivating && (
+        <IdentityLockOverlay
+          onComplete={() => {
+            setIdentityLockActivating(false);
+            setIdentityLockEnabled(true);
+            gaEvent('identity_lock_activated', { source: 'overlay' });
+          }}
+        />
+      )}
+
+      {identityLockModalOpen && (
+        <Modal
+          title="Identity Lock™ Technology Active"
+          body={
+            "This projection is not a generic filter or a randomized aging overlay.\n\nTo ensure consistency, our AI locks onto key proportional landmarks so your ‘Future Story’ remains anchored to your unique facial architecture and bone structure.\n\nThis represents a personalized cosmetic projection based on your current skin data."
+          }
+          onClose={() => setIdentityLockModalOpen(false)}
+        />
+      )}
+
       <div className="bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 text-white shadow-lg">
         <div className="max-w-6xl mx-auto px-4 py-6">
           <div className="flex items-center justify-between">
@@ -921,7 +1332,7 @@ const DermatologyApp = () => {
                   <h2 className="text-2xl font-bold text-gray-900">Virtual Skin Analysis</h2>
                 </div>
 
-                {/* Disclaimer – entertainment only, no medical advice */}
+                {/* Disclaimer */}
                 <div className="bg-gray-100 border border-gray-300 p-4 mb-4 flex items-start gap-3">
                   <Info className="text-gray-700 flex-shrink-0 mt-0.5" size={20} />
                   <p className="text-sm text-gray-800">
@@ -932,33 +1343,86 @@ const DermatologyApp = () => {
                   </p>
                 </div>
 
-                <div className="bg-gray-50 border border-gray-300 p-4 mb-8 flex items-start gap-3">
-                  <Info className="text-gray-700 flex-shrink-0 mt-0.5" size={20} />
-                  <p className="text-sm text-gray-700">
-                    Take or upload a well-lit photo of your face. Your complete cosmetic report will
-                    be emailed to you.
-                  </p>
+                {/* Clinical-Style Intake Instructions (Locked) */}
+                <div className="bg-gray-50 border border-gray-300 p-6 mb-6">
+                  <div className="flex items-start gap-3">
+                    <Info className="text-gray-700 flex-shrink-0 mt-0.5" size={20} />
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900">
+                        {CAPTURE_PREP_COPY.title}
+                      </h3>
+                      <p className="text-sm text-gray-700 mt-1">
+                        {CAPTURE_PREP_COPY.subtitle}
+                      </p>
+                      <p className="text-sm text-gray-700 mt-4">
+                        {CAPTURE_PREP_COPY.intro}
+                      </p>
+
+                      <div className="mt-4 space-y-3">
+                        {CAPTURE_PREP_COPY.bullets.map((b, i) => (
+                          <div key={i}>
+                            <p className="text-sm font-bold text-gray-900">{b.head}</p>
+                            <p className="text-sm text-gray-700">{b.body}</p>
+                          </div>
+                        ))}
+                      </div>
+
+                      <p className="text-sm text-gray-700 mt-4">
+                        {CAPTURE_PREP_COPY.outro}
+                      </p>
+
+                      {!captureGuidanceSeen && (
+                        <button
+                          onClick={beginCapture}
+                          className="mt-5 bg-gray-900 text-white px-6 py-3 font-bold hover:bg-gray-800"
+                          type="button"
+                        >
+                          I Understand — Continue
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
+                {/* Supportive Retake / Guidance Message */}
+                {captureSupportMessage && (
+                  <div className="bg-white border border-gray-300 p-5 mb-6">
+                    <p className="text-sm text-gray-800 whitespace-pre-wrap">
+                      {captureSupportMessage}
+                    </p>
+                  </div>
+                )}
+
+                {/* Capture options gated until they’ve seen the intake section */}
+                {!captureGuidanceSeen && (
+                  <div className="text-sm text-gray-600">
+                    Please read the preparation guidance above to ensure the most accurate results.
+                  </div>
+                )}
+
                 {!capturedImage && !cameraActive && (
-                  <div className="grid md:grid-cols-2 gap-6">
+                  <div className={`grid md:grid-cols-2 gap-6 ${!captureGuidanceSeen ? 'opacity-40 pointer-events-none' : ''}`}>
                     <button
                       onClick={startCamera}
                       className="flex flex-col items-center justify-center p-12 border-2 border-dashed border-gray-400 hover:border-gray-900 hover:bg-gray-50 transition-all"
+                      type="button"
                     >
                       <Camera size={56} className="text-gray-900 mb-4" />
                       <span className="font-bold text-gray-900 text-lg">Use Camera</span>
                     </button>
+
                     <button
                       onClick={() => {
                         gaEvent('upload_open_picker', { step });
                         fileInputRef.current?.click();
                       }}
                       className="flex flex-col items-center justify-center p-12 border-2 border-dashed border-gray-400 hover:border-gray-900 hover:bg-gray-50 transition-all"
+                      type="button"
                     >
                       <Upload size={56} className="text-gray-900 mb-4" />
                       <span className="font-bold text-gray-900 text-lg">Upload Photo</span>
                     </button>
+
                     <input
                       ref={fileInputRef}
                       type="file"
@@ -978,12 +1442,14 @@ const DermatologyApp = () => {
                       <button
                         onClick={capturePhoto}
                         className="px-8 py-3 bg-gray-900 text-white font-bold hover:bg-gray-800"
+                        type="button"
                       >
                         Capture
                       </button>
                       <button
                         onClick={stopCamera}
                         className="px-8 py-3 bg-gray-300 text-gray-900 font-bold hover:bg-gray-400"
+                        type="button"
                       >
                         Cancel
                       </button>
@@ -1061,12 +1527,14 @@ const DermatologyApp = () => {
                     <button
                       onClick={resetAnalysis}
                       className="px-6 py-3 bg-gray-300 text-gray-900 font-bold hover:bg-gray-400"
+                      type="button"
                     >
                       Start Over
                     </button>
                     <button
                       onClick={handleQuestionsSubmit}
                       className="flex-1 px-6 py-3 bg-gray-900 text-white font-bold hover:bg-gray-800"
+                      type="button"
                     >
                       Continue
                     </button>
@@ -1087,7 +1555,6 @@ const DermatologyApp = () => {
                     product and treatment recommendations. A copy will also be sent to our clinic team.
                   </p>
                   <div className="space-y-4">
-                    {/* ✅ NEW: First Name */}
                     <input
                       type="text"
                       value={firstName}
@@ -1109,6 +1576,7 @@ const DermatologyApp = () => {
                       onClick={handleEmailSubmit}
                       disabled={emailSubmitting}
                       className="w-full px-6 py-3 bg-white text-gray-900 font-bold hover:bg-gray-200 disabled:bg-gray-400 flex items-center justify-center gap-2"
+                      type="button"
                     >
                       {emailSubmitting ? (
                         <>
@@ -1127,16 +1595,72 @@ const DermatologyApp = () => {
             {step === 'results' && analysisReport && (
               <div className="space-y-6">
                 <div className="flex justify-between items-center">
-                  <h3 className="text-2xl font-bold text-gray-900">Your Analysis</h3>
+                  <h3 className="text-2xl font-bold text-gray-900">Your Results</h3>
                   <button
                     onClick={resetAnalysis}
                     className="px-4 py-2 bg-gray-300 text-gray-900 font-bold hover:bg-gray-400 text-sm"
+                    type="button"
                   >
                     New Analysis
                   </button>
                 </div>
 
-                {/* Fitzpatrick Card */}
+                {/* Aging Previews FIRST (if available) */}
+                {agingImages.length > 0 && (
+                  <div className="bg-white border border-gray-200 p-6">
+                    <h4 className="text-xl font-bold text-gray-900 mb-2">
+                      Your Future Story (Cosmetic Projection)
+                    </h4>
+                    <p className="text-sm text-gray-700 mb-6">
+                      These are visual projections anchored to your selfie. Take a moment before reading anything else.
+                    </p>
+
+                    <div className="grid md:grid-cols-2 gap-4">
+                      {agingImages.map((img) => (
+                        <div key={img.key} className="relative border border-gray-200 bg-gray-50 p-3">
+                          {/* TikTok watermark placement (top-left) handled in backend if desired;
+                              Identity Lock™ badge is top-left as requested */}
+                          <IdentityLockBadge
+                            placement="top-left"
+                            onClick={() => {
+                              gaEvent('identity_lock_badge_clicked', { key: img.key });
+                              setIdentityLockModalOpen(true);
+                            }}
+                          />
+                          <img
+                            src={img.url}
+                            alt={img.label}
+                            className="w-full border border-gray-200"
+                            onLoad={() => gaEvent('aging_image_loaded', { key: img.key })}
+                          />
+                          <p className="text-sm font-bold text-gray-900 mt-3">{img.label}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Reflection Layer ALWAYS after images (even if images missing, still show) */}
+                <ReflectionLayer
+                  onSeen={() => {
+                    if (!reflectionSeen) {
+                      setReflectionSeen(true);
+                      gaEvent('reflection_seen', { step: 'results' });
+                    }
+                  }}
+                />
+
+                {/* Agency Layer ONLY after Reflection is seen */}
+                {reflectionSeen && (
+                  <AgencyLayer
+                    onChoose={(choice) => {
+                      setAgencyChoice(choice);
+                      gaEvent('agency_choice', { choice });
+                    }}
+                  />
+                )}
+
+                {/* Fitzpatrick Card (Allowed; but keep calm and non-judgmental) */}
                 {(analysisReport.fitzpatrickType || analysisReport.fitzpatrickSummary) && (
                   <div className="bg-amber-50 border-2 border-amber-200 p-6">
                     <h4 className="text-lg font-bold text-amber-900 mb-2">
@@ -1158,184 +1682,94 @@ const DermatologyApp = () => {
                   </div>
                 )}
 
-                {/* Aging Previews (NEW) */}
-                {analysisReport?.agingPreviewImages && (
-                  <div className="bg-white border-2 border-gray-900 p-8">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <h4 className="font-bold text-gray-900 mb-1 text-2xl">Aging Previews</h4>
-                        <p className="text-sm text-gray-700">
-                          These images are AI-generated for cosmetic education. Downloads include the{" "}
-                          <strong>Identity Lock™</strong> badge and a subtle <strong>skindoctor.ai</strong> watermark.
-                        </p>
-                      </div>
-                    </div>
-
-                    {(() => {
-                      const ap = analysisReport.agingPreviewImages || {};
-                      const ordered = [
-                        ["noChange10", "10 Years (No Changes)"],
-                        ["noChange20", "20 Years (No Changes)"],
-                        ["withCare10", "10 Years (With Care)"],
-                        ["withCare20", "20 Years (With Care)"]
-                      ];
-
-                      const items = ordered
-                        .map(([key, label]) => (ap[key] ? { key, label, url: ap[key] } : null))
-                        .filter(Boolean);
-
-                      const extras = Object.entries(ap)
-                        .filter(([k, v]) => v && !ordered.some(([ok]) => ok === k))
-                        .map(([k, v]) => ({ key: k, label: k, url: v }));
-
-                      const all = [...items, ...extras];
-                      if (!all.length) return null;
-
-                      return (
-                        <div className="grid md:grid-cols-2 gap-6 mt-6">
-                          {all.map(({ key, label, url }) => (
-                            <div key={key} className="border p-4 bg-gray-50">
-                              <div className="flex items-center justify-between gap-3 mb-3">
-                                <h5 className="font-bold text-gray-900">{label}</h5>
-                              </div>
-
-                              <img
-                                src={url}
-                                alt={`Aging preview: ${label}`}
-                                className="w-full rounded-lg border border-gray-300"
-                                loading="lazy"
-                              />
-
-                              <div className="mt-4 flex flex-wrap gap-2">
-                                <button
-                                  className="px-4 py-2 bg-gray-900 text-white font-bold hover:bg-gray-800"
-                                  onClick={async () => {
-                                    gaEvent("aging_preview_download", { mode: "original", key, label });
-                                    try {
-                                      await downloadAgingPreview({
-                                        imageUrl: url,
-                                        mode: "original",
-                                        filename: `skindoctor-aging-${key}.png`
-                                      });
-                                    } catch (e) {
-                                      console.error("Download error:", e);
-                                      alert(
-                                        "Download failed. If this keeps happening, it may be a browser security/CORS issue with the image host."
-                                      );
-                                    }
-                                  }}
-                                >
-                                  Download
-                                </button>
-
-                                <button
-                                  className="px-4 py-2 bg-gray-300 text-gray-900 font-bold hover:bg-gray-400"
-                                  onClick={async () => {
-                                    gaEvent("aging_preview_download", { mode: "vertical", key, label });
-                                    try {
-                                      await downloadAgingPreview({
-                                        imageUrl: url,
-                                        mode: "vertical",
-                                        filename: `skindoctor-aging-${key}-tiktok-vertical.png`
-                                      });
-                                    } catch (e) {
-                                      console.error("Download error:", e);
-                                      alert(
-                                        "Download failed. If this keeps happening, it may be a browser security/CORS issue with the image host."
-                                      );
-                                    }
-                                  }}
-                                >
-                                  Download for TikTok / Reels
-                                </button>
-                              </div>
-
-                              <p className="mt-3 text-xs text-gray-600">
-                                Identity Lock™ Enabled: calculated using your unique facial architecture, bone structure,
-                                and proportional markers — ensuring consistency across time-based projections.
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      );
-                    })()}
-                  </div>
-                )}
-
+                {/* Report (always allowed) */}
                 <div className="bg-white border-2 border-gray-900 p-8">
                   <div className="prose prose-sm max-w-none text-gray-700 whitespace-pre-wrap">
                     {analysisReport.report}
                   </div>
                 </div>
 
-                <div className="bg-white border-2 border-gray-900 p-8">
-                  <h4 className="font-bold text-gray-900 mb-4 text-2xl">Recommended Products</h4>
-                  <div className="grid md:grid-cols-3 gap-4 mb-8">
-                    {analysisReport.recommendedProducts.map((p, i) => (
-                      <div key={i} className="bg-gray-50 border p-4">
-                        <h5 className="font-bold text-gray-900 mb-1">{p.name}</h5>
-                        <p className="text-gray-900 font-bold mb-2">${p.price}</p>
-                        <ul className="text-sm text-gray-700 mb-3">
-                          {p.benefits.map((b, j) => (
-                            <li key={j}>✓ {b}</li>
-                          ))}
-                        </ul>
-                        <a
-                          href={p.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={() =>
-                            gaEvent('product_click', {
-                              productName: p.name,
-                              category: p.category,
-                              price: p.price,
-                              primaryConcern
-                            })
-                          }
-                          className="block text-center bg-gray-900 text-white py-2 font-bold hover:bg-gray-800"
-                        >
-                          View
-                        </a>
-                      </div>
-                    ))}
-                  </div>
-
-                  <h4 className="font-bold text-gray-900 mb-4 text-2xl">
-                    Recommended Treatments
-                  </h4>
-                  <div className="grid md:grid-cols-2 gap-4">
-                    {analysisReport.recommendedServices.map((s, i) => (
-                      <div key={i} className="bg-blue-50 border-2 border-blue-200 p-5">
-                        <h5 className="font-bold text-blue-900 mb-2 text-lg">{s.name}</h5>
-                        <p className="text-sm text-blue-800 mb-3">{s.description}</p>
-                        <p className="text-sm text-blue-900 font-semibold mb-2">
-                          Why We Recommend This:
-                        </p>
-                        <p className="text-sm text-blue-800 mb-3">{s.whyRecommended}</p>
-                        <div className="mb-4">
-                          <p className="text-xs font-bold text-blue-900 mb-1">Benefits:</p>
-                          <ul className="text-sm text-blue-800">
-                            {s.benefits.map((b, j) => (
+                {/* Recommendations are ONLY visible after Reflection is seen (Do Not Break) */}
+                {reflectionSeen && (
+                  <div className="bg-white border-2 border-gray-900 p-8">
+                    <h4 className="font-bold text-gray-900 mb-4 text-2xl">Recommended Products</h4>
+                    <div className="grid md:grid-cols-3 gap-4 mb-8">
+                      {analysisReport.recommendedProducts.map((p, i) => (
+                        <div key={i} className="bg-gray-50 border p-4">
+                          <h5 className="font-bold text-gray-900 mb-1">{p.name}</h5>
+                          <p className="text-gray-900 font-bold mb-2">${p.price}</p>
+                          <ul className="text-sm text-gray-700 mb-3">
+                            {p.benefits.map((b, j) => (
                               <li key={j}>✓ {b}</li>
                             ))}
                           </ul>
+                          <a
+                            href={p.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={() =>
+                              gaEvent('product_click', {
+                                productName: p.name,
+                                category: p.category,
+                                price: p.price,
+                                primaryConcern
+                              })
+                            }
+                            className="block text-center bg-gray-900 text-white py-2 font-bold hover:bg-gray-800"
+                          >
+                            View
+                          </a>
                         </div>
-                        <a
-                          href="mailto:contact@skindoctor.ai"
-                          onClick={() =>
-                            gaEvent('book_appointment_click', {
-                              serviceName: s.name,
-                              primaryConcern
-                            })
-                          }
-                          className="block text-center bg-blue-600 text-white py-3 font-bold hover:bg-blue-700"
-                        >
-                          Book Appointment
-                        </a>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
+
+                    <h4 className="font-bold text-gray-900 mb-4 text-2xl">
+                      Recommended Treatments
+                    </h4>
+                    <div className="grid md:grid-cols-2 gap-4">
+                      {analysisReport.recommendedServices.map((s, i) => (
+                        <div key={i} className="bg-blue-50 border-2 border-blue-200 p-5">
+                          <h5 className="font-bold text-blue-900 mb-2 text-lg">{s.name}</h5>
+                          <p className="text-sm text-blue-800 mb-3">{s.description}</p>
+                          <p className="text-sm text-blue-900 font-semibold mb-2">
+                            Why We Recommend This:
+                          </p>
+                          <p className="text-sm text-blue-800 mb-3">{s.whyRecommended}</p>
+                          <div className="mb-4">
+                            <p className="text-xs font-bold text-blue-900 mb-1">Benefits:</p>
+                            <ul className="text-sm text-blue-800">
+                              {s.benefits.map((b, j) => (
+                                <li key={j}>✓ {b}</li>
+                              ))}
+                            </ul>
+                          </div>
+                          <a
+                            href="mailto:contact@skindoctor.ai"
+                            onClick={() =>
+                              gaEvent('book_appointment_click', {
+                                serviceName: s.name,
+                                primaryConcern
+                              })
+                            }
+                            className="block text-center bg-blue-600 text-white py-3 font-bold hover:bg-blue-700"
+                          >
+                            Book Appointment
+                          </a>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
+
+                {/* Agency content hint (optional) */}
+                {reflectionSeen && agencyChoice === "observe" && (
+                  <div className="bg-gray-50 border border-gray-200 p-6">
+                    <p className="text-sm text-gray-700">
+                      If you’d like, you can simply bookmark this page or return to your email later.
+                      There is no urgency — and no required schedule.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1391,6 +1825,7 @@ const DermatologyApp = () => {
                     onClick={sendMessage}
                     disabled={chatLoading}
                     className="px-8 py-3 bg-gray-900 text-white font-bold hover:bg-gray-800 disabled:bg-gray-400"
+                    type="button"
                   >
                     <Send size={20} />
                   </button>
