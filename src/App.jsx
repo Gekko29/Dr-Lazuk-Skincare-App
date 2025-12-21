@@ -12,9 +12,8 @@ import {
   Loader
 } from 'lucide-react';
 
-// ✅ Google Analytics (GA4) — single source of truth
-// Uses VITE_GA_MEASUREMENT_ID from env, and expects window.gtag to be initialized in main.jsx
-import { gaEvent, gaPageView, getGaClientId } from "../lib/ga";
+// ✅ Google Analytics helpers
+import { gaEvent, gaPageView, getGaClientId } from "./lib/ga";
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -204,7 +203,7 @@ const SUPPORTIVE_FOOTER_LINE =
   "This step helps ensure your results are thoughtful, accurate, and meaningful.";
 
 /* ---------------------------------------
-   Helper: check if user is locked out due to repeated non-face attempts
+   Helper: lockout after repeated non-face attempts
 --------------------------------------- */
 const getFaceLockStatus = () => {
   const lockUntilStr =
@@ -226,7 +225,6 @@ const getFaceLockStatus = () => {
   return { locked: false };
 };
 
-// Helper: register a non-face attempt and possibly lock for 30 days
 const registerFaceFailure = () => {
   const failStr =
     typeof window !== 'undefined' ? localStorage.getItem('dl_faceFailCount') : null;
@@ -255,34 +253,32 @@ const registerFaceFailure = () => {
   };
 };
 
-// Helper: clear non-face fail count when we successfully detect a face
 const clearFaceFailures = () => {
   if (typeof window === 'undefined') return;
   localStorage.removeItem('dl_faceFailCount');
 };
 
-// Face detection using the browser's FaceDetector API where available
-const detectFaceInImageElement = async (imgEl) => {
-  if (!imgEl) return { ok: false };
+/* ---------------------------------------
+   Face Detection (browser API when available)
+--------------------------------------- */
+const detectFaceInImageElement = async (canvasEl) => {
+  if (!canvasEl) return { ok: false };
 
   if ('FaceDetector' in window) {
     try {
       const detector = new window.FaceDetector({ fastMode: true, maxDetectedFaces: 5 });
-      const faces = await detector.detect(imgEl);
+      const faces = await detector.detect(canvasEl);
       if (!faces || faces.length === 0) return { ok: false };
       return { ok: true, faces };
     } catch (err) {
       console.error('FaceDetector error:', err);
-      // If FaceDetector errors, allow flow to continue (do not block UX)
       return { ok: true, faces: null, softPass: true };
     }
   } else {
-    // If FaceDetector is not supported, allow the image so the experience still works
     return { ok: true, faces: null, softPass: true };
   }
 };
 
-// Helper: detect face from a data URL (for uploaded images)
 const detectFaceFromDataUrl = (dataUrl) => {
   return new Promise((resolve) => {
     if (!('FaceDetector' in window)) {
@@ -301,18 +297,13 @@ const detectFaceFromDataUrl = (dataUrl) => {
         resolve({ ok: true, faces: null, softPass: true });
       }
     };
-    img.onerror = () => {
-      resolve({ ok: false, faces: null });
-    };
+    img.onerror = () => resolve({ ok: false, faces: null });
     img.src = dataUrl;
   });
 };
 
 /* ---------------------------------------
-   Lightweight Quality Checks (Client-side, privacy-safe)
-   - brightness check
-   - blur estimate
-   - face framing check (if FaceDetector provides bounding box)
+   Quality Checks (brightness + blur)
 --------------------------------------- */
 const computeBrightnessAndBlur = (canvas) => {
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -321,12 +312,9 @@ const computeBrightnessAndBlur = (canvas) => {
   const imgData = ctx.getImageData(0, 0, width, height);
   const data = imgData.data;
 
-  // Brightness (luma) mean
   let sum = 0;
   const n = width * height;
 
-  // Blur estimate: variance of simple gradient magnitude
-  // (not perfect, but good enough to catch very soft images)
   let gradSum = 0;
   let gradSumSq = 0;
 
@@ -337,7 +325,6 @@ const computeBrightnessAndBlur = (canvas) => {
     return 0.2126 * r + 0.7152 * g + 0.0722 * b;
   };
 
-  // sample every 2 pixels for speed
   const step = 2;
   for (let y = 1; y < height - 1; y += step) {
     for (let x = 1; x < width - 1; x += step) {
@@ -365,14 +352,10 @@ const computeBrightnessAndBlur = (canvas) => {
   const gradMean = gradSum / samples;
   const gradVar = gradSumSq / samples - gradMean * gradMean;
 
-  return {
-    meanBrightness, // 0..255 roughly
-    gradVar         // higher = sharper
-  };
+  return { meanBrightness, gradVar };
 };
 
 const validateCapturedImage = async ({ dataUrl, faces }) => {
-  // Build a canvas to analyze brightness/blur
   const img = new Image();
   await new Promise((res, rej) => {
     img.onload = res;
@@ -390,24 +373,19 @@ const validateCapturedImage = async ({ dataUrl, faces }) => {
 
   const { meanBrightness, gradVar } = computeBrightnessAndBlur(canvas);
 
-  // 1) low light
   if (meanBrightness < 70) {
     return { ok: false, code: 'low_light', message: RETAKE_MESSAGES.low_light };
   }
 
-  // 2) blur (very approximate)
   if (gradVar < 60) {
     return { ok: false, code: 'blurry', message: RETAKE_MESSAGES.blurry };
   }
 
-  // 3) face framing check (if we have bounding boxes)
   if (faces && Array.isArray(faces) && faces.length > 0 && faces[0]?.boundingBox) {
     const bb = faces[0].boundingBox;
     const faceArea = bb.width * bb.height;
     const imgArea = img.width * img.height;
     const ratio = faceArea / imgArea;
-
-    // Too small or too big: request framing adjustment
     if (ratio < 0.10 || ratio > 0.70) {
       return { ok: false, code: 'framing', message: RETAKE_MESSAGES.framing };
     }
@@ -417,7 +395,7 @@ const validateCapturedImage = async ({ dataUrl, faces }) => {
 };
 
 /* ---------------------------------------
-   Identity Lock Activation UI (Calm)
+   Identity Lock Overlay (Calm)
 --------------------------------------- */
 const IdentityLockOverlay = ({ onComplete }) => {
   const steps = useMemo(
@@ -433,14 +411,8 @@ const IdentityLockOverlay = ({ onComplete }) => {
   const [idx, setIdx] = useState(0);
 
   useEffect(() => {
-    const t1 = setInterval(() => {
-      setIdx((v) => (v + 1) % steps.length);
-    }, 900);
-
-    const t2 = setTimeout(() => {
-      onComplete?.();
-    }, 4200);
-
+    const t1 = setInterval(() => setIdx((v) => (v + 1) % steps.length), 900);
+    const t2 = setTimeout(() => onComplete?.(), 4200);
     return () => {
       clearInterval(t1);
       clearTimeout(t2);
@@ -454,9 +426,7 @@ const IdentityLockOverlay = ({ onComplete }) => {
           <Loader className="animate-spin" size={22} />
           <h3 className="text-xl font-bold text-gray-900">Activating Identity Lock™</h3>
         </div>
-        <p className="text-sm text-gray-700 mb-4">
-          {steps[idx]}
-        </p>
+        <p className="text-sm text-gray-700 mb-4">{steps[idx]}</p>
         <p className="text-xs text-gray-600">
           This ensures your analysis and future projections remain specific to you — not a generic model.
         </p>
@@ -466,7 +436,29 @@ const IdentityLockOverlay = ({ onComplete }) => {
 };
 
 /* ---------------------------------------
-   Identity Lock Badge + Modal
+   Modal
+--------------------------------------- */
+const Modal = ({ title, body, onClose }) => {
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center px-4">
+      <div className="max-w-lg w-full bg-white border border-gray-200 shadow-lg p-6">
+        <div className="flex justify-between items-start gap-4">
+          <h3 className="text-lg font-bold text-gray-900">{title}</h3>
+          <button onClick={onClose} className="text-gray-700 hover:text-gray-900 font-bold" type="button">
+            ✕
+          </button>
+        </div>
+        <p className="text-sm text-gray-700 mt-3 whitespace-pre-wrap">{body}</p>
+        <button onClick={onClose} className="mt-5 w-full bg-gray-900 text-white py-3 font-bold hover:bg-gray-800" type="button">
+          Understood
+        </button>
+      </div>
+    </div>
+  );
+};
+
+/* ---------------------------------------
+   Identity Lock Badge
 --------------------------------------- */
 const IdentityLockBadge = ({ onClick, placement = "top-left" }) => {
   const pos =
@@ -490,35 +482,19 @@ const IdentityLockBadge = ({ onClick, placement = "top-left" }) => {
   );
 };
 
-const Modal = ({ title, body, onClose }) => {
+/* ---------------------------------------
+   Watermark Overlay (UI failsafe)
+--------------------------------------- */
+const WatermarkOverlay = ({ text = "SkinDoctor.ai • Dr. Lazuk Esthetics® | Cosmetics®" }) => {
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center px-4">
-      <div className="max-w-lg w-full bg-white border border-gray-200 shadow-lg p-6">
-        <div className="flex justify-between items-start gap-4">
-          <h3 className="text-lg font-bold text-gray-900">{title}</h3>
-          <button
-            onClick={onClose}
-            className="text-gray-700 hover:text-gray-900 font-bold"
-            type="button"
-          >
-            ✕
-          </button>
-        </div>
-        <p className="text-sm text-gray-700 mt-3 whitespace-pre-wrap">{body}</p>
-        <button
-          onClick={onClose}
-          className="mt-5 w-full bg-gray-900 text-white py-3 font-bold hover:bg-gray-800"
-          type="button"
-        >
-          Understood
-        </button>
-      </div>
+    <div className="absolute bottom-3 right-3 z-10 bg-black/55 backdrop-blur-sm px-3 py-2 text-[11px] text-white font-semibold select-none">
+      {text}
     </div>
   );
 };
 
 /* ---------------------------------------
-   Reflection Layer (scroll-to-unlock Agency)
+   Reflection Layer (scroll-to-unlock)
 --------------------------------------- */
 const ReflectionLayer = ({ onSeen }) => {
   const containerRef = useRef(null);
@@ -570,7 +546,7 @@ const ReflectionLayer = ({ onSeen }) => {
 };
 
 /* ---------------------------------------
-   Agency Layer (ethical choice architecture)
+   Agency Layer
 --------------------------------------- */
 const AgencyLayer = ({ onChoose }) => {
   return (
@@ -618,16 +594,76 @@ const AgencyLayer = ({ onChoose }) => {
   );
 };
 
+/* ---------------------------------------
+   Share + Save helpers (ethical gating)
+--------------------------------------- */
+const safeCopyToClipboard = async (text) => {
+  try {
+    if (navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {}
+  return false;
+};
+
+const dataUrlToFile = async (dataUrl, filename) => {
+  // data URL → Blob → File
+  const res = await fetch(dataUrl);
+  const blob = await res.blob();
+  return new File([blob], filename, { type: blob.type || "image/jpeg" });
+};
+
+const fetchUrlToFile = async (url, filename) => {
+  // Might fail if CORS blocks; caller handles fallback.
+  const res = await fetch(url, { mode: "cors" });
+  const blob = await res.blob();
+  return new File([blob], filename, { type: blob.type || "image/jpeg" });
+};
+
+const downloadImage = async (urlOrDataUrl, filename) => {
+  try {
+    let blob;
+    if (String(urlOrDataUrl || "").startsWith("data:")) {
+      const res = await fetch(urlOrDataUrl);
+      blob = await res.blob();
+    } else {
+      const res = await fetch(urlOrDataUrl, { mode: "cors" });
+      blob = await res.blob();
+    }
+
+    const link = document.createElement("a");
+    const objectUrl = URL.createObjectURL(blob);
+    link.href = objectUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(objectUrl);
+    return true;
+  } catch {
+    // fallback: open in new tab
+    try {
+      window.open(urlOrDataUrl, "_blank", "noopener,noreferrer");
+      return false;
+    } catch {
+      return false;
+    }
+  }
+};
+
+const buildShareText = ({ label }) => {
+  // Ethical: avoid fear; focus on agency + education
+  return `I tried Dr. Lazuk’s Identity Lock™ cosmetic skin analysis. Here is my “Future Story” preview (${label}).\n\nThis is cosmetic education only—not medical advice.\n\nSkinDoctor.ai`;
+};
+
 const DermatologyApp = () => {
   const [activeTab, setActiveTab] = useState('home');
-
-  // step is still used, but we enforce reflection/agency gating within results
   const [step, setStep] = useState('photo');
 
   const [cameraActive, setCameraActive] = useState(false);
   const [capturedImage, setCapturedImage] = useState(null);
 
-  // ✅ NEW: first name is required by the API
   const [firstName, setFirstName] = useState('');
   const [userEmail, setUserEmail] = useState('');
   const [ageRange, setAgeRange] = useState('');
@@ -636,18 +672,17 @@ const DermatologyApp = () => {
   const [analysisReport, setAnalysisReport] = useState(null);
   const [emailSubmitting, setEmailSubmitting] = useState(false);
 
-  // New: capture guidance + validation status
   const [captureGuidanceSeen, setCaptureGuidanceSeen] = useState(false);
   const [captureSupportMessage, setCaptureSupportMessage] = useState(null);
 
-  // Identity Lock™ overlay + modal
   const [identityLockActivating, setIdentityLockActivating] = useState(false);
   const [identityLockEnabled, setIdentityLockEnabled] = useState(false);
   const [identityLockModalOpen, setIdentityLockModalOpen] = useState(false);
 
-  // Reflection / agency gating
   const [reflectionSeen, setReflectionSeen] = useState(false);
   const [agencyChoice, setAgencyChoice] = useState(null);
+
+  const [shareToast, setShareToast] = useState(null);
 
   const [chatMessages, setChatMessages] = useState([
     {
@@ -663,6 +698,17 @@ const DermatologyApp = () => {
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
   const fileInputRef = useRef(null);
+
+  const showToast = (msg) => {
+    setShareToast(msg);
+    window.setTimeout(() => setShareToast(null), 2400);
+  };
+
+  // Track page views
+  useEffect(() => {
+    const path = `/app/${activeTab}/${step}`;
+    gaPageView(path, `DermatologyApp - ${activeTab} - ${step}`);
+  }, [activeTab, step]);
 
   const drLazukProducts = [
     {
@@ -744,76 +790,6 @@ const DermatologyApp = () => {
       recommendFor: ['texture', 'dryness', 'aging'],
       whyRecommended:
         'Best when you feel heavy, puffy, or sluggish in the body, or want a non-invasive sculpting and smoothing option with no downtime.'
-    },
-    {
-      name: 'Candela eMatrix® RF Skin Rejuvenation',
-      description:
-        'Fractional radiofrequency treatment that targets fine lines, acne scars, large pores, and overall skin texture while being safe for many skin tones.',
-      benefits: [
-        'Softening of fine lines and wrinkles',
-        'Improved acne scars and texture',
-        'Smaller-looking pores',
-        'Gradual collagen remodeling'
-      ],
-      recommendFor: ['aging', 'texture', 'acne', 'pigmentation'],
-      whyRecommended:
-        'Recommended when you want more than a facial can offer—especially for long-standing texture, scars, or fine lines—without committing to aggressive lasers.'
-    },
-    {
-      name: 'PRP Skin Rejuvenation',
-      description:
-        'Platelet-rich plasma (PRP) from your own blood is used to stimulate collagen, improve texture, and rejuvenate delicate areas such as under the eyes.',
-      benefits: [
-        'Boosts collagen and elasticity',
-        'Improves under-eye crepiness and dullness',
-        'Softens acne scars and fine lines',
-        'Longer-term regenerative benefits'
-      ],
-      recommendFor: ['aging', 'texture', 'pigmentation'],
-      whyRecommended:
-        'Ideal when you prefer a regenerative, “from your own body” approach to aging and texture, especially around the eyes and areas that look thin or tired.'
-    },
-    {
-      name: 'PRP Hair Restoration',
-      description:
-        'PRP injections into the scalp to support hair follicles, improve hair density, and slow shedding in early to moderate thinning.',
-      benefits: [
-        'Supports hair follicle health',
-        'Improves hair density over time',
-        'Can reduce shedding in early thinning',
-        'Natural option using your own plasma'
-      ],
-      recommendFor: ['aging'],
-      whyRecommended:
-        'Suggested if you are noticing early hair thinning or widening part lines and want to intervene before the hair loss becomes advanced.'
-    },
-    {
-      name: 'HIEMT (High-Intensity Electromagnetic Therapy)',
-      description:
-        'Non-invasive treatment that contracts muscles thousands of times per session to improve core strength, tone, and body contour in areas like the abdomen and buttocks.',
-      benefits: [
-        'Improved muscle tone and strength',
-        'More defined core or glute area',
-        'Helps with posture and support',
-        'Pairs well with lifestyle changes'
-      ],
-      recommendFor: ['aging', 'texture', 'dryness'],
-      whyRecommended:
-        'Recommended when you want a stronger, more sculpted look in combination with healthy movement, without surgery or downtime.'
-    },
-    {
-      name: 'Beauty Injectables (Botox®, JUVÉDERM® Fillers, PRP)',
-      description:
-        'Customized injectable treatments to soften expression lines, restore volume, and enhance facial balance using Botox®, JUVÉDERM® fillers, and/or PRP.',
-      benefits: [
-        'Softens frown lines and crow’s feet',
-        'Restores or enhances cheek and lip volume',
-        'Improves facial harmony and balance',
-        'Can look very natural when done conservatively'
-      ],
-      recommendFor: ['aging', 'texture', 'pigmentation'],
-      whyRecommended:
-        'Best when lines and volume loss are becoming visible and you want targeted, long-lasting improvements with a medical, artistic approach.'
     }
   ];
 
@@ -833,12 +809,6 @@ const DermatologyApp = () => {
   const getRecommendedServices = (concern) => {
     return estheticServices.filter((s) => s.recommendFor.includes(concern)).slice(0, 2);
   };
-
-  // Track page views when user navigates tabs/steps
-  useEffect(() => {
-    const path = `/app/${activeTab}/${step}`;
-    gaPageView(path, `DermatologyApp - ${activeTab} - ${step}`);
-  }, [activeTab, step]);
 
   const beginCapture = () => {
     setCaptureGuidanceSeen(true);
@@ -885,22 +855,6 @@ const DermatologyApp = () => {
     gaEvent('camera_stopped', { step });
   };
 
-  const activateIdentityLockThen = (next) => {
-    setIdentityLockEnabled(false);
-    setIdentityLockActivating(true);
-    gaEvent('identity_lock_activation_started', { source: 'capture' });
-
-    // Overlay component will call onComplete
-    const complete = () => {
-      setIdentityLockActivating(false);
-      setIdentityLockEnabled(true);
-      gaEvent('identity_lock_activated', { source: 'capture' });
-      next?.();
-    };
-
-    return complete;
-  };
-
   const capturePhoto = async () => {
     gaEvent('camera_capture_clicked', { step });
     setCaptureSupportMessage(null);
@@ -920,7 +874,6 @@ const DermatologyApp = () => {
       const ctx = canvas.getContext('2d');
       ctx.drawImage(video, 0, 0);
 
-      // Face check
       const faceCheck = await detectFaceInImageElement(canvas);
       if (!faceCheck.ok) {
         const result = registerFaceFailure();
@@ -933,7 +886,6 @@ const DermatologyApp = () => {
       clearFaceFailures();
       const imageData = canvas.toDataURL('image/jpeg');
 
-      // Quality checks (brightness / blur / framing)
       try {
         const q = await validateCapturedImage({
           dataUrl: imageData,
@@ -943,27 +895,28 @@ const DermatologyApp = () => {
         if (!q.ok) {
           gaEvent('retake_requested', { source: 'camera', reason: q.code });
           showSupportiveRetake(q.message);
-          // Keep camera open so they can retry
           return;
         }
-      } catch (e) {
-        // If quality checks fail unexpectedly, do not block; proceed cautiously.
+      } catch {
         gaEvent('quality_check_soft_pass', { source: 'camera' });
       }
 
       setCapturedImage(imageData);
       stopCamera();
 
-      // Identity Lock overlay, then proceed to questions
-      const onComplete = activateIdentityLockThen(() => {
-        setStep('questions');
-      });
-
-      // mount overlay; it will call onComplete automatically
+      setIdentityLockEnabled(false);
       setIdentityLockActivating(true);
-      window.setTimeout(() => onComplete(), 4200);
+      gaEvent('identity_lock_activation_started', { source: 'capture' });
 
       gaEvent('selfie_captured', { source: 'camera' });
+
+      // overlay ends itself; after it completes, move forward
+      setTimeout(() => {
+        setIdentityLockActivating(false);
+        setIdentityLockEnabled(true);
+        gaEvent('identity_lock_activated', { source: 'overlay' });
+        setStep('questions');
+      }, 4200);
     }
   };
 
@@ -995,7 +948,6 @@ const DermatologyApp = () => {
 
       clearFaceFailures();
 
-      // Quality checks (brightness / blur / framing)
       try {
         const q = await validateCapturedImage({
           dataUrl,
@@ -1007,21 +959,24 @@ const DermatologyApp = () => {
           showSupportiveRetake(q.message);
           return;
         }
-      } catch (e2) {
+      } catch {
         gaEvent('quality_check_soft_pass', { source: 'upload' });
       }
 
       setCapturedImage(dataUrl);
 
-      // Identity Lock overlay, then proceed to questions
-      const onComplete = activateIdentityLockThen(() => {
-        setStep('questions');
-      });
-
+      setIdentityLockEnabled(false);
       setIdentityLockActivating(true);
-      window.setTimeout(() => onComplete(), 4200);
+      gaEvent('identity_lock_activation_started', { source: 'upload' });
 
       gaEvent('selfie_uploaded', { source: 'upload' });
+
+      setTimeout(() => {
+        setIdentityLockActivating(false);
+        setIdentityLockEnabled(true);
+        gaEvent('identity_lock_activated', { source: 'overlay' });
+        setStep('questions');
+      }, 4200);
     };
     reader.readAsDataURL(file);
   };
@@ -1032,7 +987,6 @@ const DermatologyApp = () => {
       showSupportiveRetake('Please answer all required questions so Dr. Lazuk can tailor your analysis.');
       return;
     }
-
     gaEvent('questions_submitted', { ageRange, primaryConcern });
     setStep('email');
   };
@@ -1078,7 +1032,6 @@ const DermatologyApp = () => {
         throw new Error(msg);
       }
 
-      // Reset reflection/agency for new results
       setReflectionSeen(false);
       setAgencyChoice(null);
 
@@ -1155,12 +1108,7 @@ const DermatologyApp = () => {
       const data = await res.json();
 
       if (!res.ok || !data.ok) {
-        console.error('ask-dr-lazuk error:', data);
-
-        gaEvent('chat_error', {
-          message: String(data?.message || 'backend_error').slice(0, 120)
-        });
-
+        gaEvent('chat_error', { message: String(data?.message || 'backend_error').slice(0, 120) });
         setChatMessages((prev) => [
           ...prev,
           {
@@ -1178,9 +1126,7 @@ const DermatologyApp = () => {
       setChatMessages((prev) => [...prev, { role: 'assistant', content: data.reply }]);
     } catch (error) {
       console.error('Chat error:', error);
-
       gaEvent('chat_error', { message: 'network_or_exception' });
-
       setChatMessages((prev) => [
         ...prev,
         {
@@ -1215,9 +1161,7 @@ const DermatologyApp = () => {
 
   useEffect(() => {
     return () => {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
-      }
+      if (streamRef.current) streamRef.current.getTracks().forEach((track) => track.stop());
     };
   }, []);
 
@@ -1231,9 +1175,85 @@ const DermatologyApp = () => {
     ].filter((x) => !!x.url);
   }, [analysisReport]);
 
+  const handleShare = async ({ url, label }) => {
+    if (!reflectionSeen) {
+      gaEvent("share_blocked_before_reflection", { label });
+      showToast("Take your time — sharing becomes available after you’ve read Dr. Lazuk’s note.");
+      return;
+    }
+
+    const shareText = buildShareText({ label });
+    gaEvent("share_clicked", { label });
+
+    // Prefer native share if possible
+    try {
+      // If share supports files, share the image itself
+      if (navigator?.canShare) {
+        let file = null;
+        const filename = `skindoctor_future_story_${label.replace(/\s+/g, "_").toLowerCase()}.jpg`;
+
+        try {
+          if (String(url).startsWith("data:")) file = await dataUrlToFile(url, filename);
+          else file = await fetchUrlToFile(url, filename);
+        } catch (e) {
+          // CORS likely blocked; fall back to text-only share
+          file = null;
+        }
+
+        if (file && navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            files: [file],
+            title: "SkinDoctor.ai — Future Story",
+            text: shareText
+          });
+          gaEvent("share_success", { label, mode: "file" });
+          return;
+        }
+      }
+
+      if (navigator?.share) {
+        await navigator.share({
+          title: "SkinDoctor.ai — Future Story",
+          text: shareText
+        });
+        gaEvent("share_success", { label, mode: "text" });
+        return;
+      }
+    } catch (err) {
+      // fall through to clipboard
+    }
+
+    const ok = await safeCopyToClipboard(shareText);
+    gaEvent("share_fallback", { label, copied: ok ? 1 : 0 });
+    showToast(ok ? "Share text copied to clipboard." : "Copy failed—please select and copy manually.");
+  };
+
+  const handleCopyImageLink = async ({ url, label }) => {
+    if (!reflectionSeen) {
+      gaEvent("copy_link_blocked_before_reflection", { label });
+      showToast("Take your time — copying becomes available after you’ve read Dr. Lazuk’s note.");
+      return;
+    }
+    const ok = await safeCopyToClipboard(String(url));
+    gaEvent("copy_image_link", { label, copied: ok ? 1 : 0 });
+    showToast(ok ? "Image link copied." : "Copy failed—please select and copy manually.");
+  };
+
+  const handleSave = async ({ url, label }) => {
+    if (!reflectionSeen) {
+      gaEvent("save_blocked_before_reflection", { label });
+      showToast("Take your time — saving becomes available after you’ve read Dr. Lazuk’s note.");
+      return;
+    }
+    gaEvent("save_clicked", { label });
+    const filename = `skindoctor_future_story_${label.replace(/\s+/g, "_").toLowerCase()}.jpg`;
+    const ok = await downloadImage(url, filename);
+    gaEvent("save_complete", { label, openedNewTab: ok ? 0 : 1 });
+    showToast(ok ? "Saved." : "Opened in a new tab (download may depend on your device).");
+  };
+
   return (
     <div className="min-h-screen bg-white">
-      {/* Identity Lock Activation Overlay */}
       {identityLockActivating && (
         <IdentityLockOverlay
           onComplete={() => {
@@ -1252,6 +1272,13 @@ const DermatologyApp = () => {
           }
           onClose={() => setIdentityLockModalOpen(false)}
         />
+      )}
+
+      {/* Tiny toast for share/save */}
+      {shareToast && (
+        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white px-5 py-3 text-sm shadow-lg">
+          {shareToast}
+        </div>
       )}
 
       <div className="bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 text-white shadow-lg">
@@ -1332,7 +1359,6 @@ const DermatologyApp = () => {
                   <h2 className="text-2xl font-bold text-gray-900">Virtual Skin Analysis</h2>
                 </div>
 
-                {/* Disclaimer */}
                 <div className="bg-gray-100 border border-gray-300 p-4 mb-4 flex items-start gap-3">
                   <Info className="text-gray-700 flex-shrink-0 mt-0.5" size={20} />
                   <p className="text-sm text-gray-800">
@@ -1343,7 +1369,6 @@ const DermatologyApp = () => {
                   </p>
                 </div>
 
-                {/* Clinical-Style Intake Instructions (Locked) */}
                 <div className="bg-gray-50 border border-gray-300 p-6 mb-6">
                   <div className="flex items-start gap-3">
                     <Info className="text-gray-700 flex-shrink-0 mt-0.5" size={20} />
@@ -1373,7 +1398,11 @@ const DermatologyApp = () => {
 
                       {!captureGuidanceSeen && (
                         <button
-                          onClick={beginCapture}
+                          onClick={() => {
+                            setCaptureGuidanceSeen(true);
+                            setCaptureSupportMessage(null);
+                            gaEvent('capture_guidance_seen', { step: 'photo' });
+                          }}
                           className="mt-5 bg-gray-900 text-white px-6 py-3 font-bold hover:bg-gray-800"
                           type="button"
                         >
@@ -1384,7 +1413,6 @@ const DermatologyApp = () => {
                   </div>
                 </div>
 
-                {/* Supportive Retake / Guidance Message */}
                 {captureSupportMessage && (
                   <div className="bg-white border border-gray-300 p-5 mb-6">
                     <p className="text-sm text-gray-800 whitespace-pre-wrap">
@@ -1393,7 +1421,6 @@ const DermatologyApp = () => {
                   </div>
                 )}
 
-                {/* Capture options gated until they’ve seen the intake section */}
                 {!captureGuidanceSeen && (
                   <div className="text-sm text-gray-600">
                     Please read the preparation guidance above to ensure the most accurate results.
@@ -1462,12 +1489,9 @@ const DermatologyApp = () => {
             {step === 'questions' && capturedImage && (
               <div className="space-y-6">
                 <div className="relative max-w-md mx-auto">
-                  <img
-                    src={capturedImage}
-                    alt="Your photo"
-                    className="w-full border border-gray-300"
-                  />
+                  <img src={capturedImage} alt="Your photo" className="w-full border border-gray-300" />
                 </div>
+
                 <div className="max-w-2xl mx-auto space-y-6">
                   <div className="bg-gray-50 border border-gray-300 p-6">
                     <h3 className="font-bold text-gray-900 mb-4 text-lg">Tell Us About Your Skin</h3>
@@ -1491,6 +1515,7 @@ const DermatologyApp = () => {
                           <option value="60+">60+</option>
                         </select>
                       </div>
+
                       <div>
                         <label className="block text-sm font-bold text-gray-900 mb-2">
                           Primary Concern *
@@ -1510,6 +1535,7 @@ const DermatologyApp = () => {
                           <option value="dryness">Dryness</option>
                         </select>
                       </div>
+
                       <div>
                         <label className="block text-sm font-bold text-gray-900 mb-2">
                           Question (Optional)
@@ -1523,6 +1549,7 @@ const DermatologyApp = () => {
                       </div>
                     </div>
                   </div>
+
                   <div className="flex gap-3">
                     <button
                       onClick={resetAnalysis}
@@ -1551,9 +1578,10 @@ const DermatologyApp = () => {
                     <h3 className="text-2xl font-bold">Get Your Analysis</h3>
                   </div>
                   <p className="text-gray-300 mb-6">
-                    Enter your first name and email to receive your complete cosmetic report with
-                    product and treatment recommendations. A copy will also be sent to our clinic team.
+                    Enter your first name and email to receive your complete cosmetic report.
+                    A copy will also be sent to our clinic team.
                   </p>
+
                   <div className="space-y-4">
                     <input
                       type="text"
@@ -1563,7 +1591,6 @@ const DermatologyApp = () => {
                       placeholder="First name"
                       className="w-full px-4 py-3 bg-white text-gray-900 border-2"
                     />
-
                     <input
                       type="email"
                       value={userEmail}
@@ -1572,6 +1599,7 @@ const DermatologyApp = () => {
                       placeholder="your.email@example.com"
                       className="w-full px-4 py-3 bg-white text-gray-900 border-2"
                     />
+
                     <button
                       onClick={handleEmailSubmit}
                       disabled={emailSubmitting}
@@ -1605,7 +1633,7 @@ const DermatologyApp = () => {
                   </button>
                 </div>
 
-                {/* Aging Previews FIRST (if available) */}
+                {/* Aging previews FIRST */}
                 {agingImages.length > 0 && (
                   <div className="bg-white border border-gray-200 p-6">
                     <h4 className="text-xl font-bold text-gray-900 mb-2">
@@ -1618,8 +1646,6 @@ const DermatologyApp = () => {
                     <div className="grid md:grid-cols-2 gap-4">
                       {agingImages.map((img) => (
                         <div key={img.key} className="relative border border-gray-200 bg-gray-50 p-3">
-                          {/* TikTok watermark placement (top-left) handled in backend if desired;
-                              Identity Lock™ badge is top-left as requested */}
                           <IdentityLockBadge
                             placement="top-left"
                             onClick={() => {
@@ -1627,30 +1653,81 @@ const DermatologyApp = () => {
                               setIdentityLockModalOpen(true);
                             }}
                           />
+
+                          {/* Watermark overlay (UI failsafe) */}
+                          <WatermarkOverlay />
+
                           <img
                             src={img.url}
                             alt={img.label}
                             className="w-full border border-gray-200"
                             onLoad={() => gaEvent('aging_image_loaded', { key: img.key })}
                           />
+
                           <p className="text-sm font-bold text-gray-900 mt-3">{img.label}</p>
+
+                          {/* Share/Save controls (ethically gated) */}
+                          <div className="mt-3 grid grid-cols-3 gap-2">
+                            <button
+                              onClick={() => handleShare({ url: img.url, label: img.label })}
+                              className={`py-2 text-sm font-bold border ${
+                                reflectionSeen
+                                  ? "bg-gray-900 text-white hover:bg-gray-800 border-gray-900"
+                                  : "bg-gray-200 text-gray-500 border-gray-300 cursor-not-allowed"
+                              }`}
+                              type="button"
+                            >
+                              Share
+                            </button>
+
+                            <button
+                              onClick={() => handleSave({ url: img.url, label: img.label })}
+                              className={`py-2 text-sm font-bold border ${
+                                reflectionSeen
+                                  ? "bg-white text-gray-900 hover:bg-gray-50 border-gray-300"
+                                  : "bg-gray-200 text-gray-500 border-gray-300 cursor-not-allowed"
+                              }`}
+                              type="button"
+                            >
+                              Save
+                            </button>
+
+                            <button
+                              onClick={() => handleCopyImageLink({ url: img.url, label: img.label })}
+                              className={`py-2 text-sm font-bold border ${
+                                reflectionSeen
+                                  ? "bg-white text-gray-900 hover:bg-gray-50 border-gray-300"
+                                  : "bg-gray-200 text-gray-500 border-gray-300 cursor-not-allowed"
+                              }`}
+                              type="button"
+                            >
+                              Copy
+                            </button>
+                          </div>
+
+                          {!reflectionSeen && (
+                            <p className="mt-2 text-xs text-gray-600">
+                              Share/Save unlock after you’ve read Dr. Lazuk’s note below.
+                            </p>
+                          )}
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
 
-                {/* Reflection Layer ALWAYS after images (even if images missing, still show) */}
+                {/* Reflection Layer always after images */}
                 <ReflectionLayer
                   onSeen={() => {
                     if (!reflectionSeen) {
                       setReflectionSeen(true);
                       gaEvent('reflection_seen', { step: 'results' });
+                      showToast("Thank you. You can now save or share if you choose.");
                     }
                   }}
                 />
 
-                {/* Agency Layer ONLY after Reflection is seen */}
+                {/* Agency Layer only after Reflection */}
                 {reflectionSeen && (
                   <AgencyLayer
                     onChoose={(choice) => {
@@ -1660,36 +1737,7 @@ const DermatologyApp = () => {
                   />
                 )}
 
-                {/* Fitzpatrick Card (Allowed; but keep calm and non-judgmental) */}
-                {(analysisReport.fitzpatrickType || analysisReport.fitzpatrickSummary) && (
-                  <div className="bg-amber-50 border-2 border-amber-200 p-6">
-                    <h4 className="text-lg font-bold text-amber-900 mb-2">
-                      Fitzpatrick Skin Type (Cosmetic Estimate)
-                    </h4>
-                    {analysisReport.fitzpatrickType && (
-                      <p className="font-semibold text-amber-900 mb-1">
-                        Type {analysisReport.fitzpatrickType}
-                      </p>
-                    )}
-                    {analysisReport.fitzpatrickSummary && (
-                      <p className="text-sm text-amber-900 whitespace-pre-wrap">
-                        {analysisReport.fitzpatrickSummary}
-                      </p>
-                    )}
-                    <p className="mt-3 text-xs text-amber-800">
-                      This is a visual, cosmetic estimate only and is not a medical diagnosis.
-                    </p>
-                  </div>
-                )}
-
-                {/* Report (always allowed) */}
-                <div className="bg-white border-2 border-gray-900 p-8">
-                  <div className="prose prose-sm max-w-none text-gray-700 whitespace-pre-wrap">
-                    {analysisReport.report}
-                  </div>
-                </div>
-
-                {/* Recommendations are ONLY visible after Reflection is seen (Do Not Break) */}
+                {/* Recommendations only after Reflection */}
                 {reflectionSeen && (
                   <div className="bg-white border-2 border-gray-900 p-8">
                     <h4 className="font-bold text-gray-900 mb-4 text-2xl">Recommended Products</h4>
@@ -1761,11 +1809,10 @@ const DermatologyApp = () => {
                   </div>
                 )}
 
-                {/* Agency content hint (optional) */}
                 {reflectionSeen && agencyChoice === "observe" && (
                   <div className="bg-gray-50 border border-gray-200 p-6">
                     <p className="text-sm text-gray-700">
-                      If you’d like, you can simply bookmark this page or return to your email later.
+                      If you’d like, you can simply return to your email later.
                       There is no urgency — and no required schedule.
                     </p>
                   </div>
@@ -1788,17 +1835,10 @@ const DermatologyApp = () => {
               </div>
               <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50">
                 {chatMessages.map((msg, i) => (
-                  <div
-                    key={i}
-                    className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                  >
-                    <div
-                      className={`max-w-[80%] p-4 ${
-                        msg.role === 'user'
-                          ? 'bg-gray-900 text-white'
-                          : 'bg-white border text-gray-900'
-                      }`}
-                    >
+                  <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[80%] p-4 ${
+                      msg.role === 'user' ? 'bg-gray-900 text-white' : 'bg-white border text-gray-900'
+                    }`}>
                       <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
                     </div>
                   </div>
@@ -1878,6 +1918,7 @@ const DermatologyApp = () => {
 };
 
 export default DermatologyApp;
+
 
 
 
