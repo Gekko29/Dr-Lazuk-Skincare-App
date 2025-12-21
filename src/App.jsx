@@ -762,7 +762,7 @@ const DermatologyApp = () => {
     }
   ];
 
-  const estheticServices = [
+const estheticServices = [
     {
       name: 'Luxury Beauty Facial (1.5-Hour Comprehensive)',
       description:
@@ -790,6 +790,76 @@ const DermatologyApp = () => {
       recommendFor: ['texture', 'dryness', 'aging'],
       whyRecommended:
         'Best when you feel heavy, puffy, or sluggish in the body, or want a non-invasive sculpting and smoothing option with no downtime.'
+    },
+    {
+      name: 'Candela eMatrix® RF Skin Rejuvenation',
+      description:
+        'Fractional radiofrequency treatment that targets fine lines, acne scars, large pores, and overall skin texture while being safe for many skin tones.',
+      benefits: [
+        'Softening of fine lines and wrinkles',
+        'Improved acne scars and texture',
+        'Smaller-looking pores',
+        'Gradual collagen remodeling'
+      ],
+      recommendFor: ['aging', 'texture', 'acne', 'pigmentation'],
+      whyRecommended:
+        'Recommended when you want more than a facial can offer—especially for long-standing texture, scars, or fine lines—without committing to aggressive lasers.'
+    },
+    {
+      name: 'PRP Skin Rejuvenation',
+      description:
+        'Platelet-rich plasma (PRP) from your own blood is used to stimulate collagen, improve texture, and rejuvenate delicate areas such as under the eyes.',
+      benefits: [
+        'Boosts collagen and elasticity',
+        'Improves under-eye crepiness and dullness',
+        'Softens acne scars and fine lines',
+        'Longer-term regenerative benefits'
+      ],
+      recommendFor: ['aging', 'texture', 'pigmentation'],
+      whyRecommended:
+        'Ideal when you prefer a regenerative, “from your own body” approach to aging and texture, especially around the eyes and areas that look thin or tired.'
+    },
+    {
+      name: 'PRP Hair Restoration',
+      description:
+        'PRP injections into the scalp to support hair follicles, improve hair density, and slow shedding in early to moderate thinning.',
+      benefits: [
+        'Supports hair follicle health',
+        'Improves hair density over time',
+        'Can reduce shedding in early thinning',
+        'Natural option using your own plasma'
+      ],
+      recommendFor: ['aging'],
+      whyRecommended:
+        'Suggested if you are noticing early hair thinning or widening part lines and want to intervene before the hair loss becomes advanced.'
+    },
+    {
+      name: 'HIEMT (High-Intensity Electromagnetic Therapy)',
+      description:
+        'Non-invasive treatment that contracts muscles thousands of times per session to improve core strength, tone, and body contour in areas like the abdomen and buttocks.',
+      benefits: [
+        'Improved muscle tone and strength',
+        'More defined core or glute area',
+        'Helps with posture and support',
+        'Pairs well with lifestyle changes'
+      ],
+      recommendFor: ['aging', 'texture', 'dryness'],
+      whyRecommended:
+        'Recommended when you want a stronger, more sculpted look in combination with healthy movement, without surgery or downtime.'
+    },
+    {
+      name: 'Beauty Injectables (Botox®, JUVÉDERM® Fillers, PRP)',
+      description:
+        'Customized injectable treatments to soften expression lines, restore volume, and enhance facial balance using Botox®, JUVÉDERM® fillers, and/or PRP.',
+      benefits: [
+        'Softens frown lines and crow’s feet',
+        'Restores or enhances cheek and lip volume',
+        'Improves facial harmony and balance',
+        'Can look very natural when done conservatively'
+      ],
+      recommendFor: ['aging', 'texture', 'pigmentation'],
+      whyRecommended:
+        'Best when lines and volume loss are becoming visible and you want targeted, long-lasting improvements with a medical, artistic approach.'
     }
   ];
 
