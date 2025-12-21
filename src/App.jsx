@@ -1921,7 +1921,3 @@ export default DermatologyApp;
 
 
 
-
-
-
-
