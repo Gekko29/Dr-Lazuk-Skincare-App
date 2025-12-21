@@ -762,7 +762,7 @@ const DermatologyApp = () => {
     }
   ];
 
-const estheticServices = [
+  const estheticServices = [
     {
       name: 'Luxury Beauty Facial (1.5-Hour Comprehensive)',
       description:
@@ -878,12 +878,6 @@ const estheticServices = [
 
   const getRecommendedServices = (concern) => {
     return estheticServices.filter((s) => s.recommendFor.includes(concern)).slice(0, 2);
-  };
-
-  const beginCapture = () => {
-    setCaptureGuidanceSeen(true);
-    setCaptureSupportMessage(null);
-    gaEvent('capture_guidance_seen', { step: 'photo' });
   };
 
   const showSupportiveRetake = (message) => {
@@ -1383,6 +1377,7 @@ const estheticServices = [
                   ? 'bg-gray-900 text-white'
                   : 'text-gray-700 hover:bg-gray-200'
               }`}
+              type="button"
             >
               <Camera size={18} />
               <span>Skin Analysis</span>
@@ -1397,6 +1392,7 @@ const estheticServices = [
                   ? 'bg-gray-900 text-white'
                   : 'text-gray-700 hover:bg-gray-200'
               }`}
+              type="button"
             >
               <MessageCircle size={18} />
               <span>Ask Dr. Lazuk</span>
@@ -1411,6 +1407,7 @@ const estheticServices = [
                   ? 'bg-gray-900 text-white'
                   : 'text-gray-700 hover:bg-gray-200'
               }`}
+              type="button"
             >
               <BookOpen size={18} />
               <span>Services</span>
