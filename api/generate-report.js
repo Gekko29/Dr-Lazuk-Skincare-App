@@ -1258,10 +1258,6 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
             />
           </div>
 
-          ${(fitzpatrickType || fitzpatrickSummary) ? `
-          <div style="border: 1px solid #FCD34D; background-color: #FFFBEB; padding: 12px 16px; margin-bottom: 16px; border-radius: 8px;">
-            <h2 style="font-size: 14px; font-weight: 700; color: #92400E; margin: 0 0 4px 0;">Fitzpatrick Skin Type (Cosmetic Estimate)</h2>
-            ${fitzpatrickType ? `<p style="font-size: 13px; font-weight: 600; color: #92400E; margin: 0 0 4px 0;">Type ${escapeHtml(fitzpatrickType)}</p>` : ""}
             ${fitzpatrickSummary ? `<p style="font-size: 13px; color: #92400E; margin: 0;">${escapeHtml(fitzpatrickSummary)}</p>` : ""}
             ${fitzpatrickType ? renderFitzpatrickScaleHtml(fitzpatrickType) : ""}
             <p style="font-size: 11px; color: #92400E; margin-top: 8px;">This is a visual, cosmetic estimate only and is not a medical diagnosis.</p>
@@ -1376,5 +1372,6 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
     });
   }
 };
+
 
 
