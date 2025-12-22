@@ -1738,96 +1738,13 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                   </button>
                 </div>
 
-                {/* Aging previews FIRST */}
-                {agingImages.length > 0 && (
-                  <div className="bg-white border border-gray-200 p-6">
-                    <h4 className="text-xl font-bold text-gray-900 mb-2">
-                      Your Future Story (Cosmetic Projection)
-                    </h4>
-                    <p className="text-sm text-gray-700 mb-6">
-                      These are visual projections anchored to your selfie. Take a moment before reading anything else.
-                    </p>
-
-                    <div className="grid md:grid-cols-2 gap-4">
-                      {agingImages.map((img) => (
-                        <div key={img.key} className="relative border border-gray-200 bg-gray-50 p-3">
-                          <IdentityLockBadge
-                            placement="top-left"
-                            onClick={() => {
-                              gaEvent('identity_lock_badge_clicked', { key: img.key });
-                              setIdentityLockModalOpen(true);
-                            }}
-                          />
-
-                          {/* Watermark overlay (UI failsafe) */}
-                          <WatermarkOverlay />
-
-                          <img
-                            src={img.url}
-                            alt={img.label}
-                            className="w-full border border-gray-200"
-                            onLoad={() => gaEvent('aging_image_loaded', { key: img.key })}
-                          />
-
-                          <p className="text-sm font-bold text-gray-900 mt-3">{img.label}</p>
-
-                          {/* Share/Save controls (ethically gated) */}
-                          <div className="mt-3 grid grid-cols-3 gap-2">
-                            <button
-                              onClick={() => handleShare({ url: img.url, label: img.label })}
-                              className={`py-2 text-sm font-bold border ${
-                                reflectionSeen
-                                  ? "bg-gray-900 text-white hover:bg-gray-800 border-gray-900"
-                                  : "bg-gray-200 text-gray-500 border-gray-300 cursor-not-allowed"
-                              }`}
-                              type="button"
-                            >
-                              Share
-                            </button>
-
-                            <button
-                              onClick={() => handleSave({ url: img.url, label: img.label })}
-                              className={`py-2 text-sm font-bold border ${
-                                reflectionSeen
-                                  ? "bg-white text-gray-900 hover:bg-gray-50 border-gray-300"
-                                  : "bg-gray-200 text-gray-500 border-gray-300 cursor-not-allowed"
-                              }`}
-                              type="button"
-                            >
-                              Save
-                            </button>
-
-                            <button
-                              onClick={() => handleCopyImageLink({ url: img.url, label: img.label })}
-                              className={`py-2 text-sm font-bold border ${
-                                reflectionSeen
-                                  ? "bg-white text-gray-900 hover:bg-gray-50 border-gray-300"
-                                  : "bg-gray-200 text-gray-500 border-gray-300 cursor-not-allowed"
-                              }`}
-                              type="button"
-                            >
-                              Copy
-                            </button>
-                          </div>
-
-                          {!reflectionSeen && (
-                            <p className="mt-2 text-xs text-gray-600">
-                              Share/Save unlock after you’ve read Dr. Lazuk’s note below.
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Reflection Layer always after images */}
+                {/* Dr. Lazuk’s note (shown first) */}
                 <ReflectionLayer
                   onSeen={() => {
                     if (!reflectionSeen) {
                       setReflectionSeen(true);
                       gaEvent('reflection_seen', { step: 'results' });
-                      showToast("Thank you. You can now save or share if you choose.");
+                      showToast("Thank you. You can now explore your results.");
                     }
                   }}
                 />
@@ -1842,8 +1759,103 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                   />
                 )}
 
-                {/* Recommendations only after Reflection */}
-                {reflectionSeen && (
+                {reflectionSeen && !agencyChoice && (
+                  <div className="bg-gray-50 border border-gray-200 p-5">
+                    <p className="text-sm text-gray-700">
+                      Choose a path above. Nothing is required — this is here when you’re ready.
+                    </p>
+                  </div>
+                )}
+
+                {/* UNDERSTAND: Future story + report */}
+                {reflectionSeen && agencyChoice === 'understand' && (
+                  <>
+                    {agingImages.length > 0 && (
+                      <div className="bg-white border border-gray-200 p-6">
+                        <h4 className="text-xl font-bold text-gray-900 mb-2">
+                          Your Future Story (Cosmetic Projection)
+                        </h4>
+                        <p className="text-sm text-gray-700 mb-6">
+                          These are visual projections anchored to your selfie.
+                        </p>
+
+                        <div className="grid md:grid-cols-2 gap-4">
+                          {agingImages.map((img) => (
+                            <div key={img.key} className="relative border border-gray-200 bg-gray-50 p-3">
+                              <IdentityLockBadge
+                                placement="top-left"
+                                onClick={() => {
+                                  gaEvent('identity_lock_badge_clicked', { key: img.key });
+                                  setIdentityLockModalOpen(true);
+                                }}
+                              />
+
+                              {/* Watermark overlay (UI failsafe) */}
+                              <WatermarkOverlay />
+
+                              <img
+                                src={img.url}
+                                alt={img.label}
+                                className="w-full border border-gray-200"
+                                onLoad={() => gaEvent('aging_image_loaded', { key: img.key })}
+                              />
+
+                              <p className="text-sm font-bold text-gray-900 mt-3">{img.label}</p>
+
+                              <div className="mt-3 grid grid-cols-3 gap-2">
+                                <button
+                                  onClick={() => handleShare({ url: img.url, label: img.label })}
+                                  className="py-2 text-sm font-bold border bg-gray-900 text-white hover:bg-gray-800 border-gray-900"
+                                  type="button"
+                                >
+                                  Share
+                                </button>
+
+                                <button
+                                  onClick={() => handleSave({ url: img.url, label: img.label })}
+                                  className="py-2 text-sm font-bold border bg-white text-gray-900 hover:bg-gray-50 border-gray-300"
+                                  type="button"
+                                >
+                                  Save
+                                </button>
+
+                                <button
+                                  onClick={() => handleCopyImageLink({ url: img.url, label: img.label })}
+                                  className="py-2 text-sm font-bold border bg-white text-gray-900 hover:bg-gray-50 border-gray-300"
+                                  type="button"
+                                >
+                                  Copy
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="bg-white border border-gray-200 p-6">
+                      <h4 className="text-xl font-bold text-gray-900 mb-2">What I’m Seeing (Cosmetic Education)</h4>
+
+                      {(analysisReport?.fitzpatrickType || analysisReport?.fitzpatrickSummary) && (
+                        <div className="bg-gray-50 border border-gray-200 p-4 mb-4">
+                          <p className="text-sm text-gray-900 font-bold mb-1">
+                            Fitzpatrick Type: {analysisReport.fitzpatrickType || "—"}
+                          </p>
+                          {analysisReport.fitzpatrickSummary && (
+                            <p className="text-sm text-gray-700">{analysisReport.fitzpatrickSummary}</p>
+                          )}
+                        </div>
+                      )}
+
+                      <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                        {analysisReport?.report || "Your report is loading."}
+                      </p>
+                    </div>
+                  </>
+                )}
+
+                {/* GUIDANCE: products + treatments */}
+                {reflectionSeen && agencyChoice === 'guidance' && (
                   <div className="bg-white border-2 border-gray-900 p-8">
                     <h4 className="font-bold text-gray-900 mb-4 text-2xl">Recommended Products</h4>
                     <div className="grid md:grid-cols-3 gap-4 mb-8">
@@ -1914,7 +1926,8 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                   </div>
                 )}
 
-                {reflectionSeen && agencyChoice === "observe" && (
+                {/* OBSERVE */}
+                {reflectionSeen && agencyChoice === 'observe' && (
                   <div className="bg-gray-50 border border-gray-200 p-6">
                     <p className="text-sm text-gray-700">
                       If you’d like, you can simply return to your email later.
@@ -2023,6 +2036,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 };
 
 export default DermatologyApp;
+
 
 
 
