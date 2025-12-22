@@ -272,6 +272,7 @@ const detectFaceInImageElement = async (canvasEl) => {
       return { ok: true, faces };
     } catch (err) {
       console.error('FaceDetector error:', err);
+      // Soft pass if the browser FaceDetector errors (do not block conversion)
       return { ok: true, faces: null, softPass: true };
     }
   } else {
@@ -378,16 +379,13 @@ const validateCapturedImage = async ({ dataUrl, faces }) => {
 
   const { meanBrightness, gradVar } = computeBrightnessAndBlur(canvas);
 
-// Hard reject only if truly unusable
-if (meanBrightness < 40) {
-  return { ok: false, code: 'low_light', message: RETAKE_MESSAGES.low_light };
-}
+  // Hard reject only if truly unusable
+  if (meanBrightness < 40) {
+    return { ok: false, code: 'low_light', message: RETAKE_MESSAGES.low_light };
+  }
 
-// Optional: allow slightly dim images to pass (best for conversion)
-// You could still show a gentle warning in UI if you want,
-// but do NOT block analysis.
-
-  if (gradVar < 60) {
+  // Blur: keep conversion-friendly (less strict). Still blocks truly soft photos.
+  if (gradVar < 40) {
     return { ok: false, code: 'blurry', message: RETAKE_MESSAGES.blurry };
   }
 
@@ -402,6 +400,29 @@ if (meanBrightness < 40) {
   }
 
   return { ok: true };
+};
+
+/* ---------------------------------------
+   Helper: downscale data URL to reduce payload (keeps quality)
+--------------------------------------- */
+const downscaleDataUrl = async (dataUrl, maxW = 960, quality = 0.92) => {
+  const img = new Image();
+  await new Promise((res, rej) => {
+    img.onload = res;
+    img.onerror = rej;
+    img.src = dataUrl;
+  });
+
+  const scale = Math.min(1, maxW / img.width);
+  const w = Math.max(1, Math.floor(img.width * scale));
+  const h = Math.max(1, Math.floor(img.height * scale));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0, w, h);
+  return canvas.toDataURL('image/jpeg', quality);
 };
 
 /* ---------------------------------------
@@ -664,7 +685,11 @@ const downloadImage = async (urlOrDataUrl, filename) => {
 
 const buildShareText = ({ label }) => {
   // Ethical: avoid fear; focus on agency + education
-  return `I tried Dr. Lazuk’s Identity Lock™ cosmetic skin analysis. Here is my “Future Story” preview (${label}).\n\nThis is cosmetic education only—not medical advice.\n\nSkinDoctor.ai`;
+  return `I tried Dr. Lazuk’s Identity Lock™ cosmetic skin analysis. Here is my “Future Story” preview (${label}).
+
+This is cosmetic education only—not medical advice.
+
+SkinDoctor.ai`;
 };
 
 const DermatologyApp = () => {
@@ -891,7 +916,9 @@ const DermatologyApp = () => {
   };
 
   const showSupportiveRetake = (message) => {
-    setCaptureSupportMessage(`${message}\n\n${SUPPORTIVE_FOOTER_LINE}`);
+    setCaptureSupportMessage(`${message}
+
+${SUPPORTIVE_FOOTER_LINE}`);
   };
 
   const startCamera = async () => {
@@ -958,7 +985,14 @@ const DermatologyApp = () => {
       }
 
       clearFaceFailures();
-      const imageData = canvas.toDataURL('image/jpeg');
+      let imageData = canvas.toDataURL('image/jpeg');
+
+      // Downscale for payload + consistency
+      try {
+        imageData = await downscaleDataUrl(imageData, 960, 0.92);
+      } catch {
+        // ignore if downscale fails
+      }
 
       try {
         const q = await validateCapturedImage({
@@ -978,19 +1012,12 @@ const DermatologyApp = () => {
       setCapturedImage(imageData);
       stopCamera();
 
+      // Identity Lock overlay is the single source of completion (no extra timers)
       setIdentityLockEnabled(false);
       setIdentityLockActivating(true);
       gaEvent('identity_lock_activation_started', { source: 'capture' });
 
       gaEvent('selfie_captured', { source: 'camera' });
-
-      // overlay ends itself; after it completes, move forward
-      setTimeout(() => {
-        setIdentityLockActivating(false);
-        setIdentityLockEnabled(true);
-        gaEvent('identity_lock_activated', { source: 'overlay' });
-        setStep('questions');
-      }, 4200);
     }
   };
 
@@ -1005,22 +1032,32 @@ const DermatologyApp = () => {
     if (lock.locked) {
       gaEvent('face_locked', { step });
       showSupportiveRetake(lock.message);
+      // allow re-selecting same file later
+      try { e.target.value = ""; } catch {}
       return;
     }
 
     const reader = new FileReader();
     reader.onload = async (event) => {
-      const dataUrl = event.target.result;
+      let dataUrl = event.target.result;
 
       const faceCheck = await detectFaceFromDataUrl(dataUrl);
       if (!faceCheck.ok) {
         const result = registerFaceFailure();
         gaEvent('face_not_detected', { source: 'upload', lockedNow: !!result.lockedNow });
         showSupportiveRetake(result.message);
+        try { e.target.value = ""; } catch {}
         return;
       }
 
       clearFaceFailures();
+
+      // Downscale uploads too
+      try {
+        dataUrl = await downscaleDataUrl(dataUrl, 960, 0.92);
+      } catch {
+        // ignore if downscale fails
+      }
 
       try {
         const q = await validateCapturedImage({
@@ -1031,6 +1068,7 @@ const DermatologyApp = () => {
         if (!q.ok) {
           gaEvent('retake_requested', { source: 'upload', reason: q.code });
           showSupportiveRetake(q.message);
+          try { e.target.value = ""; } catch {}
           return;
         }
       } catch {
@@ -1045,12 +1083,8 @@ const DermatologyApp = () => {
 
       gaEvent('selfie_uploaded', { source: 'upload' });
 
-      setTimeout(() => {
-        setIdentityLockActivating(false);
-        setIdentityLockEnabled(true);
-        gaEvent('identity_lock_activated', { source: 'overlay' });
-        setStep('questions');
-      }, 4200);
+      // allow selecting the same file again later
+      try { e.target.value = ""; } catch {}
     };
     reader.readAsDataURL(file);
   };
@@ -1334,6 +1368,7 @@ const DermatologyApp = () => {
             setIdentityLockActivating(false);
             setIdentityLockEnabled(true);
             gaEvent('identity_lock_activated', { source: 'overlay' });
+            setStep('questions');
           }}
         />
       )}
@@ -1664,7 +1699,7 @@ const DermatologyApp = () => {
                       type="text"
                       value={firstName}
                       onChange={(e) => setFirstName(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && handleEmailSubmit()}
+                      onKeyDown={(e) => e.key === 'Enter' && handleEmailSubmit()}
                       placeholder="First name"
                       className="w-full px-4 py-3 bg-white text-gray-900 border-2"
                     />
@@ -1672,7 +1707,7 @@ const DermatologyApp = () => {
                       type="email"
                       value={userEmail}
                       onChange={(e) => setUserEmail(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && handleEmailSubmit()}
+                      onKeyDown={(e) => e.key === 'Enter' && handleEmailSubmit()}
                       placeholder="your.email@example.com"
                       className="w-full px-4 py-3 bg-white text-gray-900 border-2"
                     />
@@ -1934,7 +1969,7 @@ const DermatologyApp = () => {
                     type="text"
                     value={inputMessage}
                     onChange={(e) => setInputMessage(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                    onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
                     placeholder="Ask a cosmetic skincare question..."
                     className="flex-1 px-4 py-3 border-2 focus:outline-none focus:border-gray-900"
                   />
@@ -1995,6 +2030,7 @@ const DermatologyApp = () => {
 };
 
 export default DermatologyApp;
+
 
 
 
