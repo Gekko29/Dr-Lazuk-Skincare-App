@@ -336,7 +336,7 @@ function checkCooldownOrThrow(email) {
 }
 
 // -------------------------
-// UI helper: Fitzpatrick line
+// UI helper: Fitzpatrick line (INTERNAL USE ONLY)
 // -------------------------
 function renderFitzpatrickScaleHtml(type) {
   if (!type) return "";
@@ -645,6 +645,7 @@ async function generateAgingPreviewImages({ ageRange, primaryConcern, fitzpatric
     return { noChange10: null, noChange20: null, withCare10: null, withCare20: null };
   }
 }
+
 // -------------------------
 // HTML block: Aging Preview Images (EMAIL)
 // -------------------------
@@ -756,6 +757,7 @@ async function generateEditsFromSelfie({ photoDataUrl, prompts, size = "1024x102
 
   return { noChange10, noChange20, withCare10, withCare20 };
 }
+
 // -------------------------
 // Vision analysis (enforced)
 // -------------------------
@@ -1172,8 +1174,7 @@ ${JSON.stringify(imageAnalysis || {}, null, 2)}
 Important: Use only selfie details that appear in the provided context. Do NOT invent specifics.
 `.trim();
 
-    // Model choice: your call requested. Use env overrides, otherwise sensible defaults:
-    // - Letter: strong text model (or fallback)
+    // Model choice
     const textModel = process.env.OPENAI_TEXT_MODEL || "gpt-4.1-mini";
 
     let full = "";
@@ -1240,6 +1241,7 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
       (closing ? textToHtmlParagraphs(closing) : "");
 
     // Visitor email HTML — selfie image ALWAYS included (mandatory)
+    // NOTE: Fitzpatrick results are NOT rendered to the visitor.
     const visitorHtml = `
       <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111827; line-height: 1.5; background-color: #F9FAFB; padding: 20px;">
         <div style="max-width: 680px; margin: 0 auto; background-color: #FFFFFF; border-radius: 12px; border: 1px solid #E5E7EB; padding: 20px 24px;">
@@ -1257,8 +1259,10 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
               style="max-width: 240px; width: 100%; border-radius: 10px; border: 1px solid #E5E7EB; display: block;"
             />
           </div>
-            <p style="font-size: 11px; color: #92400E; margin-top: 8px;">This is a visual, cosmetic estimate only and is not a medical diagnosis.</p>
-          </div>` : ""}
+
+          <p style="font-size: 11px; color: #92400E; margin: 0 0 10px 0;">
+            This is a visual, cosmetic estimate only and is not a medical diagnosis.
+          </p>
 
           <div style="margin-top: 10px;">
             ${letterHtmlBody}
@@ -1369,6 +1373,7 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
     });
   }
 };
+
 
 
 
