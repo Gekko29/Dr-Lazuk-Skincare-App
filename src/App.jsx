@@ -312,25 +312,30 @@ const computeBrightnessAndBlur = (canvas) => {
   const imgData = ctx.getImageData(0, 0, width, height);
   const data = imgData.data;
 
-  let sum = 0;
-  const n = width * height;
-
-  let gradSum = 0;
-  let gradSumSq = 0;
-
   const getL = (idx) => {
     const r = data[idx];
     const g = data[idx + 1];
     const b = data[idx + 2];
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b; // 0..255
   };
 
+  // Sample stride for speed
   const step = 2;
+
+  let sumL = 0;
+  let count = 0;
+
+  let gradSum = 0;
+  let gradSumSq = 0;
+  let gradCount = 0;
+
   for (let y = 1; y < height - 1; y += step) {
     for (let x = 1; x < width - 1; x += step) {
       const i = (y * width + x) * 4;
+
       const l = getL(i);
-      sum += l;
+      sumL += l;
+      count++;
 
       const iL = (y * width + (x - 1)) * 4;
       const iR = (y * width + (x + 1)) * 4;
@@ -343,14 +348,14 @@ const computeBrightnessAndBlur = (canvas) => {
 
       gradSum += gmag;
       gradSumSq += gmag * gmag;
+      gradCount++;
     }
   }
 
-  const samples = Math.max(1, ((height - 2) / step) * ((width - 2) / step));
-  const meanBrightness = sum / n;
+  const meanBrightness = sumL / Math.max(1, count);
 
-  const gradMean = gradSum / samples;
-  const gradVar = gradSumSq / samples - gradMean * gradMean;
+  const gradMean = gradSum / Math.max(1, gradCount);
+  const gradVar = gradSumSq / Math.max(1, gradCount) - gradMean * gradMean;
 
   return { meanBrightness, gradVar };
 };
