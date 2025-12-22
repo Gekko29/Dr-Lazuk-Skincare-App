@@ -1257,9 +1257,6 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
               style="max-width: 240px; width: 100%; border-radius: 10px; border: 1px solid #E5E7EB; display: block;"
             />
           </div>
-
-            ${fitzpatrickSummary ? `<p style="font-size: 13px; color: #92400E; margin: 0;">${escapeHtml(fitzpatrickSummary)}</p>` : ""}
-            ${fitzpatrickType ? renderFitzpatrickScaleHtml(fitzpatrickType) : ""}
             <p style="font-size: 11px; color: #92400E; margin-top: 8px;">This is a visual, cosmetic estimate only and is not a medical diagnosis.</p>
           </div>` : ""}
 
