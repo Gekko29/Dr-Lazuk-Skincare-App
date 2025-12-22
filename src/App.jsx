@@ -528,22 +528,20 @@ const WatermarkOverlay = ({ text = "SkinDoctor.ai • Dr. Lazuk Esthetics® | Co
    Reflection Layer (scroll-to-unlock)
 --------------------------------------- */
 const ReflectionLayer = ({ onSeen }) => {
-  const containerRef = useRef(null);
-  const [seen, setSeen] = useState(false);
+  const [ack, setAck] = useState(false);
 
-  const onScroll = () => {
-    if (seen) return;
-    const el = containerRef.current;
-    if (!el) return;
+  const reflectionText = useMemo(() => {
+    try {
+      return (REFLECTION_SECTIONS || [])
+        .map((s) => String(s?.body || "").trim())
+        .filter(Boolean)
+        .join("
 
-    const scrolled = el.scrollTop + el.clientHeight;
-    const threshold = el.scrollHeight * 0.9;
-
-    if (scrolled >= threshold) {
-      setSeen(true);
-      onSeen?.();
+");
+    } catch {
+      return "";
     }
-  };
+  }, []);
 
   return (
     <div className="border border-gray-200 bg-gray-50 p-6">
@@ -552,29 +550,32 @@ const ReflectionLayer = ({ onSeen }) => {
         Take your time. This section is here so you can pause at your own readiness.
       </p>
 
-      <div
-        ref={containerRef}
-        onScroll={onScroll}
-        className="max-h-[520px] overflow-y-auto bg-white border border-gray-200 p-6"
-      >
-        <div className="space-y-10">
-          {REFLECTION_SECTIONS.map((s, idx) => (
-            <div key={idx}>
-              <h4 className="text-lg font-bold text-gray-900 mb-3">{s.title}</h4>
-              <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-                {s.body}
-              </p>
-            </div>
-          ))}
-        </div>
+      <div className="bg-white border border-gray-200 p-6">
+        <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+          {reflectionText}
+        </p>
+
+        <button
+          onClick={() => {
+            if (ack) return;
+            setAck(true);
+            onSeen?.();
+          }}
+          className="mt-6 w-full bg-gray-900 text-white py-3 font-bold hover:bg-gray-800 disabled:bg-gray-400"
+          disabled={ack}
+          type="button"
+        >
+          {ack ? "Thank you." : "I’ve read this — continue"}
+        </button>
       </div>
 
       <p className="mt-4 text-xs text-gray-600">
-        When you’ve read through this, the next section will appear below — gently, without pressure.
+        When you’re ready, the projections and next steps will appear below.
       </p>
     </div>
   );
 };
+
 
 /* ---------------------------------------
    Agency Layer
@@ -730,6 +731,9 @@ const DermatologyApp = () => {
   const [chatLoading, setChatLoading] = useState(false);
 
   const videoRef = useRef(null);
+  const understandRef = useRef(null);
+  const guidanceRef = useRef(null);
+  const observeRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -737,6 +741,17 @@ const DermatologyApp = () => {
   const showToast = (msg) => {
     setShareToast(msg);
     window.setTimeout(() => setShareToast(null), 2400);
+  };
+
+
+  const scrollToRef = (ref) => {
+    try {
+      if (ref?.current?.scrollIntoView) {
+        ref.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    } catch {
+      // ignore
+    }
   };
 
   // Track page views
@@ -1745,14 +1760,41 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                   </button>
                 </div>
 
-                {/* Aging previews FIRST */}
-                {agingImages.length > 0 && (
+                {/* Dr. Lazuk’s note (shown first) */}
+{/* Reflection Layer */}
+                <ReflectionLayer
+                  onSeen={() => {
+                    if (!reflectionSeen) {
+                      setReflectionSeen(true);
+                      gaEvent('reflection_seen', { step: 'results' });
+                      showToast("Thank you. You can now save or share if you choose.");
+                    }
+                  }}
+                />
+
+                {/* Agency Layer only after Reflection */}
+                {reflectionSeen && (
+                  <AgencyLayer
+                    onChoose={(choice) => {
+                      setAgencyChoice(choice);
+                      gaEvent('agency_choice', { choice });
+                      window.setTimeout(() => {
+                        if (choice === 'understand') scrollToRef(understandRef);
+                        if (choice === 'guidance') scrollToRef(guidanceRef);
+                        if (choice === 'observe') scrollToRef(observeRef);
+                      }, 50);
+                    }}
+                  />
+                )}
+
+{/* Your Future Story (shown after Dr. Lazuk’s note) */}
+                {reflectionSeen && agingImages.length > 0 && (
                   <div className="bg-white border border-gray-200 p-6">
                     <h4 className="text-xl font-bold text-gray-900 mb-2">
                       Your Future Story (Cosmetic Projection)
                     </h4>
                     <p className="text-sm text-gray-700 mb-6">
-                      These are visual projections anchored to your selfie. Take a moment before reading anything else.
+                      These are visual projections anchored to your selfie.
                     </p>
 
                     <div className="grid md:grid-cols-2 gap-4">
@@ -1817,41 +1859,36 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                             </button>
                           </div>
 
-                          {!reflectionSeen && (
-                            <p className="mt-2 text-xs text-gray-600">
-                              Share/Save unlock after you’ve read Dr. Lazuk’s note below.
-                            </p>
-                          )}
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
+                
+                {reflectionSeen && agencyChoice === "understand" && (
+                  <div ref={understandRef} className="bg-white border border-gray-200 p-6">
+                    <h4 className="text-xl font-bold text-gray-900 mb-2">What I’m Seeing (Cosmetic Education)</h4>
 
-                {/* Reflection Layer always after images */}
-                <ReflectionLayer
-                  onSeen={() => {
-                    if (!reflectionSeen) {
-                      setReflectionSeen(true);
-                      gaEvent('reflection_seen', { step: 'results' });
-                      showToast("Thank you. You can now save or share if you choose.");
-                    }
-                  }}
-                />
+                    {(analysisReport?.fitzpatrickType || analysisReport?.fitzpatrickSummary) && (
+                      <div className="bg-gray-50 border border-gray-200 p-4 mb-4">
+                        <p className="text-sm text-gray-900 font-bold mb-1">
+                          Fitzpatrick Type: {analysisReport.fitzpatrickType || "—"}
+                        </p>
+                        {analysisReport.fitzpatrickSummary && (
+                          <p className="text-sm text-gray-700">{analysisReport.fitzpatrickSummary}</p>
+                        )}
+                      </div>
+                    )}
 
-                {/* Agency Layer only after Reflection */}
-                {reflectionSeen && (
-                  <AgencyLayer
-                    onChoose={(choice) => {
-                      setAgencyChoice(choice);
-                      gaEvent('agency_choice', { choice });
-                    }}
-                  />
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                      {analysisReport?.report || "Your report is loading."}
+                    </p>
+                  </div>
                 )}
 
-                {/* Recommendations only after Reflection */}
+{/* Recommendations only after Reflection */}
                 {reflectionSeen && (
-                  <div className="bg-white border-2 border-gray-900 p-8">
+                  <div ref={guidanceRef} className="bg-white border-2 border-gray-900 p-8">
                     <h4 className="font-bold text-gray-900 mb-4 text-2xl">Recommended Products</h4>
                     <div className="grid md:grid-cols-3 gap-4 mb-8">
                       {analysisReport.recommendedProducts.map((p, i) => (
@@ -1922,7 +1959,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                 )}
 
                 {reflectionSeen && agencyChoice === "observe" && (
-                  <div className="bg-gray-50 border border-gray-200 p-6">
+                  <div ref={observeRef} className="bg-gray-50 border border-gray-200 p-6">
                     <p className="text-sm text-gray-700">
                       If you’d like, you can simply return to your email later.
                       There is no urgency — and no required schedule.
