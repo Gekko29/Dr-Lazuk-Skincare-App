@@ -525,25 +525,34 @@ const WatermarkOverlay = ({ text = "SkinDoctor.ai • Dr. Lazuk Esthetics® | Co
 };
 
 /* ---------------------------------------
-   Reflection Layer (scroll-to-unlock)
+   Post-Image Reflection (BOTTOM ONLY)
+   - No section labels
+   - No internal scroll
+   - Unlocks on reaching the end
 --------------------------------------- */
-const ReflectionLayer = ({ onSeen }) => {
-  const containerRef = useRef(null);
+const PostImageReflection = ({ onSeen }) => {
+  const endRef = useRef(null);
   const [seen, setSeen] = useState(false);
 
-  const onScroll = () => {
+  useEffect(() => {
     if (seen) return;
-    const el = containerRef.current;
+    const el = endRef.current;
     if (!el) return;
 
-    const scrolled = el.scrollTop + el.clientHeight;
-    const threshold = el.scrollHeight * 0.9;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        const entry = entries?.[0];
+        if (entry?.isIntersecting) {
+          setSeen(true);
+          onSeen?.();
+        }
+      },
+      { threshold: 0.6 }
+    );
 
-    if (scrolled >= threshold) {
-      setSeen(true);
-      onSeen?.();
-    }
-  };
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [seen, onSeen]);
 
   return (
     <div className="border border-gray-200 bg-gray-50 p-6">
@@ -552,25 +561,24 @@ const ReflectionLayer = ({ onSeen }) => {
         Take your time. This section is here so you can pause at your own readiness.
       </p>
 
-      <div
-        ref={containerRef}
-        onScroll={onScroll}
-        className="max-h-[520px] overflow-y-auto bg-white border border-gray-200 p-6"
-      >
+      <div className="bg-white border border-gray-200 p-6">
         <div className="space-y-10">
           {REFLECTION_SECTIONS.map((s, idx) => (
             <div key={idx}>
-              <h4 className="text-lg font-bold text-gray-900 mb-3">{s.title}</h4>
+              {/* ✅ Section label removed by design */}
               <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
                 {s.body}
               </p>
             </div>
           ))}
         </div>
+
+        {/* Sentinel for unlock */}
+        <div ref={endRef} className="h-1 w-full" />
       </div>
 
       <p className="mt-4 text-xs text-gray-600">
-        When you’ve read through this, the next section will appear below — gently, without pressure.
+        When you’re ready, you can simply close this page — or return to it later.
       </p>
     </div>
   );
@@ -1140,6 +1148,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
         throw new Error(msg);
       }
 
+      // ✅ Reset gating on each new report
       setReflectionSeen(false);
       setAgencyChoice(null);
 
@@ -1464,6 +1473,9 @@ ${SUPPORTIVE_FOOTER_LINE}`);
       <div className="max-w-6xl mx-auto px-4 py-8">
         {activeTab === 'home' && (
           <div className="bg-white border border-gray-200 shadow-sm p-8">
+            {/* ✅ Everything above this point unchanged */}
+            {/* ✅ Everything below only changes RESULTS order + reflection placement */}
+
             {step === 'photo' && (
               <>
                 <div className="flex items-center gap-3 mb-6">
@@ -1541,8 +1553,6 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 
                 {!capturedImage && !cameraActive && (
                   <div className={`grid md:grid-cols-1 gap-6 ${!captureGuidanceSeen ? 'opacity-40 pointer-events-none' : ''}`}>
-                    
-
                     <button
                       onClick={() => {
                         gaEvent('upload_open_picker', { step });
@@ -1738,28 +1748,15 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                   </button>
                 </div>
 
-                {/* Dr. Lazuk’s note (shown first) */}
-                <ReflectionLayer
-                  onSeen={() => {
-                    if (!reflectionSeen) {
-                      setReflectionSeen(true);
-                      gaEvent('reflection_seen', { step: 'results' });
-                      showToast("Thank you. You can now explore your results.");
-                    }
+                {/* ✅ Paths Forward appears immediately (no more “blocked paths”) */}
+                <AgencyLayer
+                  onChoose={(choice) => {
+                    setAgencyChoice(choice);
+                    gaEvent('agency_choice', { choice });
                   }}
                 />
 
-                {/* Agency Layer only after Reflection */}
-                {reflectionSeen && (
-                  <AgencyLayer
-                    onChoose={(choice) => {
-                      setAgencyChoice(choice);
-                      gaEvent('agency_choice', { choice });
-                    }}
-                  />
-                )}
-
-                {reflectionSeen && !agencyChoice && (
+                {!agencyChoice && (
                   <div className="bg-gray-50 border border-gray-200 p-5">
                     <p className="text-sm text-gray-700">
                       Choose a path above. Nothing is required — this is here when you’re ready.
@@ -1767,8 +1764,8 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                   </div>
                 )}
 
-                {/* UNDERSTAND: Future story + report */}
-                {reflectionSeen && agencyChoice === 'understand' && (
+                {/* UNDERSTAND: Images → Report → Reflection (BOTTOM) */}
+                {agencyChoice === 'understand' && (
                   <>
                     {agingImages.length > 0 && (
                       <div className="bg-white border border-gray-200 p-6">
@@ -1790,7 +1787,6 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                                 }}
                               />
 
-                              {/* Watermark overlay (UI failsafe) */}
                               <WatermarkOverlay />
 
                               <img
@@ -1847,15 +1843,28 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                         </div>
                       )}
 
+                      {/* ✅ This is where your “Dear Mark…” letter will naturally appear FIRST,
+                          because Reflection is no longer above it. */}
                       <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
                         {analysisReport?.report || "Your report is loading."}
                       </p>
                     </div>
+
+                    {/* ✅ Reflection is now AFTER they viewed images + read report */}
+                    <PostImageReflection
+                      onSeen={() => {
+                        if (!reflectionSeen) {
+                          setReflectionSeen(true);
+                          gaEvent('reflection_seen', { step: 'results' });
+                          showToast("Thank you. Sharing and saving are now available.");
+                        }
+                      }}
+                    />
                   </>
                 )}
 
                 {/* GUIDANCE: products + treatments */}
-                {reflectionSeen && agencyChoice === 'guidance' && (
+                {agencyChoice === 'guidance' && (
                   <div className="bg-white border-2 border-gray-900 p-8">
                     <h4 className="font-bold text-gray-900 mb-4 text-2xl">Recommended Products</h4>
                     <div className="grid md:grid-cols-3 gap-4 mb-8">
@@ -1927,7 +1936,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                 )}
 
                 {/* OBSERVE */}
-                {reflectionSeen && agencyChoice === 'observe' && (
+                {agencyChoice === 'observe' && (
                   <div className="bg-gray-50 border border-gray-200 p-6">
                     <p className="text-sm text-gray-700">
                       If you’d like, you can simply return to your email later.
@@ -1942,6 +1951,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
           </div>
         )}
 
+        {/* chat + education tabs unchanged */}
         {activeTab === 'chat' && (
           <div className="bg-white border shadow-sm overflow-hidden" style={{ height: '600px' }}>
             <div className="flex flex-col h-full">
@@ -2036,6 +2046,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 };
 
 export default DermatologyApp;
+
 
 
 
