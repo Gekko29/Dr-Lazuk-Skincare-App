@@ -378,9 +378,14 @@ const validateCapturedImage = async ({ dataUrl, faces }) => {
 
   const { meanBrightness, gradVar } = computeBrightnessAndBlur(canvas);
 
-  if (meanBrightness < 70) {
-    return { ok: false, code: 'low_light', message: RETAKE_MESSAGES.low_light };
-  }
+// Hard reject only if truly unusable
+if (meanBrightness < 40) {
+  return { ok: false, code: 'low_light', message: RETAKE_MESSAGES.low_light };
+}
+
+// Optional: allow slightly dim images to pass (best for conversion)
+// You could still show a gentle warning in UI if you want,
+// but do NOT block analysis.
 
   if (gradVar < 60) {
     return { ok: false, code: 'blurry', message: RETAKE_MESSAGES.blurry };
