@@ -23,6 +23,9 @@
 // NEW (per request):
 // ✅ Adds “heart-to-heart” Reflection copy to EMAIL (NO TITLES)
 // ✅ Positions Reflection copy AFTER aging images in the emailed copies
+//
+// NEW (per request 12/22):
+// ✅ Clinic/Contact email default changed to contact@drlazuk.com (was contact@skindoctor.ai)
 
 const path = require("path");
 const crypto = require("crypto");
@@ -1425,14 +1428,14 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
           <p style="font-size: 12px; color: #6B7280;">
             With care,<br/>
             Dr. Lazuk Esthetics® &amp; Dr. Lazuk Cosmetics®<br/>
-            <a href="mailto:contact@skindoctor.ai" style="color: #111827; text-decoration: underline;">contact@skindoctor.ai</a>
+            <a href="mailto:contact@drlazuk.com" style="color: #111827; text-decoration: underline;">contact@drlazuk.com</a>
           </p>
         </div>
       </div>
     `;
 
     // Clinic email HTML
-    const clinicEmail = process.env.RESEND_CLINIC_EMAIL || "contact@skindoctor.ai";
+    const clinicEmail = process.env.RESEND_CLINIC_EMAIL || "contact@drlazuk.com";
     const safeConcern = cleanPrimaryConcern || "Not specified";
 
     // ADD: Include derm engine JSON for internal QA/trust (clinic only)
@@ -1532,6 +1535,7 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
     });
   }
 };
+
 
 
 
