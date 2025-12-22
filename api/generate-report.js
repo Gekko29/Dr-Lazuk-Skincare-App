@@ -19,6 +19,10 @@
 // ✅ (Optional) Includes dermEngine JSON block in CLINIC email only (visitor email remains unchanged)
 // ✅ Locks dermEngine JSON keys so UI can reliably render
 // ✅ Normalizes aging preview images to stable public URLs (prevents expiring OpenAI URLs)
+//
+// NEW (per request):
+// ✅ Adds “heart-to-heart” Reflection copy to EMAIL (NO TITLES)
+// ✅ Positions Reflection copy AFTER aging images in the emailed copies
 
 const path = require("path");
 const crypto = require("crypto");
@@ -219,7 +223,8 @@ function normalizeDermEngineKeys(derm) {
 
   if (!Array.isArray(d.observed_visual_findings)) d.observed_visual_findings = [];
   if (!Array.isArray(d.two_signal_evidence_map)) d.two_signal_evidence_map = [];
-  if (!Array.isArray(d.clinical_interpretation_non_diagnostic)) d.clinical_interpretation_non_diagnostic = [];
+  if (!Array.isArray(d.clinical_interpretation_non_diagnostic))
+    d.clinical_interpretation_non_diagnostic = [];
 
   d.structured_differential_considerations = d.structured_differential_considerations || {
     most_consistent: [],
@@ -257,148 +262,6 @@ async function runDermatologyEngine({
   analysisContext,
   imageAnalysis,
 }) {
-
-  // ---------------------------------------
-// Reflection Layer (EMAIL) — Locked Copy (NO TITLES)
-// Must appear AFTER aging images in the email
-// ---------------------------------------
-const EMAIL_REFLECTION_INTRO =
-  "Take your time. This section is here so you can pause at your own readiness.";
-
-const EMAIL_REFLECTION_PARAGRAPHS = [
-  `If you’re feeling a little unsettled right now, that’s normal.
-
-What you just saw can bring up many emotions—surprise, curiosity, concern, even resistance. Some people feel a quiet moment of reflection. Others feel a jolt they weren’t expecting. There is no right or wrong reaction here.
-
-I want you to know something important:
-
-What you are seeing is not a verdict.
-It is not a prediction carved in stone.
-And it is certainly not a judgment.
-
-What you’re seeing is a visual story—one possible path based on today’s data, today’s habits, today’s environment. Nothing more, and nothing less.
-
-As a physician, I’ve spent decades studying faces, skin, and the quiet signals the body gives long before change becomes obvious. I can tell you this with confidence: the future of your skin is not decided by time alone. It is shaped—slowly, consistently—by care, protection, and intention.
-
-If there is one thing I want you to take from this moment, it’s this:
-
-Your face is not aging “toward” something.
-It is responding to how it is supported.
-
-And support can always be adjusted.
-
-You don’t need to act today.
-You don’t need to decide anything right now.
-You only need to understand that what you just saw represents possibility—not destiny.
-
-When you’re ready, the way forward is not about chasing youth.
-It’s about strengthening resilience.
-Protecting what’s already beautiful.
-And allowing your outer appearance to reflect the care you give yourself internally.
-
-Until then, take a breath.
-Let this information settle.`,
-
-  `It’s a fair question—and an important one.
-
-What you just saw represents one possible trajectory, not a fixed destination. Skin does not age in isolation, and it does not age uniformly. It responds—quietly and continuously—to how it is supported over time.
-
-In clinical practice, the most meaningful differences we see are not created by extremes. They come from consistency: protecting the skin barrier, minimizing chronic inflammation, supporting hydration, and reducing cumulative environmental stress.
-
-This is why two people of the same age can look remarkably different over time—not because one did “more,” but because their skin was supported differently.
-
-There is no single correct path forward.
-Some people focus on daily care.
-Some choose professional treatments.
-Some simply become more intentional and observant.
-
-All of these approaches can influence direction.
-
-What matters most is understanding this:
-
-The future of your skin is responsive—not predetermined.
-
-And responsiveness means you retain influence, at every stage.`,
-
-  `That question matters—and you deserve a clear answer.
-
-This experience was not created using a generic aging filter or a randomized model. Every image and insight was anchored to your own face, starting with the photo you provided.
-
-Rather than replacing your features, the system analyzed them—your facial structure, proportions, texture patterns, tone distribution, and visible environmental stress signals. From there, it calculated how those same features tend to evolve over time under similar conditions.
-
-The intention was never to create something dramatic.
-It was to create something recognizable.
-
-Technology alone does not decide how this information is presented.
-
-As a physician, my role is to ensure that what you see is framed responsibly, explained clearly, and never used to provoke fear or urgency. This is why the results are delivered as interpretation—not diagnosis, not judgment, and not instruction.
-
-This analysis exists to inform, not to persuade.`,
-
-  `Skin does not change overnight—and neither does its direction.
-
-In medicine, we learn the most not from a single snapshot, but from patterns over time. What stabilizes. What shifts. What responds to care. Your skin follows the same principle.
-
-Revisiting this analysis periodically is not about watching for flaws or chasing perfection. It’s about understanding how your skin responds to the way you live, protect, and care for it.
-
-Over time, subtle changes become clearer:
-- whether hydration and texture are stabilizing
-- whether environmental stress is quieting or accumulating
-- whether your current level of support is sufficient
-
-These shifts are often difficult to notice day to day, but meaningful over months.
-
-By returning to this analysis when you feel ready, you’re not checking on your appearance—you’re observing your skin’s conversation with time.
-
-There is no required schedule.
-There is no expectation to act.
-
-But for those who choose to revisit, this becomes a way to stay informed, grounded, and thoughtful—making decisions based on evidence rather than emotion.
-
-A Final Thought
-
-Skin health is not a single moment.
-It’s a relationship—one that evolves with time, environment, and care.
-
-This tool exists to support that relationship.
-Nothing more.
-Nothing less.
-
-When you’re ready to listen again, it will be here.
-
-With care,
-Dr. Iryna Lazuk`
-];
-
-function escapeHtml(str = "") {
-  return String(str)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-// Preserves line breaks as <br/> and paragraph spacing for email clients
-function toEmailParagraphHtml(text) {
-  const safe = escapeHtml(text);
-  return safe
-    .split(/\n\s*\n/g) // paragraph breaks
-    .map(p => `<p style="margin:0 0 14px 0; line-height:1.55; font-size:14px; color:#111827;">${p.replaceAll("\n", "<br/>")}</p>`)
-    .join("");
-}
-
-function buildEmailReflectionSectionHtml() {
-  return `
-  <div style="margin-top:18px; padding-top:18px; border-top:1px solid #E5E7EB;">
-    <p style="margin:0 0 12px 0; font-size:14px; color:#111827; line-height:1.55;">
-      <strong>${escapeHtml(EMAIL_REFLECTION_INTRO)}</strong>
-    </p>
-    ${EMAIL_REFLECTION_PARAGRAPHS.map(toEmailParagraphHtml).join("")}
-  </div>
-  `;
-}
-
   // Uses a vision-capable model because it must evaluate the selfie visually.
   // Pick best available via env; otherwise a sensible default.
   const dermModel =
@@ -561,6 +424,143 @@ function splitForAgingPlacement(reportText) {
 }
 
 // -------------------------
+// NEW: Reflection Layer (EMAIL) — Locked Copy (NO TITLES)
+// Must appear AFTER aging images in the email
+// -------------------------
+const EMAIL_REFLECTION_INTRO =
+  "Take your time. This section is here so you can pause at your own readiness.";
+
+const EMAIL_REFLECTION_PARAGRAPHS = [
+  `If you’re feeling a little unsettled right now, that’s normal.
+
+What you just saw can bring up many emotions—surprise, curiosity, concern, even resistance. Some people feel a quiet moment of reflection. Others feel a jolt they weren’t expecting. There is no right or wrong reaction here.
+
+I want you to know something important:
+
+What you are seeing is not a verdict.
+It is not a prediction carved in stone.
+And it is certainly not a judgment.
+
+What you’re seeing is a visual story—one possible path based on today’s data, today’s habits, today’s environment. Nothing more, and nothing less.
+
+As a physician, I’ve spent decades studying faces, skin, and the quiet signals the body gives long before change becomes obvious. I can tell you this with confidence: the future of your skin is not decided by time alone. It is shaped—slowly, consistently—by care, protection, and intention.
+
+If there is one thing I want you to take from this moment, it’s this:
+
+Your face is not aging “toward” something.
+It is responding to how it is supported.
+
+And support can always be adjusted.
+
+You don’t need to act today.
+You don’t need to decide anything right now.
+You only need to understand that what you just saw represents possibility—not destiny.
+
+When you’re ready, the way forward is not about chasing youth.
+It’s about strengthening resilience.
+Protecting what’s already beautiful.
+And allowing your outer appearance to reflect the care you give yourself internally.
+
+Until then, take a breath.
+Let this information settle.`,
+
+  `It’s a fair question—and an important one.
+
+What you just saw represents one possible trajectory, not a fixed destination. Skin does not age in isolation, and it does not age uniformly. It responds—quietly and continuously—to how it is supported over time.
+
+In clinical practice, the most meaningful differences we see are not created by extremes. They come from consistency: protecting the skin barrier, minimizing chronic inflammation, supporting hydration, and reducing cumulative environmental stress.
+
+This is why two people of the same age can look remarkably different over time—not because one did “more,” but because their skin was supported differently.
+
+There is no single correct path forward.
+Some people focus on daily care.
+Some choose professional treatments.
+Some simply become more intentional and observant.
+
+All of these approaches can influence direction.
+
+What matters most is understanding this:
+
+The future of your skin is responsive—not predetermined.
+
+And responsiveness means you retain influence, at every stage.`,
+
+  `That question matters—and you deserve a clear answer.
+
+This experience was not created using a generic aging filter or a randomized model. Every image and insight was anchored to your own face, starting with the photo you provided.
+
+Rather than replacing your features, the system analyzed them—your facial structure, proportions, texture patterns, tone distribution, and visible environmental stress signals. From there, it calculated how those same features tend to evolve over time under similar conditions.
+
+The intention was never to create something dramatic.
+It was to create something recognizable.
+
+Technology alone does not decide how this information is presented.
+
+As a physician, my role is to ensure that what you see is framed responsibly, explained clearly, and never used to provoke fear or urgency. This is why the results are delivered as interpretation—not diagnosis, not judgment, and not instruction.
+
+This analysis exists to inform, not to persuade.`,
+
+  `Skin does not change overnight—and neither does its direction.
+
+In medicine, we learn the most not from a single snapshot, but from patterns over time. What stabilizes. What shifts. What responds to care. Your skin follows the same principle.
+
+Revisiting this analysis periodically is not about watching for flaws or chasing perfection. It’s about understanding how your skin responds to the way you live, protect, and care for it.
+
+Over time, subtle changes become clearer:
+- whether hydration and texture are stabilizing
+- whether environmental stress is quieting or accumulating
+- whether your current level of support is sufficient
+
+These shifts are often difficult to notice day to day, but meaningful over months.
+
+By returning to this analysis when you feel ready, you’re not checking on your appearance—you’re observing your skin’s conversation with time.
+
+There is no required schedule.
+There is no expectation to act.
+
+But for those who choose to revisit, this becomes a way to stay informed, grounded, and thoughtful—making decisions based on evidence rather than emotion.
+
+A Final Thought
+
+Skin health is not a single moment.
+It’s a relationship—one that evolves with time, environment, and care.
+
+This tool exists to support that relationship.
+Nothing more.
+Nothing less.
+
+When you’re ready to listen again, it will be here.
+
+With care,
+Dr. Iryna Lazuk`,
+];
+
+function toEmailParagraphHtml(text) {
+  const safe = escapeHtml(text);
+  return safe
+    .split(/\n\s*\n/g) // paragraph breaks
+    .map(
+      (p) =>
+        `<p style="margin:0 0 14px 0; line-height:1.55; font-size:14px; color:#111827;">${p.replace(
+          /\n/g,
+          "<br/>"
+        )}</p>`
+    )
+    .join("");
+}
+
+function buildEmailReflectionSectionHtml() {
+  return `
+  <div style="margin-top:18px; padding-top:18px; border-top:1px solid #E5E7EB;">
+    <p style="margin:0 0 12px 0; font-size:14px; color:#111827; line-height:1.55;">
+      <strong>${escapeHtml(EMAIL_REFLECTION_INTRO)}</strong>
+    </p>
+    ${EMAIL_REFLECTION_PARAGRAPHS.map(toEmailParagraphHtml).join("")}
+  </div>
+  `;
+}
+
+// -------------------------
 // Upload image to a public URL for EMAIL rendering
 // WHY: Many email clients block data: URLs in <img src="data:...">.
 // Supports:
@@ -629,7 +629,9 @@ async function uploadToVercelBlobAny(input) {
         ? "jpg"
         : "img";
 
-      const filename = `drlazuk/visitor-selfies/${Date.now()}-${Math.random().toString(16).slice(2)}.${ext}`;
+      const filename = `drlazuk/visitor-selfies/${Date.now()}-${Math.random()
+        .toString(16)
+        .slice(2)}.${ext}`;
 
       const out = await put(filename, buf, {
         access: "public",
@@ -655,7 +657,9 @@ async function uploadToVercelBlobAny(input) {
         ? "jpg"
         : "img";
 
-      const filename = `drlazuk/visitor-selfies/${Date.now()}-${Math.random().toString(16).slice(2)}.${ext}`;
+      const filename = `drlazuk/visitor-selfies/${Date.now()}-${Math.random()
+        .toString(16)
+        .slice(2)}.${ext}`;
 
       const out = await put(filename, buf, {
         access: "public",
@@ -1375,11 +1379,16 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
 
     const agingPreviewHtml = buildAgingPreviewHtml(agingPreviewImages);
 
+    // NEW: Reflection HTML (must be inserted AFTER aging images)
+    const reflectionHtml = buildEmailReflectionSectionHtml();
+
     // Place aging block near the end, just above Dr. Lazuk’s closing note/signature.
+    // NEW order: before -> aging images -> reflection -> closing
     const { before, closing } = splitForAgingPlacement(reportText);
     const letterHtmlBody =
       textToHtmlParagraphs(before) +
       (agingPreviewHtml ? agingPreviewHtml : "") +
+      (reflectionHtml ? reflectionHtml : "") +
       (closing ? textToHtmlParagraphs(closing) : "");
 
     // Visitor email HTML — selfie image ALWAYS included (mandatory)
@@ -1430,7 +1439,9 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
     const dermEngineClinicBlock = `
       <div style="margin-top: 14px; padding: 12px 14px; border-radius: 10px; border: 1px dashed #D1D5DB; background: #FAFAFA;">
         <p style="margin:0 0 8px 0; font-size: 12px; color: #374151;"><strong>Dermatology Engine (Structured JSON)</strong> — internal QA / audit snapshot</p>
-        <pre style="margin:0; font-size: 11px; color: #111827; white-space: pre-wrap;">${escapeHtml(JSON.stringify(dermEngine || {}, null, 2))}</pre>
+        <pre style="margin:0; font-size: 11px; color: #111827; white-space: pre-wrap;">${escapeHtml(
+          JSON.stringify(dermEngine || {}, null, 2)
+        )}</pre>
       </div>
     `;
 
@@ -1447,7 +1458,13 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
             ${fitzpatrickType ? `<li><strong>Fitzpatrick Estimate:</strong> Type ${escapeHtml(fitzpatrickType)}</li>` : ""}
           </ul>
 
-          ${fitzpatrickSummary ? `<p style="font-size: 13px; margin-bottom: 12px;"><strong>Fitzpatrick Summary:</strong> ${escapeHtml(fitzpatrickSummary)}</p>` : ""}
+          ${
+            fitzpatrickSummary
+              ? `<p style="font-size: 13px; margin-bottom: 12px;"><strong>Fitzpatrick Summary:</strong> ${escapeHtml(
+                  fitzpatrickSummary
+                )}</p>`
+              : ""
+          }
 
           <div style="margin: 12px 0 18px 0;">
             <p style="font-size: 12px; color: #6B7280; margin: 0 0 6px 0;">Visitor photo:</p>
@@ -1515,6 +1532,7 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
     });
   }
 };
+
 
 
 
