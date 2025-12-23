@@ -27,6 +27,16 @@
 // NEW (per request 12/22):
 // ✅ Clinic/Contact email default changed to contact@drlazuk.com (was contact@skindoctor.ai)
 //
+// IMPORTANT CHANGE (12/23):
+// ✅ Removed server-side watermark pixel-baking (Sharp) — watermark is client-side only now.
+
+// -------------------------
+// Node built-ins (required)
+// -------------------------
+const path = require("path");
+const crypto = require("crypto");
+const { pathToFileURL } = require("url");
+
 // -------------------------
 // Dynamic imports (CJS-safe)
 // -------------------------
@@ -757,90 +767,6 @@ async function normalizeAgingPreviewImagesToPublicUrls(agingPreviewImages) {
 }
 
 // -------------------------
-// Watermark (pixel-baked) — Option A: "skindoctor.ai"
-// Applied to aging preview images BEFORE they are uploaded/stabilized.
-// -------------------------
-const WATERMARK_TEXT = "skindoctor.ai";
-
-function buildWatermarkSvg({ text = WATERMARK_TEXT, fontSize = 34, opacity = 0.42 }) {
-  const safeText = String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  return Buffer.from(`
-    <svg xmlns="http://www.w3.org/2000/svg" width="1400" height="220">
-      <style>
-        .wm { font-family: Arial, sans-serif; font-weight: 700; letter-spacing: 0.2px; }
-      </style>
-      <text x="96%" y="72%" text-anchor="end"
-        class="wm"
-        font-size="${fontSize}"
-        fill="rgba(255,255,255,${opacity})"
-        stroke="rgba(0,0,0,${Math.min(opacity, 0.22)})"
-        stroke-width="1.2"
-        paint-order="stroke"
-      >${safeText}</text>
-    </svg>
-  `);
-}
-
-async function addTextWatermarkToBuffer(inputBuffer, opts = {}) {
-  const svg = buildWatermarkSvg(opts);
-  return await sharp(inputBuffer)
-    .composite([{ input: svg, gravity: "southeast" }])
-    .png()
-    .toBuffer();
-}
-
-async function addTextWatermarkToDataUrl(dataUrl, opts = {}) {
-  const parsed = parseDataUrl(dataUrl);
-  if (!parsed?.b64) return dataUrl;
-
-  const rawBuffer = Buffer.from(parsed.b64, "base64");
-  const wmBuffer = await addTextWatermarkToBuffer(rawBuffer, opts);
-
-  return `data:image/png;base64,${wmBuffer.toString("base64")}`;
-}
-
-async function addTextWatermarkToAnyImage(anyImage, opts = {}) {
-  if (!anyImage) return anyImage;
-
-  if (isDataUrl(anyImage)) {
-    return await addTextWatermarkToDataUrl(anyImage, opts);
-  }
-
-  if (typeof anyImage === "string" && /^https?:\/\//i.test(anyImage)) {
-    const res = await fetch(anyImage);
-    if (!res.ok) return anyImage;
-
-    const ab = await res.arrayBuffer();
-    const rawBuffer = Buffer.from(ab);
-
-    const wmBuffer = await addTextWatermarkToBuffer(rawBuffer, opts);
-    return `data:image/png;base64,${wmBuffer.toString("base64")}`;
-  }
-
-  return anyImage;
-}
-
-async function applyWatermarkToAgingPreviewImages(agingPreviewImages) {
-  if (!agingPreviewImages) return agingPreviewImages;
-
-  const keys = ["noChange10", "noChange20", "withCare10", "withCare20"];
-  const out = { ...agingPreviewImages };
-
-  await Promise.all(
-    keys.map(async (k) => {
-      if (!out[k]) return;
-      out[k] = await addTextWatermarkToAnyImage(out[k], {
-        text: WATERMARK_TEXT,
-        fontSize: 34,
-        opacity: 0.42,
-      });
-    })
-  );
-
-  return out;
-}
-
-// -------------------------
 // 4 aging preview images (SELFIE-BASED via OpenAI Images Edits)
 // -------------------------
 async function generateAgingPreviewImages({ ageRange, primaryConcern, fitzpatrickType, photoDataUrl }) {
@@ -1458,9 +1384,7 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
       photoDataUrl, // IMPORTANT: use original selfie dataURL as base for edits
     });
 
-    // ✅ NEW: Pixel-bake watermark BEFORE upload/stabilization
-    agingPreviewImages = await applyWatermarkToAgingPreviewImages(agingPreviewImages);
-
+    // ✅ Server-side watermark removed (client-side watermark only)
     // Then stabilize to public URLs (Cloudinary/Vercel Blob)
     agingPreviewImages = await normalizeAgingPreviewImagesToPublicUrls(agingPreviewImages);
 
@@ -1619,6 +1543,7 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
     });
   }
 };
+
 
 
 
