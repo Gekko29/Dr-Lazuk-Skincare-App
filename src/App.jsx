@@ -727,6 +727,10 @@ const DermatologyApp = () => {
 
   const [shareToast, setShareToast] = useState(null);
 
+  // ✅ NEW: email-step messaging (cooldown + patience notice)
+  const [analysisUiError, setAnalysisUiError] = useState('');
+  const [analysisUiNotice, setAnalysisUiNotice] = useState('');
+
   const [chatMessages, setChatMessages] = useState([
     {
       role: 'assistant',
@@ -1113,6 +1117,10 @@ ${SUPPORTIVE_FOOTER_LINE}`);
   };
 
   const performAnalysis = async () => {
+    // ✅ Clear prior messages for the email step
+    setAnalysisUiError('');
+    setAnalysisUiNotice('Analysis can take up to 60 seconds to complete. Thank you for your patience.');
+
     setEmailSubmitting(true);
 
     const gaClientId = await getGaClientId();
@@ -1145,6 +1153,18 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 
       if (!response.ok || !data.ok) {
         const msg = data?.message || data?.error || 'Error generating report';
+
+        // ✅ IMPORTANT: show cooldown + other server messages ON THE EMAIL SCREEN
+        if (response.status === 429 || data?.error === 'cooldown_active') {
+          setAnalysisUiError(String(msg));
+          gaEvent('analysis_cooldown', {
+            primaryConcern,
+            ageRange,
+            message: String(msg).slice(0, 160)
+          });
+          return; // stop here; finally will clear spinner
+        }
+
         gaEvent('analysis_error', {
           primaryConcern,
           ageRange,
@@ -1180,12 +1200,18 @@ ${SUPPORTIVE_FOOTER_LINE}`);
         )
       });
 
-      setEmailSubmitting(false);
       setStep('results');
     } catch (error) {
       console.error('Analysis error:', error);
-      setEmailSubmitting(false);
+
+      // ✅ Email-step visible error (prevents “app feels broken”)
+      setAnalysisUiError(error?.message || 'There was an error. Please try again.');
+      gaEvent('analysis_error', { message: String(error?.message || 'exception').slice(0, 160) });
+
+      // keep your supportive messaging behavior (doesn't hurt)
       showSupportiveRetake(error?.message || 'There was an error. Please try again.');
+    } finally {
+      setEmailSubmitting(false);
     }
   };
 
@@ -1194,12 +1220,14 @@ ${SUPPORTIVE_FOOTER_LINE}`);
     if (!fn) {
       gaEvent('email_step_error', { reason: 'missing_first_name' });
       showSupportiveRetake('Please enter your first name.');
+      setAnalysisUiError('Please enter your first name.');
       return;
     }
 
     if (!userEmail || !userEmail.includes('@')) {
       gaEvent('email_step_error', { reason: 'invalid_email' });
       showSupportiveRetake('Please enter a valid email address.');
+      setAnalysisUiError('Please enter a valid email address.');
       return;
     }
 
@@ -1281,6 +1309,10 @@ ${SUPPORTIVE_FOOTER_LINE}`);
     setIdentityLockActivating(false);
     setReflectionSeen(false);
     setAgencyChoice(null);
+
+    // ✅ reset email-step messages too
+    setAnalysisUiError('');
+    setAnalysisUiNotice('');
   };
 
   useEffect(() => {
@@ -1743,6 +1775,21 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                         'View Results'
                       )}
                     </button>
+
+                    {/* ✅ NEW: Patience notice + cooldown error shown right on this screen */}
+                    {emailSubmitting && (
+                      <p className="text-xs text-gray-300 mt-2">
+                        {analysisUiNotice || "Analysis can take up to 60 seconds to complete. Thank you for your patience."}
+                      </p>
+                    )}
+
+                    {analysisUiError && (
+                      <div className="mt-3 bg-white/10 border border-white/20 p-4">
+                        <p className="text-sm text-white whitespace-pre-wrap">
+                          {analysisUiError}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2069,6 +2116,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 };
 
 export default DermatologyApp;
+
 
 
 
