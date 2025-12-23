@@ -603,7 +603,7 @@ const AgencyLayer = ({ onChoose }) => {
         >
           <p className="font-bold text-gray-900">Understand</p>
           <p className="text-sm text-gray-700 mt-1">
-            Learn what the analysis is observing and why it matters.
+            View your Future Story projection (images).
           </p>
         </button>
 
@@ -625,7 +625,7 @@ const AgencyLayer = ({ onChoose }) => {
         >
           <p className="font-bold text-gray-900">Guidance</p>
           <p className="text-sm text-gray-700 mt-1">
-            Explore a calm, barrier-first roadmap — when you choose.
+            Explore products and treatments tailored to your concern.
           </p>
         </button>
       </div>
@@ -741,6 +741,11 @@ const DermatologyApp = () => {
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
   const fileInputRef = useRef(null);
+
+  // ✅ NEW: section refs so “Paths Forward” always works (scrolls correctly)
+  const understandRef = useRef(null);
+  const guidanceRef = useRef(null);
+  const observeRef = useRef(null);
 
   const showToast = (msg) => {
     setShareToast(msg);
@@ -1156,6 +1161,8 @@ ${SUPPORTIVE_FOOTER_LINE}`);
         report: data.report,
         recommendedProducts: getRecommendedProducts(primaryConcern),
         recommendedServices: getRecommendedServices(primaryConcern),
+        // ✅ Fitzpatrick is intentionally kept in data (email can include it),
+        // but UI will not render it anywhere.
         fitzpatrickType: data.fitzpatrickType || null,
         fitzpatrickSummary: data.fitzpatrickSummary || null,
         agingPreviewImages: data.agingPreviewImages || null
@@ -1474,7 +1481,13 @@ ${SUPPORTIVE_FOOTER_LINE}`);
         {activeTab === 'home' && (
           <div className="bg-white border border-gray-200 shadow-sm p-8">
             {/* ✅ Everything above this point unchanged */}
-            {/* ✅ Everything below only changes RESULTS order + reflection placement */}
+            {/* ✅ RESULTS FLOW FIX:
+                - Report shows immediately (always)
+                - “Understand” ONLY reveals aging images
+                - Reflection is always at the very bottom
+                - Paths Forward buttons scroll reliably
+                - Fitzpatrick removed from UI rendering
+            */}
 
             {step === 'photo' && (
               <>
@@ -1748,26 +1761,51 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                   </button>
                 </div>
 
-                {/* ✅ Paths Forward appears immediately (no more “blocked paths”) */}
+                {/* ✅ REPORT IS IMMEDIATE (always visible) */}
+                <div className="bg-white border border-gray-200 p-6">
+                  <h4 className="text-xl font-bold text-gray-900 mb-2">
+                    What I’m Seeing (Cosmetic Education)
+                  </h4>
+
+                  {/* ✅ Fitzpatrick removed from onscreen UI by requirement */}
+
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                    {analysisReport?.report || "Your report is loading."}
+                  </p>
+                </div>
+
+                {/* ✅ Paths Forward works + scrolls */}
                 <AgencyLayer
                   onChoose={(choice) => {
                     setAgencyChoice(choice);
                     gaEvent('agency_choice', { choice });
+
+                    window.requestAnimationFrame(() => {
+                      const map = {
+                        understand: understandRef.current,
+                        guidance: guidanceRef.current,
+                        observe: observeRef.current
+                      };
+                      const target = map[choice];
+                      if (target?.scrollIntoView) {
+                        target.scrollIntoView({ behavior: "smooth", block: "start" });
+                      }
+                    });
                   }}
                 />
 
                 {!agencyChoice && (
                   <div className="bg-gray-50 border border-gray-200 p-5">
                     <p className="text-sm text-gray-700">
-                      Choose a path above. Nothing is required — this is here when you’re ready.
+                      Your report is ready above. If you’d like, choose a path here — nothing is required.
                     </p>
                   </div>
                 )}
 
-                {/* UNDERSTAND: Images → Report → Reflection (BOTTOM) */}
+                {/* ✅ UNDERSTAND = IMAGES ONLY */}
                 {agencyChoice === 'understand' && (
-                  <>
-                    {agingImages.length > 0 && (
+                  <div ref={understandRef}>
+                    {agingImages.length > 0 ? (
                       <div className="bg-white border border-gray-200 p-6">
                         <h4 className="text-xl font-bold text-gray-900 mb-2">
                           Your Future Story (Cosmetic Projection)
@@ -1827,45 +1865,19 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                           ))}
                         </div>
                       </div>
+                    ) : (
+                      <div className="bg-gray-50 border border-gray-200 p-6">
+                        <p className="text-sm text-gray-700">
+                          Your Future Story images are not available for this result.
+                        </p>
+                      </div>
                     )}
-
-                    <div className="bg-white border border-gray-200 p-6">
-                      <h4 className="text-xl font-bold text-gray-900 mb-2">What I’m Seeing (Cosmetic Education)</h4>
-
-                      {(analysisReport?.fitzpatrickType || analysisReport?.fitzpatrickSummary) && (
-                        <div className="bg-gray-50 border border-gray-200 p-4 mb-4">
-                          <p className="text-sm text-gray-900 font-bold mb-1">
-                            Fitzpatrick Type: {analysisReport.fitzpatrickType || "—"}
-                          </p>
-                          {analysisReport.fitzpatrickSummary && (
-                            <p className="text-sm text-gray-700">{analysisReport.fitzpatrickSummary}</p>
-                          )}
-                        </div>
-                      )}
-
-                      {/* ✅ This is where your “Dear Mark…” letter will naturally appear FIRST,
-                          because Reflection is no longer above it. */}
-                      <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-                        {analysisReport?.report || "Your report is loading."}
-                      </p>
-                    </div>
-
-                    {/* ✅ Reflection is now AFTER they viewed images + read report */}
-                    <PostImageReflection
-                      onSeen={() => {
-                        if (!reflectionSeen) {
-                          setReflectionSeen(true);
-                          gaEvent('reflection_seen', { step: 'results' });
-                          showToast("Thank you. Sharing and saving are now available.");
-                        }
-                      }}
-                    />
-                  </>
+                  </div>
                 )}
 
                 {/* GUIDANCE: products + treatments */}
                 {agencyChoice === 'guidance' && (
-                  <div className="bg-white border-2 border-gray-900 p-8">
+                  <div ref={guidanceRef} className="bg-white border-2 border-gray-900 p-8">
                     <h4 className="font-bold text-gray-900 mb-4 text-2xl">Recommended Products</h4>
                     <div className="grid md:grid-cols-3 gap-4 mb-8">
                       {analysisReport.recommendedProducts.map((p, i) => (
@@ -1937,13 +1949,24 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 
                 {/* OBSERVE */}
                 {agencyChoice === 'observe' && (
-                  <div className="bg-gray-50 border border-gray-200 p-6">
+                  <div ref={observeRef} className="bg-gray-50 border border-gray-200 p-6">
                     <p className="text-sm text-gray-700">
                       If you’d like, you can simply return to your email later.
                       There is no urgency — and no required schedule.
                     </p>
                   </div>
                 )}
+
+                {/* ✅ Reflection is ALWAYS at the bottom (independent of choice) */}
+                <PostImageReflection
+                  onSeen={() => {
+                    if (!reflectionSeen) {
+                      setReflectionSeen(true);
+                      gaEvent('reflection_seen', { step: 'results' });
+                      showToast("Thank you. Sharing and saving are now available.");
+                    }
+                  }}
+                />
               </div>
             )}
 
