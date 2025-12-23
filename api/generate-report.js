@@ -27,14 +27,6 @@
 // NEW (per request 12/22):
 // ✅ Clinic/Contact email default changed to contact@drlazuk.com (was contact@skindoctor.ai)
 //
-// NEW (per request 12/22 watermark):
-// ✅ Pixel-bakes "skindoctor.ai" watermark onto ALL 4 aging preview images BEFORE upload/stabilization
-
-const path = require("path");
-const crypto = require("crypto");
-const { pathToFileURL } = require("url");
-const sharp = require("sharp");
-
 // -------------------------
 // Dynamic imports (CJS-safe)
 // -------------------------
