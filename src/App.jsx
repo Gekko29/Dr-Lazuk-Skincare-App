@@ -1,4 +1,3 @@
-```jsx
 // src/App.jsx
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
@@ -2202,13 +2201,3 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 };
 
 export default DermatologyApp;
-```
-
-
-
-
-
-
-
-
-
