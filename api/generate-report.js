@@ -29,6 +29,11 @@
 //
 // IMPORTANT CHANGE (12/23):
 // ✅ Removed server-side watermark pixel-baking (Sharp) — watermark is client-side only now.
+//
+// NEW (per request 12/24):
+// ✅ Adds “Areas of Focus — Your Action Summary” hybrid section (executive + scoring)
+// ✅ Section shows only what is relevant (no hard limit)
+// ✅ Inserted BELOW the top letter intro (early in the report) to create urgency + clarity
 
 // -------------------------
 // Node built-ins (required)
@@ -430,6 +435,413 @@ function splitForAgingPlacement(reportText) {
   const before = t.slice(0, idx).trimEnd();
   const closing = t.slice(idx).trimStart();
   return { before, closing };
+}
+
+// -------------------------
+// NEW: Areas of Focus — Hybrid section (executive + scoring)
+// Shows only what is relevant (no hard limit).
+// Placement target: BELOW the top letter intro, early in the report.
+// -------------------------
+const AREAS_OF_FOCUS_TITLE = "Areas of Focus — Your Action Summary";
+
+const WHAT_THIS_MEANS_BLOCK_TEXT = [
+  "What This Means",
+  "",
+  "These findings are not a diagnosis, and they are not a judgment.",
+  "They are signals — and are most impactful when addressed early.",
+  "",
+  "The guidance that follows reflects the specific areas identified in your skin and is designed to address them intentionally.",
+].join("\n");
+
+function safeStr(v) {
+  return typeof v === "string" ? v : v == null ? "" : String(v);
+}
+
+function normalizeTextForMatch(s) {
+  return safeStr(s).toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function gatherSignalText({ dermEngine, imageAnalysis }) {
+  const chunks = [];
+
+  // dermEngine
+  if (dermEngine && typeof dermEngine === "object") {
+    const f15 = dermEngine.framework_15_point || {};
+    Object.values(f15).forEach((v) => {
+      if (!v) return;
+      if (typeof v === "string") chunks.push(v);
+      if (typeof v === "object") chunks.push(JSON.stringify(v));
+    });
+
+    (dermEngine.observed_visual_findings || []).forEach((x) => {
+      if (!x) return;
+      chunks.push(`${x.finding || ""} ${x.location || ""} ${x.severity || ""}`);
+    });
+
+    (dermEngine.two_signal_evidence_map || []).forEach((m) => {
+      if (!m) return;
+      chunks.push(`${m.interpretation || ""} ${(m.signals || []).join(" ")}`);
+    });
+
+    (dermEngine.risk_amplifiers || []).forEach((a) => {
+      if (!a) return;
+      chunks.push(`${a.amplifier || ""} ${a.why || ""}`);
+    });
+
+    const ns = dermEngine.next_steps_summary || {};
+    (ns.top_priorities || []).forEach((p) => chunks.push(p));
+    const tl = ns.timeline || {};
+    Object.values(tl).forEach((v) => {
+      if (v) chunks.push(v);
+    });
+  }
+
+  // imageAnalysis (vision strings)
+  const a = imageAnalysis?.analysis || {};
+  [
+    a.skinFindings,
+    a.texture,
+    a.poreBehavior,
+    a.pigment,
+    a.fineLinesAreas,
+    a.elasticity,
+    a.complimentFeatures,
+  ].forEach((v) => {
+    if (v) chunks.push(v);
+  });
+
+  const checklist = a.checklist15 || {};
+  Object.values(checklist).forEach((v) => {
+    if (v) chunks.push(v);
+  });
+
+  return normalizeTextForMatch(chunks.join(" | "));
+}
+
+function computeImpactScore({ base, dermEngine, keywordHitCount = 0 }) {
+  // base: 1..10
+  let score = Math.max(1, Math.min(10, Number(base || 5)));
+
+  // bump if we have multiple cues across derm engine (more concrete)
+  const conf = dermEngine?.meta?.confidence_score_0_100;
+  if (typeof conf === "number") {
+    if (conf >= 75) score += 1;
+    else if (conf <= 35) score -= 1;
+  }
+
+  // bump if multiple keyword hits
+  if (keywordHitCount >= 3) score += 1;
+  if (keywordHitCount >= 6) score += 1;
+
+  return Math.max(1, Math.min(10, score));
+}
+
+function urgencyFromScore(score) {
+  if (score >= 8) return "Do now";
+  if (score >= 6) return "Do next";
+  return "Monitor";
+}
+
+function buildAreasOfFocusItems({ dermEngine, imageAnalysis }) {
+  const s = gatherSignalText({ dermEngine, imageAnalysis });
+
+  // Focus library:
+  // Each focus has:
+  // - key
+  // - label
+  // - when (parenthetical helper)
+  // - triggers (keywords)
+  // - baseScore
+  // - why / risk (non-aging specific; behavior-based)
+  const focusLibrary = [
+    {
+      key: "barrier_inflammation",
+      label: "Barrier Stability / Reactivity Control",
+      when: "(When dryness, sensitivity, redness-prone patterns, or irritation cues appear)",
+      triggers: [
+        "barrier",
+        "dry",
+        "dehydr",
+        "tight",
+        "flak",
+        "irrit",
+        "sensitive",
+        "redness",
+        "reactive",
+        "inflamm",
+        "stinging",
+      ],
+      baseScore: 8,
+      why: "If left unaddressed, the skin becomes more reactive, more easily irritated, and less consistent in how it holds hydration and tolerates active ingredients.",
+      plan: "Prioritize barrier-first steps, then introduce actives only when the skin can tolerate them comfortably.",
+    },
+    {
+      key: "pigment_tone",
+      label: "Pigment Regulation / Tone Variability",
+      when: "(When uneven tone, early sun stress, or post-inflammatory patterns are detected)",
+      triggers: [
+        "pigment",
+        "uneven tone",
+        "tone",
+        "spots",
+        "dark",
+        "sun",
+        "uv",
+        "discolor",
+        "patchy",
+        "hyper",
+        "post-inflammatory",
+        "pi",
+      ],
+      baseScore: 7,
+      why: "If left unaddressed, tone can become more uneven over time and more difficult to correct without longer timelines and stricter consistency.",
+      plan: "Focus on daily protection + gentle brightening support that matches your current tolerance level.",
+    },
+    {
+      key: "sebum_congestion",
+      label: "Sebum Regulation / Congestion Patterns",
+      when: "(Especially relevant for teens, young adults, acne-prone users)",
+      triggers: [
+        "oil",
+        "oily",
+        "sebum",
+        "shine",
+        "congestion",
+        "clog",
+        "blackhead",
+        "whitehead",
+        "comed",
+        "breakout",
+        "acne",
+        "pore",
+        "t-zone",
+      ],
+      baseScore: 7,
+      why: "If left unaddressed, congestion can cycle (clog → inflammation → marks), making texture and clarity less predictable.",
+      plan: "Control oil without stripping, and use unclogging support with a tolerance-aware pace.",
+    },
+    {
+      key: "texture_pores",
+      label: "Texture / Pore Refinement Signals",
+      when: "(When visible texture irregularity, roughness, or pore prominence stands out)",
+      triggers: ["texture", "rough", "bumpy", "pore", "pores", "enlarged", "grainy", "uneven", "surface quality"],
+      baseScore: 6,
+      why: "If left unaddressed, texture tends to feel less smooth and pores can look more prominent—especially under certain lighting and makeup.",
+      plan: "Stabilize the surface first, then refine gradually with targeted exfoliation and hydration balance.",
+    },
+    {
+      key: "structural_support",
+      label: "Early Structural Support Signals",
+      when: "(Not “aging,” but collagen response, firmness trajectory, resilience)",
+      triggers: ["elasticity", "firm", "lax", "support", "collagen", "resilience", "fine line", "line", "wrinkle", "photoaging"],
+      baseScore: 6,
+      why: "If left unaddressed, the skin’s ‘bounce-back’ can decrease, and fine lines can become more persistent after stress, dehydration, or inflammation.",
+      plan: "Support structural resilience with steady hydration + protective daily habits, then layer in targeted support where appropriate.",
+    },
+    {
+      key: "recovery_repair",
+      label: "Recovery & Repair Capacity",
+      when: "(How well skin rebounds after stress, breakouts, procedures, travel, etc.)",
+      triggers: ["recover", "repair", "rebound", "post", "irritation", "inflamm", "stress", "sensitivity", "barrier", "flare"],
+      baseScore: 7,
+      why: "If left unaddressed, skin can stay ‘stuck’ in a stressed state longer—leading to recurring irritation, uneven texture, or lingering marks.",
+      plan: "Use a recovery-forward routine that restores calm first, then builds tolerance for stronger steps.",
+    },
+    {
+      key: "environmental_load",
+      label: "Environmental Stress Load",
+      when: "(UV exposure patterns, pollution markers, lifestyle-linked stress indicators)",
+      triggers: ["uv", "sun", "photo", "pollution", "smoke", "environment", "stress", "dull", "dehydr", "oxid"],
+      baseScore: 7,
+      why: "If left unaddressed, daily exposure quietly compounds—showing up as dullness, uneven tone, and more sensitivity over time.",
+      plan: "Treat protection as a daily baseline, then support the skin’s antioxidant and hydration systems consistently.",
+    },
+  ];
+
+  // Determine relevance by keyword hits
+  const items = [];
+  for (const f of focusLibrary) {
+    const hits = (f.triggers || []).reduce((acc, kw) => {
+      const k = normalizeTextForMatch(kw);
+      if (!k) return acc;
+      return s.includes(k) ? acc + 1 : acc;
+    }, 0);
+
+    // relevance threshold: either multiple hits OR strong single hit for the category
+    const relevant = hits >= 2 || (hits >= 1 && ["barrier_inflammation", "sebum_congestion"].includes(f.key));
+    if (!relevant) continue;
+
+    const score = computeImpactScore({ base: f.baseScore, dermEngine, keywordHitCount: hits });
+    items.push({
+      key: f.key,
+      label: f.label,
+      when: f.when,
+      score,
+      urgency: urgencyFromScore(score),
+      why: f.why,
+      plan: f.plan,
+    });
+  }
+
+  // If nothing triggered (rare), fall back to top priorities from dermEngine
+  if (!items.length) {
+    const top = dermEngine?.next_steps_summary?.top_priorities || [];
+    top.slice(0, 4).forEach((p, idx) => {
+      const score = computeImpactScore({ base: 7 - idx, dermEngine, keywordHitCount: 3 - idx });
+      items.push({
+        key: `priority_${idx}`,
+        label: p || "Priority Focus",
+        when: "",
+        score,
+        urgency: urgencyFromScore(score),
+        why: "If left unaddressed, this area tends to persist and influence how consistently your skin stays calm, clear, and balanced.",
+        plan: "The recommendations that follow will address this directly with a tolerance-aware approach.",
+      });
+    });
+  }
+
+  // Sort: highest impact first
+  items.sort((a, b) => (b.score || 0) - (a.score || 0));
+  return items;
+}
+
+function buildAreasOfFocusText({ dermEngine, imageAnalysis }) {
+  const items = buildAreasOfFocusItems({ dermEngine, imageAnalysis });
+  if (!items.length) return "";
+
+  const lines = [];
+  lines.push(AREAS_OF_FOCUS_TITLE);
+  lines.push("");
+  lines.push("If left unaddressed, the items below tend to compound—making your skin harder to calm, clarify, and balance.");
+  lines.push("");
+  lines.push(WHAT_THIS_MEANS_BLOCK_TEXT);
+  lines.push("");
+  lines.push("Areas of Focus");
+  lines.push("");
+
+  for (const it of items) {
+    // Hybrid: punchy + scored + direct
+    lines.push(
+      `• ${it.label} — Clinical Impact Score: ${it.score}/10 — Urgency: ${it.urgency}${it.when ? ` ${it.when}` : ""}`
+    );
+    lines.push(`  Why it matters: ${it.why}`);
+    lines.push(`  What changes it: ${it.plan}`);
+    lines.push("");
+  }
+
+  return lines.join("\n").trim();
+}
+
+function buildAreasOfFocusHtml({ dermEngine, imageAnalysis }) {
+  const items = buildAreasOfFocusItems({ dermEngine, imageAnalysis });
+  if (!items.length) return "";
+
+  const whyLine =
+    "If left unaddressed, the items below tend to compound—making your skin harder to calm, clarify, and balance.";
+
+  const whatThisMeansHtml = `
+    <div style="margin-top:10px;">
+      <p style="margin:0 0 8px 0; font-size:14px; color:#111827; line-height:1.55;"><strong>What This Means</strong></p>
+      <p style="margin:0 0 10px 0; font-size:14px; color:#111827; line-height:1.55;">
+        These findings are not a diagnosis, and they are not a judgment.<br/>
+        They are signals — and are most impactful when addressed early.
+      </p>
+      <p style="margin:0 0 0 0; font-size:14px; color:#111827; line-height:1.55;">
+        The guidance that follows reflects the specific areas identified in your skin and is designed to address them intentionally.
+      </p>
+    </div>
+  `;
+
+  const itemHtml = items
+    .map((it) => {
+      const score = Number(it.score || 0);
+      const urgency = escapeHtml(it.urgency || "");
+      const label = escapeHtml(it.label || "");
+      const when = it.when ? ` <span style="font-weight:400; color:#374151;">${escapeHtml(it.when)}</span>` : "";
+
+      return `
+        <div style="padding:12px 12px; border-radius:10px; border:1px solid #E5E7EB; background:#FFFFFF; margin:10px 0;">
+          <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">
+            <div style="flex:1;">
+              <p style="margin:0 0 6px 0; font-size:14px; color:#111827; line-height:1.45;">
+                <strong>${label}</strong>${when}
+              </p>
+              <p style="margin:0 0 6px 0; font-size:13px; color:#111827; line-height:1.55;">
+                <strong>Why it matters:</strong> ${escapeHtml(it.why || "")}
+              </p>
+              <p style="margin:0; font-size:13px; color:#111827; line-height:1.55;">
+                <strong>What changes it:</strong> ${escapeHtml(it.plan || "")}
+              </p>
+            </div>
+            <div style="min-width:160px; text-align:right;">
+              <p style="margin:0; font-size:12px; color:#374151;">
+                <strong>Clinical Impact</strong>
+              </p>
+              <p style="margin:2px 0 6px 0; font-size:18px; color:#111827; font-weight:800;">
+                ${score}/10
+              </p>
+              <p style="margin:0; font-size:12px; color:#374151;">
+                <strong>Urgency:</strong> ${urgency}
+              </p>
+            </div>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+
+  return `
+    <div style="margin:16px 0 18px 0;">
+      <hr style="border:0; border-top:2px solid #111827; margin:16px 0 14px 0;" />
+      <h2 style="font-size:16px; font-weight:800; margin:0 0 6px 0; color:#111827;">
+        ${escapeHtml(AREAS_OF_FOCUS_TITLE)}
+      </h2>
+      <p style="margin:0 0 10px 0; font-size:13px; color:#111827; line-height:1.55;">
+        <strong>${escapeHtml(whyLine)}</strong>
+      </p>
+      ${whatThisMeansHtml}
+      <div style="margin-top:12px;">
+        ${itemHtml}
+      </div>
+    </div>
+  `;
+}
+
+// Insert the section early in the letter (below the top intro) using paragraph splits.
+// We DO NOT rely on the model to format this; this is deterministic.
+function injectAreasOfFocusIntoReportText({ reportText, areasOfFocusText }) {
+  const t = String(reportText || "").trim();
+  if (!t || !areasOfFocusText) return t;
+
+  const parts = t.split(/\n\s*\n/g); // paragraph-ish blocks
+  if (parts.length <= 2) {
+    // minimal letter; append after greeting block
+    return [t, "", areasOfFocusText, ""].join("\n");
+  }
+
+  // Insert after the first ~3 paragraphs (keeps greeting + warm intro intact)
+  const insertAt = Math.min(3, parts.length - 1);
+  const before = parts.slice(0, insertAt).join("\n\n");
+  const after = parts.slice(insertAt).join("\n\n");
+
+  return [before, "", areasOfFocusText, "", after].join("\n").trim();
+}
+
+// For HTML, we insert the pre-rendered HTML block after first ~3 paragraphs
+function injectAreasOfFocusIntoHtml({ reportTextBeforeClosing, areasOfFocusHtml }) {
+  const t = String(reportTextBeforeClosing || "").trim();
+  if (!t || !areasOfFocusHtml) return textToHtmlParagraphs(t);
+
+  const parts = t.split(/\n\s*\n/g);
+  if (parts.length <= 2) {
+    return textToHtmlParagraphs(t) + areasOfFocusHtml;
+  }
+
+  const insertAt = Math.min(3, parts.length - 1);
+  const before = parts.slice(0, insertAt).join("\n\n");
+  const after = parts.slice(insertAt).join("\n\n");
+
+  return textToHtmlParagraphs(before) + areasOfFocusHtml + textToHtmlParagraphs(after);
 }
 
 // -------------------------
@@ -1376,6 +1788,16 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
 
     reportText = stripInternalLines(reportText).trim();
 
+    // -------------------------
+    // NEW: Build + inject “Areas of Focus — Your Action Summary”
+    // Inject into reportText early, and into email HTML early.
+    // -------------------------
+    const areasOfFocusText = buildAreasOfFocusText({ dermEngine, imageAnalysis });
+    const areasOfFocusHtml = buildAreasOfFocusHtml({ dermEngine, imageAnalysis });
+
+    // Inject into the returned report text (so UI also shows it)
+    reportText = injectAreasOfFocusIntoReportText({ reportText, areasOfFocusText });
+
     // 5) Generate SELFIE-based aging preview images
     let agingPreviewImages = await generateAgingPreviewImages({
       ageRange: cleanAgeRange,
@@ -1394,10 +1816,17 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
     const reflectionHtml = buildEmailReflectionSectionHtml();
 
     // Place aging block near the end, just above Dr. Lazuk’s closing note/signature.
-    // NEW order: before -> aging images -> reflection -> closing
+    // Order: (before + AreasOfFocus injected early) -> aging images -> reflection -> closing
     const { before, closing } = splitForAgingPlacement(reportText);
+
+    // Inject Areas of Focus into the HTML BEFORE closing as well (early in "before")
+    const beforeHtmlWithAreas = injectAreasOfFocusIntoHtml({
+      reportTextBeforeClosing: before,
+      areasOfFocusHtml,
+    });
+
     const letterHtmlBody =
-      textToHtmlParagraphs(before) +
+      beforeHtmlWithAreas +
       (agingPreviewHtml ? agingPreviewHtml : "") +
       (reflectionHtml ? reflectionHtml : "") +
       (closing ? textToHtmlParagraphs(closing) : "");
@@ -1543,6 +1972,7 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
     });
   }
 };
+
 
 
 
