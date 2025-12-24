@@ -29,6 +29,11 @@
 //
 // IMPORTANT CHANGE (12/23):
 // ✅ Removed server-side watermark pixel-baking (Sharp) — watermark is client-side only now.
+//
+// NEW (per request 12/24):
+// ✅ ADD ONLY: Inserts “Areas of Focus — Your Action Summary” card section AFTER the initial letter
+//    and BEFORE the aging images in the emailed report.
+// ✅ Removes “Clinical Impact” / “Urgency” / numeric signaling from that section (no scores).
 
 // -------------------------
 // Node built-ins (required)
@@ -430,6 +435,121 @@ function splitForAgingPlacement(reportText) {
   const before = t.slice(0, idx).trimEnd();
   const closing = t.slice(idx).trimStart();
   return { before, closing };
+}
+
+// -------------------------
+// NEW: Areas of Focus — Your Action Summary (EMAIL)
+// Insert AFTER initial letter and BEFORE aging images.
+// NO “Clinical Impact”, NO “Urgency”, NO scores.
+// -------------------------
+function buildAreasOfFocusSectionHtml() {
+  // Note: Intentionally stable copy + structure to preserve “baseline” feel.
+  // This is an additive insert only; no other report copy is altered.
+  const items = [
+    {
+      title: "Barrier Stability / Reactivity Control",
+      subtitle: "When dryness, sensitivity, redness, or prone patches appear",
+      why:
+        "If left unaddressed, the skin becomes more reactive, more easily irritated, and less consistent in how it holds hydration and tolerates active ingredients.",
+      what:
+        "Prioritize barrier-first steps, then introduce actives only when the skin can tolerate them comfortably.",
+    },
+    {
+      title: "Pigment Regulation / Tone Variability",
+      subtitle: "When uneven tone, early sun stress, or post inflammatory patterns are detected",
+      why:
+        "If left unaddressed, tone can become more uneven over time and more difficult to correct without long-term consistency.",
+      what:
+        "Focus on daily protection + gentle brightening support that matches your current tolerance level.",
+    },
+    {
+      title: "Sebum Regulation / Congestion Patterns",
+      subtitle: "Especially relevant for teens, young adults, acne prone users",
+      why:
+        "If left unaddressed, congestion can cycle (clog → inflammation → marks), making texture and clarity less predictable.",
+      what:
+        "Change skin: Control oil without stripping, and use unclogging support with a tolerable, steady pace.",
+    },
+    {
+      title: "Early Structural Support Signals",
+      subtitle: "Not “aging,” but collagen response, firmness trajectory, resilience",
+      why:
+        "If left unaddressed, the skin’s bounce back can decrease, and fine lines can become more persistent after stress, dehydration, or inflammation.",
+      what:
+        "Support structural resilience with steady hydration + protective daily habits, then layer in targeted support where appropriate.",
+    },
+    {
+      title: "Recovery & Repair Capacity",
+      subtitle: "How well skin rebounds after stress, breakouts, procedures, or travel",
+      why:
+        "If left unaddressed, skin can stay in a stressed state longer—leading to recurring irritation, uneven texture, or lingering marks.",
+      what:
+        "Use a recovery-forward routine that restores calm first, then builds tolerance for stronger steps.",
+    },
+    {
+      title: "Environmental Stress Load",
+      subtitle: "UV exposure patterns, pollution markers, lifestyle-linked stress indicators",
+      why:
+        "If left unaddressed, daily exposure quietly compounds—showing up as dullness, uneven tone, and more sensitivity over time.",
+      what:
+        "Treat protection as a daily baseline, then support the skin’s antioxidant and hydration systems consistently.",
+    },
+    {
+      title: "Texture / Pore Refinement Signals",
+      subtitle: "When visible texture irregularity, roughness, or pore prominence stands out",
+      why:
+        "If left unaddressed, texture tends to feel less smooth and pores can look more prominent—especially under certain lighting and makeup.",
+      what:
+        "Stabilize the surface first, then refine gradually with targeted exfoliation and hydration balance.",
+    },
+  ];
+
+  const itemHtml = items
+    .map((it, idx) => {
+      const topBorder = idx === 0 ? "" : `border-top: 1px solid #E5E7EB;`;
+      return `
+        <div style="padding: 12px 0; ${topBorder}">
+          <div style="font-size: 13px; font-weight: 700; color: #111827; margin: 0 0 4px 0;">
+            ${escapeHtml(it.title)}
+            <span style="font-weight: 500; color: #6B7280;"> (${escapeHtml(it.subtitle)})</span>
+          </div>
+
+          <div style="font-size: 12px; color: #111827; line-height: 1.55; margin: 6px 0 0 0;">
+            <strong>Why it matters:</strong> ${escapeHtml(it.why)}
+          </div>
+
+          <div style="font-size: 12px; color: #111827; line-height: 1.55; margin: 6px 0 0 0;">
+            <strong>What changes:</strong> ${escapeHtml(it.what)}
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+
+  return `
+    <div style="margin: 16px 0 18px 0; padding: 14px 16px; border-radius: 10px; border: 1px solid #111827; background-color: #FFFFFF;">
+      <div style="font-size: 14px; font-weight: 800; color: #111827; margin: 0 0 6px 0;">
+        Areas of Focus — Your Action Summary
+      </div>
+
+      <div style="font-size: 12px; color: #111827; margin: 0 0 10px 0;">
+        If left unaddressed, the items below tend to compound—making your skin harder to calm, clarify, and balance.
+      </div>
+
+      <div style="font-size: 12px; color: #111827; margin: 0 0 10px 0;">
+        <strong>What This Means</strong>
+        <div style="margin-top: 6px; color: #111827;">
+          These findings are not a diagnosis, and they are not a judgment.
+          <br/>They are signals — and are most impactful when addressed early.
+          <br/><br/>The guidance that follows reflects the specific areas identified in your skin and is designed to address them intentionally.
+        </div>
+      </div>
+
+      <div>
+        ${itemHtml}
+      </div>
+    </div>
+  `;
 }
 
 // -------------------------
@@ -1393,11 +1513,15 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
     // NEW: Reflection HTML (must be inserted AFTER aging images)
     const reflectionHtml = buildEmailReflectionSectionHtml();
 
+    // NEW: Areas of Focus card section (must be inserted AFTER initial letter and BEFORE aging images)
+    const areasOfFocusHtml = buildAreasOfFocusSectionHtml();
+
     // Place aging block near the end, just above Dr. Lazuk’s closing note/signature.
-    // NEW order: before -> aging images -> reflection -> closing
+    // Order: before -> areas of focus -> aging images -> reflection -> closing
     const { before, closing } = splitForAgingPlacement(reportText);
     const letterHtmlBody =
       textToHtmlParagraphs(before) +
+      (areasOfFocusHtml ? areasOfFocusHtml : "") +
       (agingPreviewHtml ? agingPreviewHtml : "") +
       (reflectionHtml ? reflectionHtml : "") +
       (closing ? textToHtmlParagraphs(closing) : "");
@@ -1543,6 +1667,7 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
     });
   }
 };
+
 
 
 
