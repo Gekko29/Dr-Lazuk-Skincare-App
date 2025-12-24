@@ -34,6 +34,12 @@
 // ✅ ADD ONLY: Inserts “Areas of Focus — Your Action Summary” card section AFTER the initial letter
 //    and BEFORE the aging images in the emailed report.
 // ✅ Removes “Clinical Impact” / “Urgency” / numeric signaling from that section (no scores).
+//
+// FIX (per your latest feedback):
+// ✅ Removes parenthetical “(When …)” subtitles from each Areas of Focus item (no generic qualifiers).
+// ✅ Removes repeated “If left unaddressed …” from each item (that concept is stated once at the top).
+// ✅ Adds Areas of Focus content to the VISUAL (in-app) report response so the UI can render the card too.
+//    (Returned as areasOfFocus structured data + areasOfFocusText.)
 
 // -------------------------
 // Node built-ins (required)
@@ -438,71 +444,75 @@ function splitForAgingPlacement(reportText) {
 }
 
 // -------------------------
-// NEW: Areas of Focus — Your Action Summary (EMAIL)
-// Insert AFTER initial letter and BEFORE aging images.
-// NO “Clinical Impact”, NO “Urgency”, NO scores.
+// FIXED: Areas of Focus — Your Action Summary (EMAIL + UI DATA)
+// - No parenthetical subtitles
+// - No repeated "If left unaddressed..." per item
+// - Provides structured data for the UI and a plaintext rendering for visual report
 // -------------------------
-function buildAreasOfFocusSectionHtml() {
-  // Note: Intentionally stable copy + structure to preserve “baseline” feel.
-  // This is an additive insert only; no other report copy is altered.
-  const items = [
+function getAreasOfFocusItems() {
+  // Stable, declarative, non-generic, no “if” framing.
+  return [
     {
+      key: "barrier_stability",
       title: "Barrier Stability / Reactivity Control",
-      subtitle: "When dryness, sensitivity, redness, or prone patches appear",
       why:
-        "If left unaddressed, the skin becomes more reactive, more easily irritated, and less consistent in how it holds hydration and tolerates active ingredients.",
+        "Barrier disruption makes skin more reactive, more easily irritated, and less consistent in how it holds hydration and tolerates active ingredients.",
       what:
         "Prioritize barrier-first steps, then introduce actives only when the skin can tolerate them comfortably.",
     },
     {
+      key: "pigment_regulation",
       title: "Pigment Regulation / Tone Variability",
-      subtitle: "When uneven tone, early sun stress, or post inflammatory patterns are detected",
       why:
-        "If left unaddressed, tone can become more uneven over time and more difficult to correct without long-term consistency.",
+        "Uneven tone tends to become more stubborn over time and typically requires steady, long-term consistency to meaningfully improve.",
       what:
-        "Focus on daily protection + gentle brightening support that matches your current tolerance level.",
+        "Make daily protection the baseline and add gentle brightening support that matches your current tolerance level.",
     },
     {
+      key: "sebum_congestion",
       title: "Sebum Regulation / Congestion Patterns",
-      subtitle: "Especially relevant for teens, young adults, acne prone users",
       why:
-        "If left unaddressed, congestion can cycle (clog → inflammation → marks), making texture and clarity less predictable.",
+        "Congestion can cycle quietly (clog → inflammation → marks), making clarity and texture less predictable when it isn’t stabilized.",
       what:
-        "Change skin: Control oil without stripping, and use unclogging support with a tolerable, steady pace.",
+        "Control oil without stripping and use unclogging support at a tolerable, steady pace.",
     },
     {
+      key: "structural_support",
       title: "Early Structural Support Signals",
-      subtitle: "Not “aging,” but collagen response, firmness trajectory, resilience",
       why:
-        "If left unaddressed, the skin’s bounce back can decrease, and fine lines can become more persistent after stress, dehydration, or inflammation.",
+        "When the skin’s resilience and “bounce-back” are under-supported, fine lines can become more persistent after stress, dehydration, or inflammation.",
       what:
-        "Support structural resilience with steady hydration + protective daily habits, then layer in targeted support where appropriate.",
+        "Support structural resilience with steady hydration and protective daily habits, then layer in targeted support where appropriate.",
     },
     {
+      key: "recovery_repair",
       title: "Recovery & Repair Capacity",
-      subtitle: "How well skin rebounds after stress, breakouts, procedures, or travel",
       why:
-        "If left unaddressed, skin can stay in a stressed state longer—leading to recurring irritation, uneven texture, or lingering marks.",
+        "When recovery runs slow, skin can stay in a stressed state longer—showing up as recurring irritation, uneven texture, or lingering marks.",
       what:
         "Use a recovery-forward routine that restores calm first, then builds tolerance for stronger steps.",
     },
     {
+      key: "environmental_stress",
       title: "Environmental Stress Load",
-      subtitle: "UV exposure patterns, pollution markers, lifestyle-linked stress indicators",
       why:
-        "If left unaddressed, daily exposure quietly compounds—showing up as dullness, uneven tone, and more sensitivity over time.",
+        "Daily UV and environmental exposure compounds quietly over time, often showing up as dullness, uneven tone, and increased sensitivity.",
       what:
-        "Treat protection as a daily baseline, then support the skin’s antioxidant and hydration systems consistently.",
+        "Treat protection as non-negotiable and support the skin’s antioxidant and hydration systems consistently.",
     },
     {
+      key: "texture_pores",
       title: "Texture / Pore Refinement Signals",
-      subtitle: "When visible texture irregularity, roughness, or pore prominence stands out",
       why:
-        "If left unaddressed, texture tends to feel less smooth and pores can look more prominent—especially under certain lighting and makeup.",
+        "Texture irregularity and visible pores tend to stand out more when the surface is dehydrated, inflamed, or over-exfoliated.",
       what:
         "Stabilize the surface first, then refine gradually with targeted exfoliation and hydration balance.",
     },
   ];
+}
+
+function buildAreasOfFocusSectionHtml() {
+  const items = getAreasOfFocusItems();
 
   const itemHtml = items
     .map((it, idx) => {
@@ -511,7 +521,6 @@ function buildAreasOfFocusSectionHtml() {
         <div style="padding: 12px 0; ${topBorder}">
           <div style="font-size: 13px; font-weight: 700; color: #111827; margin: 0 0 4px 0;">
             ${escapeHtml(it.title)}
-            <span style="font-weight: 500; color: #6B7280;"> (${escapeHtml(it.subtitle)})</span>
           </div>
 
           <div style="font-size: 12px; color: #111827; line-height: 1.55; margin: 6px 0 0 0;">
@@ -550,6 +559,28 @@ function buildAreasOfFocusSectionHtml() {
       </div>
     </div>
   `;
+}
+
+function buildAreasOfFocusText() {
+  const items = getAreasOfFocusItems();
+  const header =
+    `Areas of Focus — Your Action Summary\n` +
+    `If left unaddressed, the items below tend to compound—making your skin harder to calm, clarify, and balance.\n` +
+    `What This Means\n` +
+    `These findings are not a diagnosis, and they are not a judgment.\n` +
+    `They are signals — and are most impactful when addressed early.\n` +
+    `The guidance that follows reflects the specific areas identified in your skin and is designed to address them intentionally.\n`;
+
+  const body = items
+    .map(
+      (it) =>
+        `\n${it.title}\n` +
+        `Why it matters: ${it.why}\n` +
+        `What changes: ${it.what}`
+    )
+    .join("\n");
+
+  return (header + body).trim();
 }
 
 // -------------------------
@@ -691,10 +722,6 @@ function buildEmailReflectionSectionHtml() {
 
 // -------------------------
 // Upload image to a public URL for EMAIL rendering
-// WHY: Many email clients block data: URLs in <img src="data:...">.
-// Supports:
-// - Cloudinary (recommended quick win)
-// - Vercel Blob (optional)
 // -------------------------
 function isDataUrl(s) {
   return typeof s === "string" && s.startsWith("data:image/");
@@ -1510,14 +1537,18 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
 
     const agingPreviewHtml = buildAgingPreviewHtml(agingPreviewImages);
 
-    // NEW: Reflection HTML (must be inserted AFTER aging images)
+    // Reflection HTML (must be inserted AFTER aging images)
     const reflectionHtml = buildEmailReflectionSectionHtml();
 
-    // NEW: Areas of Focus card section (must be inserted AFTER initial letter and BEFORE aging images)
+    // Areas of Focus card section (EMAIL)
     const areasOfFocusHtml = buildAreasOfFocusSectionHtml();
 
+    // Areas of Focus (UI payload + plaintext)
+    const areasOfFocus = getAreasOfFocusItems();
+    const areasOfFocusText = buildAreasOfFocusText();
+
     // Place aging block near the end, just above Dr. Lazuk’s closing note/signature.
-    // Order: before -> areas of focus -> aging images -> reflection -> closing
+    // EMAIL order: before -> areas of focus -> aging images -> reflection -> closing
     const { before, closing } = splitForAgingPlacement(reportText);
     const letterHtmlBody =
       textToHtmlParagraphs(before) +
@@ -1629,10 +1660,17 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
       }),
     ]);
 
-    // Response to frontend
+    // Response to frontend (VISUAL REPORT)
     return res.status(200).json({
       ok: true,
+
+      // Original narrative letter (UI can keep rendering this as-is)
       report: reportText,
+
+      // ✅ Card data for visual report rendering
+      areasOfFocus,
+      areasOfFocusText,
+
       fitzpatrickType: fitzpatrickType || null,
       fitzpatrickSummary: fitzpatrickSummary || null,
       agingPreviewImages,
@@ -1667,6 +1705,7 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
     });
   }
 };
+
 
 
 
