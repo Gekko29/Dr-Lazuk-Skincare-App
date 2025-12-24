@@ -1,3 +1,4 @@
+```jsx
 // src/App.jsx
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
@@ -520,6 +521,80 @@ const WatermarkOverlay = ({ text = "SkinDoctor.ai • Dr. Lazuk Esthetics® | Co
   return (
     <div className="absolute bottom-3 right-3 z-10 bg-black/55 backdrop-blur-sm px-3 py-2 text-[11px] text-white font-semibold select-none">
       {text}
+    </div>
+  );
+};
+
+/* ---------------------------------------
+   Areas of Focus Card (ON-SCREEN)
+   - Shows only relevant categories returned by API
+   - Uses locked labels:
+     "The Compounding Risk" + "Do This Now"
+--------------------------------------- */
+const normalizeAreasOfFocus = (areas) => {
+  if (!areas) return [];
+
+  // Accept either array or object-map from API
+  if (Array.isArray(areas)) {
+    return areas
+      .map((x) => {
+        const title = String(x?.title || x?.category || x?.name || "").trim();
+        const risk = String(x?.compoundingRisk || x?.risk || x?.implications || "").trim();
+        const now = String(x?.doThisNow || x?.action || x?.protocol || "").trim();
+        if (!title || (!risk && !now)) return null;
+        return { title, risk, now };
+      })
+      .filter(Boolean);
+  }
+
+  if (typeof areas === "object") {
+    return Object.entries(areas)
+      .map(([key, val]) => {
+        const title = String(val?.title || key || "").trim();
+        const risk = String(val?.compoundingRisk || val?.risk || val?.implications || "").trim();
+        const now = String(val?.doThisNow || val?.action || val?.protocol || "").trim();
+        if (!title || (!risk && !now)) return null;
+        return { title, risk, now };
+      })
+      .filter(Boolean);
+  }
+
+  return [];
+};
+
+const AreasOfFocusCard = ({ areas }) => {
+  const items = useMemo(() => normalizeAreasOfFocus(areas), [areas]);
+
+  if (!items || items.length === 0) return null;
+
+  return (
+    <div className="bg-white border-2 border-gray-900 p-6">
+      <h4 className="text-xl font-bold text-gray-900 mb-2">Areas of Focus</h4>
+      <p className="text-sm text-gray-700 mb-5">
+        These are the specific signals your analysis flagged as most relevant right now.
+      </p>
+
+      <div className="space-y-5">
+        {items.map((it, idx) => (
+          <div key={`${it.title}-${idx}`} className="border border-gray-200 bg-gray-50 p-5">
+            <p className="text-base font-bold text-gray-900">{it.title}</p>
+
+            {it.risk && (
+              <p className="text-sm text-gray-800 mt-3 leading-relaxed">
+                <span className="font-bold text-gray-900">The Compounding Risk:</span>{" "}
+                {it.risk}
+              </p>
+            )}
+
+            {it.now && (
+              <p className="text-sm text-gray-800 mt-3 leading-relaxed">
+                <span className="font-bold text-gray-900">Do This Now:</span>{" "}
+                {it.now}
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
@@ -1185,7 +1260,13 @@ ${SUPPORTIVE_FOOTER_LINE}`);
         // but UI will not render it anywhere.
         fitzpatrickType: data.fitzpatrickType || null,
         fitzpatrickSummary: data.fitzpatrickSummary || null,
-        agingPreviewImages: data.agingPreviewImages || null
+        agingPreviewImages: data.agingPreviewImages || null,
+
+        // ✅ NEW: Areas of Focus (must render on-screen)
+        // Server should return either:
+        // - data.areasOfFocus: array of { title, compoundingRisk, doThisNow }
+        // - or object map by key
+        areasOfFocus: data.areasOfFocus || data.focusAreas || null
       });
 
       gaEvent('analysis_success', {
@@ -1197,7 +1278,8 @@ ${SUPPORTIVE_FOOTER_LINE}`);
           data?.agingPreviewImages?.noChange20 ||
           data?.agingPreviewImages?.withCare10 ||
           data?.agingPreviewImages?.withCare20
-        )
+        ),
+        hasAreasOfFocus: !!(data?.areasOfFocus || data?.focusAreas)
       });
 
       setStep('results');
@@ -1519,6 +1601,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                 - Reflection is always at the very bottom
                 - Paths Forward buttons scroll reliably
                 - Fitzpatrick removed from UI rendering
+                - ✅ Areas of Focus card is visible on-screen
             */}
 
             {step === 'photo' && (
@@ -1821,6 +1904,9 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                   </p>
                 </div>
 
+                {/* ✅ Areas of Focus (ON-SCREEN) */}
+                <AreasOfFocusCard areas={analysisReport?.areasOfFocus} />
+
                 {/* ✅ Paths Forward works + scrolls */}
                 <AgencyLayer
                   onChoose={(choice) => {
@@ -2116,6 +2202,8 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 };
 
 export default DermatologyApp;
+```
+
 
 
 
