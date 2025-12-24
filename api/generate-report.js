@@ -31,13 +31,15 @@
 // ✅ Removed server-side watermark pixel-baking (Sharp) — watermark is client-side only now.
 //
 // NEW (per request 12/24):
-// ✅ ADD ONLY: Inserts “Areas of Focus — Your Action Summary” card section AFTER the initial letter
+// ✅ ADD ONLY: Inserts “Areas of Focus” card section AFTER the initial letter
 //    and BEFORE the aging images in the emailed report.
 // ✅ Removes “Clinical Impact” / “Urgency” / numeric signaling from that section (no scores).
 //
 // FIX (per your latest feedback):
-// ✅ Removes parenthetical “(When …)” subtitles from each Areas of Focus item (no generic qualifiers).
-// ✅ Removes repeated “If left unaddressed …” from each item (that concept is stated once at the top).
+// ✅ Removes parenthetical subtitles from each Areas of Focus item (no generic qualifiers).
+// ✅ Removes the “What This Means / not a diagnosis / not a judgment” block from Areas of Focus
+//    (that copy is what you flagged as NOT agreed).
+// ✅ Removes the “If left unaddressed…” sentence from Areas of Focus.
 // ✅ Adds Areas of Focus content to the VISUAL (in-app) report response so the UI can render the card too.
 //    (Returned as areasOfFocus structured data + areasOfFocusText.)
 
@@ -444,69 +446,68 @@ function splitForAgingPlacement(reportText) {
 }
 
 // -------------------------
-// FIXED: Areas of Focus — Your Action Summary (EMAIL + UI DATA)
-// - No parenthetical subtitles
-// - No repeated "If left unaddressed..." per item
-// - Provides structured data for the UI and a plaintext rendering for visual report
+// FIXED: Areas of Focus (EMAIL + UI DATA)
+// - Removes the unwanted “What This Means / not a diagnosis / not a judgment” block
+// - Removes “If left unaddressed…” sentence
+// - Keeps clean, simple card content consistent across EMAIL + UI
 // -------------------------
 function getAreasOfFocusItems() {
-  // Stable, declarative, non-generic, no “if” framing.
   return [
     {
       key: "barrier_stability",
       title: "Barrier Stability / Reactivity Control",
       why:
-        "Barrier disruption makes skin more reactive, more easily irritated, and less consistent in how it holds hydration and tolerates active ingredients.",
+        "When the barrier is disrupted, skin tends to feel more reactive and less consistent in how it holds hydration and tolerates active ingredients.",
       what:
-        "Prioritize barrier-first steps, then introduce actives only when the skin can tolerate them comfortably.",
+        "Go barrier-first (gentle cleanse + moisturize + daily mineral SPF), then introduce actives only once sensitivity is calm and stable.",
     },
     {
       key: "pigment_regulation",
       title: "Pigment Regulation / Tone Variability",
       why:
-        "Uneven tone tends to become more stubborn over time and typically requires steady, long-term consistency to meaningfully improve.",
+        "Uneven tone becomes harder to shift when daily protection isn’t consistent and brightening steps are introduced too aggressively.",
       what:
-        "Make daily protection the baseline and add gentle brightening support that matches your current tolerance level.",
+        "Make daily protection non-negotiable, then use gentle brightening support at a pace your skin tolerates comfortably.",
     },
     {
       key: "sebum_congestion",
       title: "Sebum Regulation / Congestion Patterns",
       why:
-        "Congestion can cycle quietly (clog → inflammation → marks), making clarity and texture less predictable when it isn’t stabilized.",
+        "Congestion often cycles quietly (clog → inflammation → marks), which can make clarity and texture feel unpredictable.",
       what:
-        "Control oil without stripping and use unclogging support at a tolerable, steady pace.",
+        "Control oil without stripping, and use unclogging support steadily—slow, consistent progress beats over-exfoliation.",
     },
     {
       key: "structural_support",
       title: "Early Structural Support Signals",
       why:
-        "When the skin’s resilience and “bounce-back” are under-supported, fine lines can become more persistent after stress, dehydration, or inflammation.",
+        "When resilience is under-supported, fine lines can look more persistent after dehydration, stress, or irritation.",
       what:
-        "Support structural resilience with steady hydration and protective daily habits, then layer in targeted support where appropriate.",
+        "Reinforce hydration + daily protection, then layer targeted support in a measured, tolerable way.",
     },
     {
       key: "recovery_repair",
       title: "Recovery & Repair Capacity",
       why:
-        "When recovery runs slow, skin can stay in a stressed state longer—showing up as recurring irritation, uneven texture, or lingering marks.",
+        "When recovery runs slow, skin can stay in a stressed state longer—showing up as lingering redness, texture irregularity, or marks.",
       what:
-        "Use a recovery-forward routine that restores calm first, then builds tolerance for stronger steps.",
+        "Use a recovery-forward routine that restores calm first, then gradually builds tolerance for stronger steps.",
     },
     {
       key: "environmental_stress",
       title: "Environmental Stress Load",
       why:
-        "Daily UV and environmental exposure compounds quietly over time, often showing up as dullness, uneven tone, and increased sensitivity.",
+        "Daily UV and environmental exposure compounds quietly over time, often showing up as dullness, uneven tone, and sensitivity.",
       what:
-        "Treat protection as non-negotiable and support the skin’s antioxidant and hydration systems consistently.",
+        "Treat protection as the foundation and support the skin’s antioxidant + hydration systems consistently.",
     },
     {
       key: "texture_pores",
       title: "Texture / Pore Refinement Signals",
       why:
-        "Texture irregularity and visible pores tend to stand out more when the surface is dehydrated, inflamed, or over-exfoliated.",
+        "Texture and visible pores tend to stand out more when the surface is dehydrated, inflamed, or over-exfoliated.",
       what:
-        "Stabilize the surface first, then refine gradually with targeted exfoliation and hydration balance.",
+        "Stabilize the surface first, then refine gradually with balanced hydration and measured exfoliation.",
     },
   ];
 }
@@ -538,20 +539,11 @@ function buildAreasOfFocusSectionHtml() {
   return `
     <div style="margin: 16px 0 18px 0; padding: 14px 16px; border-radius: 10px; border: 1px solid #111827; background-color: #FFFFFF;">
       <div style="font-size: 14px; font-weight: 800; color: #111827; margin: 0 0 6px 0;">
-        Areas of Focus — Your Action Summary
+        Areas of Focus
       </div>
 
       <div style="font-size: 12px; color: #111827; margin: 0 0 10px 0;">
-        If left unaddressed, the items below tend to compound—making your skin harder to calm, clarify, and balance.
-      </div>
-
-      <div style="font-size: 12px; color: #111827; margin: 0 0 10px 0;">
-        <strong>What This Means</strong>
-        <div style="margin-top: 6px; color: #111827;">
-          These findings are not a diagnosis, and they are not a judgment.
-          <br/>They are signals — and are most impactful when addressed early.
-          <br/><br/>The guidance that follows reflects the specific areas identified in your skin and is designed to address them intentionally.
-        </div>
+        A quick snapshot of the priorities I would address first—based on the visible patterns in your photo and the information you shared.
       </div>
 
       <div>
@@ -564,12 +556,8 @@ function buildAreasOfFocusSectionHtml() {
 function buildAreasOfFocusText() {
   const items = getAreasOfFocusItems();
   const header =
-    `Areas of Focus — Your Action Summary\n` +
-    `If left unaddressed, the items below tend to compound—making your skin harder to calm, clarify, and balance.\n` +
-    `What This Means\n` +
-    `These findings are not a diagnosis, and they are not a judgment.\n` +
-    `They are signals — and are most impactful when addressed early.\n` +
-    `The guidance that follows reflects the specific areas identified in your skin and is designed to address them intentionally.\n`;
+    `Areas of Focus\n` +
+    `A quick snapshot of the priorities I would address first—based on the visible patterns in your photo and the information you shared.\n`;
 
   const body = items
     .map(
