@@ -40,6 +40,10 @@
 //    - emailed report
 //    - on-screen (API response payload) report
 //
+// IMPORTANT FIX (12/24):
+// ✅ Prevents “always 7 categories” bug by scanning VALUE text only (not JSON keys/headings)
+// ✅ Triggers require risk/problem language (not just category words existing in the payload)
+//
 // -------------------------
 // Node built-ins (required)
 // -------------------------
@@ -451,16 +455,44 @@ function splitForAgingPlacement(reportText) {
 // - This is course correction (not reassurance)
 // -------------------------
 
+// ✅ FIX: extract VALUE text only (do NOT include keys/headings)
+function extractTextValues(input) {
+  const out = [];
+  const seen = new Set();
+
+  function walk(v) {
+    if (v == null) return;
+
+    if (typeof v === "object") {
+      if (seen.has(v)) return;
+      seen.add(v);
+    }
+
+    if (typeof v === "string") {
+      out.push(v);
+      return;
+    }
+
+    if (Array.isArray(v)) {
+      for (const item of v) walk(item);
+      return;
+    }
+
+    if (typeof v === "object") {
+      for (const k of Object.keys(v)) {
+        walk(v[k]); // IMPORTANT: values only
+      }
+      return;
+    }
+  }
+
+  walk(input);
+  return out.join(" ").toLowerCase();
+}
+
 function normalizeToTextBlob(...parts) {
   try {
-    return parts
-      .map((p) => {
-        if (!p) return "";
-        if (typeof p === "string") return p;
-        return JSON.stringify(p);
-      })
-      .join(" ")
-      .toLowerCase();
+    return parts.map((p) => extractTextValues(p)).join(" ").toLowerCase();
   } catch {
     return "";
   }
@@ -475,7 +507,17 @@ function buildBehaviorAnchors(visitorQuestion) {
   const v = String(visitorQuestion || "").toLowerCase();
 
   const anchors = {
-    overExfoliation: includesAny(v, ["exfoliat", "scrub", "peel", "aha", "bha", "acid", "glycol", "lactic", "salicylic"]),
+    overExfoliation: includesAny(v, [
+      "exfoliat",
+      "scrub",
+      "peel",
+      "aha",
+      "bha",
+      "acid",
+      "glycol",
+      "lactic",
+      "salicylic",
+    ]),
     retinoidHeavy: includesAny(v, ["retinol", "retinoid", "tret", "adapalene"]),
     noSpf: includesAny(v, ["no spf", "dont use spf", "don't use spf", "skip spf", "not wearing sunscreen"]),
     sunExposure: includesAny(v, ["tanning", "tan", "sunbed", "sun bed", "sun exposure", "outside all day", "beach"]),
@@ -628,46 +670,114 @@ function buildAreaCopy({ title, kind, anchors }) {
   };
 }
 
+// ✅ FIX: require risk/problem language (prevents “always 7”)
+const NEGATIVE_TERMS = ["no concern", "not present", "absent", "normal", "stable", "balanced", "minimal", "none"];
+const RISK_TERMS = [
+  "compromis",
+  "weaken",
+  "fragile",
+  "irritat",
+  "reactiv",
+  "sensitiv",
+  "inflam",
+  "redness",
+  "tight",
+  "stinging",
+  "burning",
+  "congest",
+  "clog",
+  "comed",
+  "blackhead",
+  "whitehead",
+  "breakout",
+  "oily",
+  "excess sebum",
+  "uneven",
+  "discolor",
+  "dark spot",
+  "hyperpig",
+  "dull",
+  "rough",
+  "bumpy",
+  "enlarged pores",
+  "visible pores",
+  "fine line",
+  "wrinkle",
+  "photoaging",
+  "loss of elasticity",
+  "sag",
+  "puff",
+  "swelling",
+];
+
+function hasRiskLanguage(text, required = 1) {
+  const t = String(text || "").toLowerCase();
+  const riskHits = RISK_TERMS.filter((w) => t.includes(w)).length;
+  const negHits = NEGATIVE_TERMS.filter((w) => t.includes(w)).length;
+
+  // If it explicitly says “normal/none/minimal”, do NOT trigger from that snippet alone
+  if (negHits > 0 && riskHits <= 1) return false;
+
+  return riskHits >= required;
+}
+
 function detectAreasTriggered({ analysisContext, imageAnalysis, visitorQuestion }) {
+  // VALUE text only
   const blob = normalizeToTextBlob(analysisContext, imageAnalysis);
   const ia = imageAnalysis || {};
   const vision = ia.analysis || {};
   const checklist15 = vision.checklist15 || {};
   const skinType = (ia.skinType || "").toLowerCase();
-  const primary = normalizeToTextBlob({ primaryConcern: (analysisContext && analysisContext.form && analysisContext.form.primaryConcerns) || [] });
+
+  const primary = normalizeToTextBlob({
+    primaryConcern: (analysisContext && analysisContext.form && analysisContext.form.primaryConcerns) || [],
+  });
 
   const anchors = buildBehaviorAnchors(visitorQuestion);
 
-  // signal gates (heuristic, conservative)
+  // Pull specific checklist value strings (values, not keys)
+  const barrierTxt = checklist15["8_barrierHealth"] || "";
+  const inflamTxt = checklist15["7_inflammatoryClues"] || "";
+  const pigmentTxt = checklist15["3_pigmentationColor"] || "";
+  const poresTxt = checklist15["5_acneCongestion"] || "";
+  const textureTxt = checklist15["2_textureSurfaceQuality"] || "";
+  const agingTxt = checklist15["6_agingPhotoaging"] || "";
+  const lifestyleTxt = checklist15["12_lifestyleIndicators"] || "";
+
   const barrier =
-    includesAny(blob, ["barrier", "stinging", "tight", "reactiv", "sensitiv", "irritat"]) ||
-    includesAny(normalizeToTextBlob(checklist15["8_barrierHealth"]), ["barrier", "tight", "stinging", "sensitiv", "irritat"]);
+    hasRiskLanguage(barrierTxt, 1) ||
+    includesAny(blob, ["stinging", "burning", "tightness"]) ||
+    (includesAny(blob, ["barrier"]) && hasRiskLanguage(blob, 2));
 
   const sebum =
     skinType === "oily" ||
-    includesAny(blob, ["congestion", "clog", "comed", "blackhead", "breakout", "oily", "sebum", "acne"]) ||
-    includesAny(primary, ["acne", "breakout", "oily", "blackhead", "pores"]);
+    hasRiskLanguage(poresTxt, 1) ||
+    includesAny(blob, ["blackhead", "whitehead", "breakout", "clog", "congestion"]) ||
+    (includesAny(primary, ["acne", "breakout", "oily", "blackhead", "pores"]) && hasRiskLanguage(blob, 1));
 
   const pigment =
-    includesAny(blob, ["uneven tone", "pigment", "dark spot", "sun spot", "discolor", "tone variab"]) ||
-    includesAny(primary, ["pigment", "dark spots", "uneven tone", "hyperpig", "melanin"]); // note: not diagnosing; just user words
+    hasRiskLanguage(pigmentTxt, 1) ||
+    includesAny(blob, ["dark spot", "uneven tone", "discolor"]) ||
+    (includesAny(primary, ["pigment", "dark spots", "uneven tone", "hyperpig"]) && hasRiskLanguage(blob, 1));
 
   const texturePores =
-    includesAny(blob, ["texture", "rough", "bumpy", "pores", "pore"]) ||
-    includesAny(primary, ["texture", "pores"]);
+    hasRiskLanguage(textureTxt, 1) ||
+    (includesAny(blob, ["pores"]) && hasRiskLanguage(blob, 2)) ||
+    (includesAny(blob, ["texture", "rough", "bumpy"]) && hasRiskLanguage(blob, 2));
 
   const structural =
-    includesAny(blob, ["fine line", "wrinkle", "elastic", "sag", "photoaging", "aging"]) ||
-    includesAny(primary, ["wrinkle", "fine lines", "aging"]);
+    hasRiskLanguage(agingTxt, 1) ||
+    (includesAny(blob, ["wrinkle", "fine line", "photoaging", "elasticity", "sag"]) && hasRiskLanguage(blob, 2)) ||
+    (includesAny(primary, ["wrinkle", "fine lines", "aging"]) && hasRiskLanguage(blob, 1));
 
   const recovery =
-    includesAny(blob, ["redness", "inflammation", "slow recovery", "lingering", "marks", "irritation"]) ||
-    includesAny(normalizeToTextBlob(checklist15["7_inflammatoryClues"]), ["inflamm", "red", "reactiv"]) ||
-    includesAny(normalizeToTextBlob(checklist15["12_lifestyleIndicators"]), ["stress", "fatigue"]);
+    hasRiskLanguage(inflamTxt, 1) ||
+    (includesAny(blob, ["redness", "inflammation", "irritation", "lingering"]) && hasRiskLanguage(blob, 2)) ||
+    (includesAny(lifestyleTxt, ["stress", "fatigue"]) && hasRiskLanguage(blob, 1));
 
   const environment =
-    includesAny(blob, ["uv", "sun", "environment", "pollution", "dull", "oxidative", "outdoor"]) ||
-    includesAny(primary, ["sun", "dull", "tone"]);
+    (includesAny(blob, ["uv", "sun", "pollution", "environment"]) && hasRiskLanguage(blob, 1)) ||
+    ((anchors.noSpf || anchors.sunExposure) && includesAny(blob, ["uv", "sun", "sunscreen", "spf"]));
 
   return {
     anchors,
