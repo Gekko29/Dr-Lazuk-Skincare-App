@@ -30,24 +30,16 @@
 // IMPORTANT CHANGE (12/23):
 // ✅ Removed server-side watermark pixel-baking (Sharp) — watermark is client-side only now.
 //
-// NEW (per request 12/24):
-// ✅ ADD ONLY: Inserts “Areas of Focus” card section AFTER the initial letter
-//    and BEFORE the aging images in the emailed report.
-// ✅ Removes “Clinical Impact” / “Urgency” / numeric signaling from that section (no scores).
+// NEW (LOCKED — per your directive):
+// ✅ “Areas of Focus” is now DYNAMIC (0–7 items, only triggered by analysis)
+// ✅ Naming convention is LOCKED:
+//    - The Compounding Risk
+//    - Do This Now
+// ✅ This section is course correction (not reassurance), physician-credible urgency without panic
+// ✅ The same Areas of Focus content appears in BOTH:
+//    - emailed report
+//    - on-screen (API response payload) report
 //
-// FIX (per your latest feedback):
-// ✅ Removes parenthetical subtitles from each Areas of Focus item (no generic qualifiers).
-// ✅ Removes the “What This Means / not a diagnosis / not a judgment” block from Areas of Focus
-//    (that copy is what you flagged as NOT agreed).
-// ✅ Removes the “If left unaddressed…” sentence from Areas of Focus.
-// ✅ Adds Areas of Focus content to the VISUAL (in-app) report response so the UI can render the card too.
-//    (Returned as areasOfFocus structured data + areasOfFocusText.)
-//
-// NEW (per request 12/24 - “Directional Wrong” framework):
-// ✅ Areas of Focus now follows: Observation → Interference → Consequence → Protocol Shift → Why stopping matters
-// ✅ Ties to user-stated behaviors when present; otherwise uses “commonly reinforced by…”
-// ✅ Never diagnoses; no fear language; decisive course-correction tone.
-
 // -------------------------
 // Node built-ins (required)
 // -------------------------
@@ -451,232 +443,307 @@ function splitForAgingPlacement(reportText) {
 }
 
 // -------------------------
-// FIXED: Areas of Focus (EMAIL + UI DATA)
-// - Implements “Directional Wrong” framework:
-//   Observation → Interference → Consequence → Protocol Shift → Why stopping matters
-// - No diagnosis language; no fear; decisive course-correction tone
-// - Ties to user-stated behaviors when available; otherwise uses “commonly reinforced by…”
-// - No “What This Means / not a judgment” block
-// - No “If left unaddressed…” sentence
+// LOCKED: Areas of Focus (EMAIL + UI DATA)
+// - Dynamic: 0–7 items based on analysis triggers (NOT static)
+// - Naming convention locked:
+//    The Compounding Risk
+//    Do This Now
+// - This is course correction (not reassurance)
 // -------------------------
 
-function buildDirectionalAreasOfFocus({ imageAnalysis, dermEngine, visitorQuestion }) {
-  const routineText = String(visitorQuestion || "").toLowerCase();
-
-  const a = imageAnalysis?.analysis || {};
-  const evidence = dermEngine?.two_signal_evidence_map || [];
-
-  // Routine / ingredient cues (ONLY if user mentions them)
-  const routineCues = {
-    exfoliation: /(exfoliat|scrub|aha|bha|glycol|lactic|mandelic|salicylic|peel|toner acid)/i.test(routineText),
-    retinoid: /(retinol|tretinoin|adapalene|retinoid)/i.test(routineText),
-    vitaminC: /(vitamin c|ascorb)/i.test(routineText),
-    fragrance: /(fragrance|perfume|scented)/i.test(routineText),
-    harshCleanser: /(foaming|deep clean|stripping|bar soap)/i.test(routineText),
-    noSunscreen: /(no spf|dont use spf|never sunscreen|skip spf|rarely spf)/i.test(routineText),
-    tooManyActives: /(too many|layer(ing)? actives|multiple acids|strong routine|overdoing)/i.test(routineText),
-  };
-
-  function hasEvidence(keywordList) {
-    const joined = JSON.stringify(evidence).toLowerCase();
-    return keywordList.some((k) => joined.includes(k));
-  }
-
-  const obs = {
-    texture: a.texture || "",
-    pores: a.poreBehavior || "",
-    pigment: a.pigment || "",
-    lines: a.fineLinesAreas || "",
-    elasticity: a.elasticity || "",
-    overall: a.skinFindings || "",
-  };
-
-  function joinShort(...parts) {
+function normalizeToTextBlob(...parts) {
+  try {
     return parts
-      .map((p) => String(p || "").trim())
-      .filter(Boolean)
-      .slice(0, 2)
-      .join(" ");
+      .map((p) => {
+        if (!p) return "";
+        if (typeof p === "string") return p;
+        return JSON.stringify(p);
+      })
+      .join(" ")
+      .toLowerCase();
+  } catch {
+    return "";
   }
-
-  function safeOneSentence(text) {
-    const t = String(text || "").trim();
-    if (!t) return "";
-    // Avoid runaway length; keep it crisp.
-    return t.length > 180 ? t.slice(0, 177).trimEnd() + "…" : t;
-  }
-
-  const items = [];
-
-  // 1) Barrier Stability / Reactivity Control
-  {
-    const supported =
-      hasEvidence(["barrier", "reactiv", "irrit", "dry", "dehydrat"]) ||
-      /react|irrit|dry|dehydrat/i.test(JSON.stringify(obs));
-
-    if (supported) {
-      const interference = [];
-      if (routineCues.exfoliation) interference.push("frequent exfoliation / acids");
-      if (routineCues.retinoid) interference.push("nightly retinoid use without recovery nights");
-      if (routineCues.harshCleanser) interference.push("cleansers that strip the surface");
-      if (routineCues.fragrance) interference.push("fragrance-heavy products");
-      if (routineCues.tooManyActives) interference.push("stacking too many actives at once");
-
-      items.push({
-        key: "barrier_stability",
-        title: "Barrier Stability / Reactivity Control",
-        compoundingRisk:
-          `Your skin shows early signs of barrier stress—sometimes even when it looks “fine” at a glance. ` +
-          safeOneSentence(joinShort(obs.overall, obs.texture)),
-        interference:
-          interference.length
-            ? `This pattern is commonly reinforced by ${interference.join(", ")}.`
-            : `This pattern is commonly reinforced by over-exfoliation, high-strength actives, or cleansing that strips the surface oils your barrier relies on.`,
-        consequence:
-          `When this continues, hydration won’t hold consistently and sensitivity escalates—so progress starts to feel unpredictable.`,
-        directive:
-          `Pause aggressive actives immediately. Go barrier-first for 10–14 days: gentle cleanse, moisturize, and daily mineral SPF.`,
-        whyStopping:
-          `Removing the source of barrier stress gives your skin the space to stabilize so corrective steps work instead of backfiring.`,
-      });
-    }
-  }
-
-  // 2) Pigment Regulation / Tone Variability
-  {
-    const supported =
-      hasEvidence(["pigment", "tone", "uneven", "discolor"]) ||
-      /uneven|tone|pigment/i.test(JSON.stringify(obs));
-
-    if (supported) {
-      const interference = [];
-      if (routineCues.noSunscreen) interference.push("inconsistent SPF");
-      if (routineCues.exfoliation) interference.push("irritation from over-exfoliation (which can worsen tone)");
-      if (routineCues.retinoid) interference.push("retinoids without barrier support (increasing irritation risk)");
-      if (routineCues.vitaminC) interference.push("strong vitamin C layering without tolerance (irritation risk)");
-
-      items.push({
-        key: "pigment_regulation",
-        title: "Pigment Regulation / Tone Variability",
-        compoundingRisk:
-          `Your skin shows signs of tone variability that becomes harder to shift when the routine isn’t consistent. ` +
-          safeOneSentence(joinShort(obs.pigment, obs.overall)),
-        interference:
-          interference.length
-            ? `This pattern is commonly reinforced by ${interference.join(", ")}.`
-            : `This pattern is commonly reinforced by daily UV exposure and low-grade irritation from routines that push too hard, too fast.`,
-        consequence:
-          `When this pattern keeps stacking, tone can “set” over time—meaning it takes longer to meaningfully calm and brighten.`,
-        directive:
-          `Treat daily mineral SPF as non-negotiable. Keep brightening gentle and consistent—avoid aggressive “quick fixes.”`,
-        whyStopping:
-          `Protection stops new imbalance from stacking on top of old imbalance. That’s where real momentum starts.`,
-      });
-    }
-  }
-
-  // 3) Sebum Regulation / Congestion Patterns
-  {
-    const supported =
-      hasEvidence(["sebum", "congestion", "pore", "shine"]) ||
-      /pore|congest|oil|shine/i.test(JSON.stringify(obs));
-
-    if (supported) {
-      const interference = [];
-      if (routineCues.harshCleanser) interference.push("stripping cleansers (rebound oil)");
-      if (routineCues.exfoliation) interference.push("over-exfoliation (irritation-driven congestion)");
-      if (routineCues.tooManyActives) interference.push("too many actives at once (inflammation cycle)");
-
-      items.push({
-        key: "sebum_congestion",
-        title: "Sebum Regulation / Congestion Patterns",
-        compoundingRisk:
-          `Your skin shows a congestion pattern that tends to cycle quietly (clog → inflammation → marks). ` +
-          safeOneSentence(joinShort(obs.pores, obs.texture)),
-        interference:
-          interference.length
-            ? `This is commonly reinforced by ${interference.join(", ")}.`
-            : `This is commonly reinforced by stripping routines, heavy layering that traps congestion, or inconsistent unclogging support.`,
-        consequence:
-          `When the cycle repeats, clarity becomes less predictable and texture becomes harder to refine.`,
-        directive:
-          `Stop “stripping to feel clean.” Control oil without over-correcting. Use steady, tolerable unclogging support—consistency beats intensity.`,
-        whyStopping:
-          `Consistency breaks the cycle. Intensity usually just irritates it and keeps the loop going.`,
-      });
-    }
-  }
-
-  // 4) Early Structural Support Signals
-  {
-    const supported =
-      hasEvidence(["wrinkle", "line", "elastic", "lax"]) ||
-      /fine line|wrinkl|elastic/i.test(JSON.stringify(obs));
-
-    if (supported) {
-      items.push({
-        key: "structural_support",
-        title: "Early Structural Support Signals",
-        compoundingRisk:
-          `Your skin shows early structural-support signals—lines that look more persistent after dehydration or stress. ` +
-          safeOneSentence(joinShort(obs.lines, obs.elasticity)),
-        interference:
-          `This is commonly reinforced by inconsistent hydration support, barrier disruption, and cumulative environmental exposure.`,
-        consequence:
-          `When resilience drops, “bounce-back” becomes slower—so fine lines hang around longer.`,
-        directive:
-          `Stabilize hydration daily, protect from UV consistently, and add targeted support only after the surface stays calm.`,
-        whyStopping:
-          `Structural support responds best to steady habits. Sporadic intensity rarely delivers steady results.`,
-      });
-    }
-  }
-
-  // Fallback: Always return at least 1 item (still directional, still decisive)
-  if (!items.length) {
-    return [
-      {
-        key: "barrier_stability",
-        title: "Barrier Stability / Reactivity Control",
-        compoundingRisk:
-          `Your skin shows subtle signs that it would benefit from a barrier-first reset before stronger steps.`,
-        interference:
-          `This pattern is commonly reinforced by over-exfoliation, high-strength actives, or cleansing that strips the surface.`,
-        consequence:
-          `When that continues, hydration becomes inconsistent and sensitivity becomes easier to trigger.`,
-        directive:
-          `Pause aggressive actives and run a calm, protective routine for 10–14 days.`,
-        whyStopping:
-          `A stable barrier is what makes every other improvement possible.`,
-      },
-    ];
-  }
-
-  // Keep it tight in the email/UI: cap to 6 items
-  return items.slice(0, 6);
 }
 
-function buildAreasOfFocusSectionHtmlFromItems(items) {
-  const itemHtml = (items || [])
+function includesAny(blob, keywords) {
+  if (!blob) return false;
+  return keywords.some((k) => blob.includes(k));
+}
+
+function buildBehaviorAnchors(visitorQuestion) {
+  const v = String(visitorQuestion || "").toLowerCase();
+
+  const anchors = {
+    overExfoliation: includesAny(v, ["exfoliat", "scrub", "peel", "aha", "bha", "acid", "glycol", "lactic", "salicylic"]),
+    retinoidHeavy: includesAny(v, ["retinol", "retinoid", "tret", "adapalene"]),
+    noSpf: includesAny(v, ["no spf", "dont use spf", "don't use spf", "skip spf", "not wearing sunscreen"]),
+    sunExposure: includesAny(v, ["tanning", "tan", "sunbed", "sun bed", "sun exposure", "outside all day", "beach"]),
+    harshCleansers: includesAny(v, ["foaming", "stripping", "squeaky clean", "alcohol toner", "astringent"]),
+    picking: includesAny(v, ["pick", "picking", "squeeze", "popping"]),
+    heavyOcclusives: includesAny(v, ["vaseline", "petrolatum", "heavy cream", "thick cream", "coconut oil"]),
+  };
+
+  return anchors;
+}
+
+// Build per-category copy using the locked micro-structure.
+// IMPORTANT: We do not claim the user does a behavior unless they explicitly shared it.
+// We can say "commonly reinforced by..." as directional, physician-style guidance.
+function buildAreaCopy({ title, kind, anchors }) {
+  // common helper strings for decisive time horizons
+  const t = {
+    weeks: "within the next 6–8 weeks",
+    month: "over the next 30 days",
+    months: "over the next 3–6 months",
+    long: "over the next 6–12 months",
+  };
+
+  if (kind === "barrier") {
+    const reinforced =
+      anchors.overExfoliation || anchors.retinoidHeavy || anchors.harshCleansers
+        ? "This pattern is being reinforced by barrier-stressing steps in your current routine (exfoliation/acids/retinoids or stripping cleansers)."
+        : "This pattern is commonly reinforced by frequent exfoliation, high-percentage acids, nightly retinoid use, or stripping cleansers.";
+
+    return {
+      title,
+      compoundingRisk:
+        `Your photo suggests early barrier instability — the kind that can look “fine” on the surface while the skin underneath behaves unpredictably. ` +
+        `${reinforced} ` +
+        `When the barrier stays stressed, hydration stops holding, sensitivity escalates, and the same products that should help begin to backfire — ${t.weeks} it often becomes harder to stabilize.`,
+      doThisNow:
+        `Pause aggressive actives immediately (high-percentage acids, scrubs, and frequent retinoid use). ` +
+        `Run a barrier-first routine for 3–4 weeks: gentle cleanse, moisturize, and daily mineral SPF. ` +
+        `Only reintroduce corrective actives after your routine feels consistently calm — no stinging, tightness, or flare-ups.`,
+    };
+  }
+
+  if (kind === "sebum") {
+    const reinforced =
+      anchors.harshCleansers || anchors.picking || anchors.heavyOcclusives
+        ? "This is often made worse by harsh cleansing, picking, or heavy occlusive layers that trap congestion."
+        : "This is commonly reinforced by over-cleansing, inconsistent exfoliation, picking, or heavy occlusives that trap congestion.";
+
+    return {
+      title,
+      compoundingRisk:
+        `Your photo suggests a congestion pattern that can run quietly: clog → inflammation → lingering mark. ` +
+        `${reinforced} ` +
+        `If the cycle stays active, clarity becomes hard to maintain and texture feels unpredictable — ${t.month} it often takes longer to calm the skin once this loop is entrenched.`,
+      doThisNow:
+        `Control oil without stripping. Choose a gentle cleanser, avoid “squeaky clean” routines, and stop picking. ` +
+        `Use one steady unclogging step at a conservative pace (low-frequency BHA or retinoid — not both at once), and don’t escalate until congestion visibly calms.`,
+    };
+  }
+
+  if (kind === "pigment") {
+    const reinforced =
+      anchors.noSpf || anchors.sunExposure
+        ? "Based on what you shared, inconsistent UV protection is actively locking this in."
+        : "This is commonly reinforced by inconsistent UV protection and overly aggressive brightening steps.";
+
+    return {
+      title,
+      compoundingRisk:
+        `Your photo suggests tone variability that is trending from “fluid” to “fixed.” ` +
+        `${reinforced} ` +
+        `When pigment settles deeper, what could shift in weeks becomes a months-long project — ${t.months} the same unevenness becomes more stubborn and less responsive.`,
+      doThisNow:
+        `Make daily broad-spectrum SPF non-negotiable. ` +
+        `Choose one gentle brightening support and commit to consistency for 12 weeks before judging progress. ` +
+        `Avoid stacking multiple actives — pigment responds best to steady pressure, not intensity.`,
+    };
+  }
+
+  if (kind === "recovery") {
+    const reinforced =
+      anchors.overExfoliation || anchors.retinoidHeavy
+        ? "Your routine appears to be keeping the skin in a low-grade stressed state instead of letting it recover."
+        : "This is commonly reinforced by too many actives too often, inconsistent hydration, and insufficient recovery days.";
+
+    return {
+      title,
+      compoundingRisk:
+        `Your photo suggests recovery is running slower than it should — meaning irritation, redness, texture irregularity, or marks can linger. ` +
+        `${reinforced} ` +
+        `When recovery runs slow, skin spends more time in “stressed mode” than “repair mode,” and progress becomes unpredictable — ${t.weeks} it can feel like products stop working.`,
+      doThisNow:
+        `Switch to a recovery-forward routine immediately: simplify, hydrate, and protect. ` +
+        `Build “calm nights” into your week where you use only gentle cleansing + moisturization. ` +
+        `Only add treatment steps after your skin can reset overnight without lingering tightness or redness.`,
+    };
+  }
+
+  if (kind === "environment") {
+    const reinforced =
+      anchors.noSpf || anchors.sunExposure
+        ? "Your UV exposure/protection pattern is compounding this quietly."
+        : "This is commonly reinforced by inconsistent SPF and low daily antioxidant support.";
+
+    return {
+      title,
+      compoundingRisk:
+        `Environmental exposure is cumulative and invisible — until it isn’t. ` +
+        `${reinforced} ` +
+        `Without intervention, UV and pollution “tax” the skin’s resources and accelerate dullness, uneven tone, and sensitivity — ${t.long} the breakdown can appear faster than natural aging.`,
+      doThisNow:
+        `Treat protection as your foundation: daily SPF, every day, even when you’re indoors. ` +
+        `Add a daily antioxidant support step and keep hydration consistent — this is your insurance policy against premature compounding damage.`,
+    };
+  }
+
+  if (kind === "structural") {
+    const reinforced =
+      anchors.overExfoliation || anchors.retinoidHeavy
+        ? "Chronic irritation and dehydration from an overactive routine can make lines look more persistent."
+        : "This is commonly reinforced by dehydration, chronic inflammation, and inconsistent protection.";
+
+    return {
+      title,
+      compoundingRisk:
+        `Your photo suggests early structural resilience is being under-supported — the “bounce-back” looks less consistent under stress. ` +
+        `${reinforced} ` +
+        `When this continues, dehydration-based lines become more persistent and the skin’s ability to recover weakens — ${t.long} temporary patterns can settle into more fixed ones.`,
+      doThisNow:
+        `Prioritize hydration and protection first (humectant + moisturizer + daily SPF). ` +
+        `Once your barrier is stable, add measured support (peptides/retinoid) slowly — progress here comes from consistency, not aggression.`,
+    };
+  }
+
+  // texture / pores
+  const reinforced =
+    anchors.overExfoliation || anchors.harshCleansers
+      ? "Over-exfoliation or stripping routines can make this worse by inflaming and dehydrating the surface."
+      : "This is commonly reinforced by dehydration, low-grade inflammation, and over-exfoliation.";
+
+  return {
+    title,
+    compoundingRisk:
+      `Your photo suggests texture irregularity and pore visibility that are being amplified by surface instability. ` +
+      `${reinforced} ` +
+      `If you keep trying to “scrub it smooth,” pores often look larger and texture rougher — ${t.weeks} it becomes harder to refine once inflammation and dehydration are locked in.`,
+    doThisNow:
+      `Stop aggressive exfoliation and stabilize the surface. ` +
+      `Hydrate consistently, keep irritation low, and refine gradually with measured turnover — texture typically improves downstream once the barrier calms.`,
+  };
+}
+
+function detectAreasTriggered({ analysisContext, imageAnalysis, visitorQuestion }) {
+  const blob = normalizeToTextBlob(analysisContext, imageAnalysis);
+  const ia = imageAnalysis || {};
+  const vision = ia.analysis || {};
+  const checklist15 = vision.checklist15 || {};
+  const skinType = (ia.skinType || "").toLowerCase();
+  const primary = normalizeToTextBlob({ primaryConcern: (analysisContext && analysisContext.form && analysisContext.form.primaryConcerns) || [] });
+
+  const anchors = buildBehaviorAnchors(visitorQuestion);
+
+  // signal gates (heuristic, conservative)
+  const barrier =
+    includesAny(blob, ["barrier", "stinging", "tight", "reactiv", "sensitiv", "irritat"]) ||
+    includesAny(normalizeToTextBlob(checklist15["8_barrierHealth"]), ["barrier", "tight", "stinging", "sensitiv", "irritat"]);
+
+  const sebum =
+    skinType === "oily" ||
+    includesAny(blob, ["congestion", "clog", "comed", "blackhead", "breakout", "oily", "sebum", "acne"]) ||
+    includesAny(primary, ["acne", "breakout", "oily", "blackhead", "pores"]);
+
+  const pigment =
+    includesAny(blob, ["uneven tone", "pigment", "dark spot", "sun spot", "discolor", "tone variab"]) ||
+    includesAny(primary, ["pigment", "dark spots", "uneven tone", "hyperpig", "melanin"]); // note: not diagnosing; just user words
+
+  const texturePores =
+    includesAny(blob, ["texture", "rough", "bumpy", "pores", "pore"]) ||
+    includesAny(primary, ["texture", "pores"]);
+
+  const structural =
+    includesAny(blob, ["fine line", "wrinkle", "elastic", "sag", "photoaging", "aging"]) ||
+    includesAny(primary, ["wrinkle", "fine lines", "aging"]);
+
+  const recovery =
+    includesAny(blob, ["redness", "inflammation", "slow recovery", "lingering", "marks", "irritation"]) ||
+    includesAny(normalizeToTextBlob(checklist15["7_inflammatoryClues"]), ["inflamm", "red", "reactiv"]) ||
+    includesAny(normalizeToTextBlob(checklist15["12_lifestyleIndicators"]), ["stress", "fatigue"]);
+
+  const environment =
+    includesAny(blob, ["uv", "sun", "environment", "pollution", "dull", "oxidative", "outdoor"]) ||
+    includesAny(primary, ["sun", "dull", "tone"]);
+
+  return {
+    anchors,
+    flags: {
+      barrier,
+      sebum,
+      pigment,
+      recovery,
+      environment,
+      structural,
+      texturePores,
+    },
+  };
+}
+
+// Dynamic builder: returns 0–7 items, ordered by impact / operations
+function buildAreasOfFocusItems({ analysisContext, imageAnalysis, visitorQuestion }) {
+  const { anchors, flags } = detectAreasTriggered({ analysisContext, imageAnalysis, visitorQuestion });
+
+  const ordered = [
+    { key: "barrier_stability", kind: "barrier", title: "Barrier Stability" },
+    { key: "sebum_congestion", kind: "sebum", title: "Sebum & Congestion" },
+    { key: "pigment_regulation", kind: "pigment", title: "Pigment & Tone" },
+    { key: "recovery_repair", kind: "recovery", title: "Recovery & Repair" },
+    { key: "environmental_stress", kind: "environment", title: "Environmental Stress Load" },
+    { key: "structural_support", kind: "structural", title: "Structural Resilience" },
+    { key: "texture_pores", kind: "texture", title: "Texture & Pores" },
+  ];
+
+  const include = (kind) => {
+    if (kind === "barrier") return !!flags.barrier;
+    if (kind === "sebum") return !!flags.sebum;
+    if (kind === "pigment") return !!flags.pigment;
+    if (kind === "recovery") return !!flags.recovery;
+    if (kind === "environment") return !!flags.environment;
+    if (kind === "structural") return !!flags.structural;
+    if (kind === "texture") return !!flags.texturePores;
+    return false;
+  };
+
+  const out = [];
+  for (const item of ordered) {
+    if (!include(item.kind)) continue;
+
+    const copy = buildAreaCopy({ title: item.title, kind: item.kind, anchors });
+    out.push({
+      key: item.key,
+      title: copy.title,
+      compoundingRisk: copy.compoundingRisk,
+      doThisNow: copy.doThisNow,
+    });
+  }
+
+  return out; // 0–7 items
+}
+
+function buildAreasOfFocusSectionHtml({ analysisContext, imageAnalysis, visitorQuestion }) {
+  const items = buildAreasOfFocusItems({ analysisContext, imageAnalysis, visitorQuestion });
+  if (!items || items.length === 0) return ""; // dynamic: can be none
+
+  const itemHtml = items
     .map((it, idx) => {
       const topBorder = idx === 0 ? "" : `border-top: 1px solid #E5E7EB;`;
-
-      const block = (label, text) => `
-        <div style="font-size: 12px; color: #111827; line-height: 1.55; margin: 6px 0 0 0;">
-          <strong>${escapeHtml(label)}:</strong> ${escapeHtml(String(text || ""))}
-        </div>
-      `;
-
       return `
         <div style="padding: 12px 0; ${topBorder}">
-          <div style="font-size: 13px; font-weight: 700; color: #111827; margin: 0 0 4px 0;">
+          <div style="font-size: 13px; font-weight: 800; color: #111827; margin: 0 0 6px 0;">
             ${escapeHtml(it.title)}
           </div>
-          ${block("The Compounding Risk", it.compoundingRisk)}
-          ${block("What may be reinforcing it", it.interference)}
-          ${block("What continuing costs", it.consequence)}
-          ${block("Required Protocol Shift", it.directive)}
-          ${block("Why stopping matters", it.whyStopping)}
+
+          <div style="font-size: 12px; color: #111827; line-height: 1.55; margin: 6px 0 0 0;">
+            <strong>The Compounding Risk:</strong> ${escapeHtml(it.compoundingRisk)}
+          </div>
+
+          <div style="font-size: 12px; color: #111827; line-height: 1.55; margin: 8px 0 0 0;">
+            <strong>Do This Now:</strong> ${escapeHtml(it.doThisNow)}
+          </div>
         </div>
       `;
     })
@@ -684,12 +751,12 @@ function buildAreasOfFocusSectionHtmlFromItems(items) {
 
   return `
     <div style="margin: 16px 0 18px 0; padding: 14px 16px; border-radius: 10px; border: 1px solid #111827; background-color: #FFFFFF;">
-      <div style="font-size: 14px; font-weight: 800; color: #111827; margin: 0 0 6px 0;">
+      <div style="font-size: 14px; font-weight: 900; color: #111827; margin: 0 0 6px 0;">
         Areas of Focus
       </div>
 
       <div style="font-size: 12px; color: #111827; margin: 0 0 10px 0;">
-        A quick snapshot of the levers I would pull first—based on the visible patterns in your photo and the information you shared.
+        This is not reassurance. It’s course correction — based on the patterns visible in your photo and what you shared.
       </div>
 
       <div>
@@ -699,20 +766,20 @@ function buildAreasOfFocusSectionHtmlFromItems(items) {
   `;
 }
 
-function buildAreasOfFocusTextFromItems(items) {
+function buildAreasOfFocusText({ analysisContext, imageAnalysis, visitorQuestion }) {
+  const items = buildAreasOfFocusItems({ analysisContext, imageAnalysis, visitorQuestion });
+  if (!items || items.length === 0) return "";
+
   const header =
     `Areas of Focus\n` +
-    `A quick snapshot of the levers I would pull first—based on the visible patterns in your photo and the information you shared.\n`;
+    `This is not reassurance. It’s course correction — based on the patterns visible in your photo and what you shared.\n`;
 
-  const body = (items || [])
+  const body = items
     .map(
       (it) =>
         `\n${it.title}\n` +
         `The Compounding Risk: ${it.compoundingRisk}\n` +
-        `What may be reinforcing it: ${it.interference}\n` +
-        `What continuing costs: ${it.consequence}\n` +
-        `Required Protocol Shift: ${it.directive}\n` +
-        `Why stopping matters: ${it.whyStopping}`
+        `Do This Now: ${it.doThisNow}`
     )
     .join("\n");
 
@@ -1676,14 +1743,22 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
     // Reflection HTML (must be inserted AFTER aging images)
     const reflectionHtml = buildEmailReflectionSectionHtml();
 
-    // ✅ Areas of Focus (dynamic, directional framework) — EMAIL + UI
-    const areasOfFocus = buildDirectionalAreasOfFocus({
+    // ✅ LOCKED: Areas of Focus card section (EMAIL + UI) — dynamic + “Do This Now”
+    const areasOfFocusHtml = buildAreasOfFocusSectionHtml({
+      analysisContext,
       imageAnalysis,
-      dermEngine,
       visitorQuestion: cleanVisitorQuestion,
     });
-    const areasOfFocusHtml = buildAreasOfFocusSectionHtmlFromItems(areasOfFocus);
-    const areasOfFocusText = buildAreasOfFocusTextFromItems(areasOfFocus);
+    const areasOfFocus = buildAreasOfFocusItems({
+      analysisContext,
+      imageAnalysis,
+      visitorQuestion: cleanVisitorQuestion,
+    });
+    const areasOfFocusText = buildAreasOfFocusText({
+      analysisContext,
+      imageAnalysis,
+      visitorQuestion: cleanVisitorQuestion,
+    });
 
     // Place aging block near the end, just above Dr. Lazuk’s closing note/signature.
     // EMAIL order: before -> areas of focus -> aging images -> reflection -> closing
@@ -1805,7 +1880,7 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
       // Original narrative letter (UI can keep rendering this as-is)
       report: reportText,
 
-      // ✅ Card data for visual report rendering
+      // ✅ LOCKED: dynamic card data for visual report rendering
       areasOfFocus,
       areasOfFocusText,
 
