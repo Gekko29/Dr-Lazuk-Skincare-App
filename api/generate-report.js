@@ -44,6 +44,21 @@
 // ✅ Prevents “always 7 categories” bug by scanning VALUE text only (not JSON keys/headings)
 // ✅ Triggers require risk/problem language (not just category words existing in the payload)
 //
+// NEW (12/26 — LOW LOE V2 FEATURES):
+// ✅ Adds Visual Signals V2 (low-LOE high-ROI image-specific signals)
+//    - Asymmetry (basic)
+//    - Oil–hydration mismatch pattern
+//    - Pigment distribution pattern
+//    - Barrier stress hotspots
+//    - Lips/perioral cues
+//    - Periorbital sub-zone cues
+//    - Neck–face aging ratio (confidence-weighted inference)
+//    - Micro-wrinkle density + orientation
+//    - Pores by zone
+//    - Glow/reflectance proxy
+// ✅ Adds short, no-title, paragraph-only “precision detail” insert into the LETTER (no headings)
+// ✅ Appends visualSignalsV2 JSON to API response and clinic email QA block (visitor unchanged)
+//
 // -------------------------
 // Node built-ins (required)
 // -------------------------
@@ -447,6 +462,358 @@ function splitForAgingPlacement(reportText) {
 }
 
 // -------------------------
+// LOW-LOE V2 VISUAL SIGNALS — helpers
+// -------------------------
+function clamp01(n) {
+  if (typeof n !== "number" || Number.isNaN(n)) return 0;
+  return Math.max(0, Math.min(1, n));
+}
+
+function label01(s) {
+  const x = clamp01(s);
+  if (x >= 0.75) return "high";
+  if (x >= 0.45) return "moderate";
+  if (x >= 0.2) return "low";
+  return "minimal";
+}
+
+function normalizeConfidence01(n) {
+  const x = clamp01(typeof n === "number" ? n : 0.6);
+  // never “force” certainty; keep it conservative
+  return x;
+}
+
+function safeArray(a, limit = 4) {
+  return Array.isArray(a) ? a.filter(Boolean).slice(0, limit) : [];
+}
+
+function safeString(s, max = 220) {
+  const t = String(s || "").trim();
+  if (!t) return "";
+  return t.length > max ? t.slice(0, max - 1).trimEnd() + "…" : t;
+}
+
+// -------------------------
+// LOW-LOE V2 VISUAL SIGNALS — extraction (vision JSON)
+// -------------------------
+async function extractVisualSignalsV2({ client, photoDataUrl, firstName, ageRange, primaryConcern }) {
+  if (!photoDataUrl) return null;
+
+  const visionModel =
+    process.env.OPENAI_V2_SIGNALS_MODEL ||
+    process.env.OPENAI_VISION_MODEL ||
+    process.env.OPENAI_DERM_ENGINE_MODEL ||
+    "gpt-4o-mini";
+
+  const prompt = `
+You are assisting a board-certified dermatologist in a non-diagnostic, educational VISUAL skin assessment from ONE selfie.
+Return STRICT JSON ONLY. No markdown. No extra text.
+
+Core rules:
+- Observation-only; no diagnosis; do not name medical diseases (no rosacea, melasma, eczema, etc).
+- If uncertain due to angle/lighting/blur, mark "uncertain" and reduce confidence.
+- Scores MUST be 0..1.
+
+Return EXACT JSON schema:
+
+{
+  "asymmetry": {
+    "overall": number,
+    "wrinkles": number,
+    "pigment": number,
+    "redness": number,
+    "sagging": number,
+    "notes": string[]
+  },
+  "oilHydrationMismatch": {
+    "pattern": "balanced"|"oily_dehydrated"|"dry_dehydrated"|"oily_balanced"|"uncertain",
+    "score": number,
+    "zones": string[],
+    "notes": string[]
+  },
+  "pigmentPattern": {
+    "type": "focal"|"diffuse"|"mixed"|"uncertain",
+    "score": number,
+    "commonZones": string[],
+    "notes": string[]
+  },
+  "barrierStressHotspots": {
+    "score": number,
+    "zones": string[],
+    "overlapSignals": string[],
+    "notes": string[]
+  },
+  "lipsPerioral": {
+    "drynessScore": number,
+    "perioralLinesScore": number,
+    "borderDefinitionScore": number,
+    "notes": string[]
+  },
+  "periorbital": {
+    "shadowScore": number,
+    "fineLinesScore": number,
+    "puffinessScore": number,
+    "notes": string[]
+  },
+  "neckFaceRatio": {
+    "type": "neck_less_aged"|"similar"|"neck_more_aged"|"uncertain",
+    "confidence": number,
+    "notes": string[]
+  },
+  "microWrinkles": {
+    "densityScore": number,
+    "orientation": "horizontal"|"vertical"|"mixed"|"uncertain",
+    "zones": string[],
+    "notes": string[]
+  },
+  "poresByZone": {
+    "overallScore": number,
+    "zones": { "tzone": number, "cheeks": number, "nose": number, "forehead": number },
+    "notes": string[]
+  },
+  "glowReflectance": {
+    "score": number,
+    "uniformityScore": number,
+    "notes": string[]
+  },
+  "globalConfidence": number,
+  "limitations": string[]
+}
+
+Context (use gently; do not invent details):
+- firstName: ${firstName || "unknown"}
+- ageRange: ${ageRange || "unknown"}
+- primaryConcern: ${primaryConcern || "unknown"}
+`.trim();
+
+  try {
+    const resp = await client.chat.completions.create({
+      model: visionModel,
+      temperature: 0.18,
+      max_tokens: 1100,
+      messages: [
+        { role: "system", content: "Return STRICT JSON only." },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: prompt },
+            { type: "image_url", image_url: { url: photoDataUrl } },
+          ],
+        },
+      ],
+    });
+
+    const text = resp?.choices?.[0]?.message?.content || "";
+    const parsed = safeJsonParse(text);
+    if (!parsed) {
+      return {
+        globalConfidence: 0.35,
+        limitations: ["Secondary visual signal extraction could not be parsed reliably."],
+      };
+    }
+
+    // Light normalization to prevent UI/letter crashes
+    parsed.globalConfidence = normalizeConfidence01(parsed.globalConfidence);
+    parsed.limitations = safeArray(parsed.limitations, 5);
+
+    // Clamp obvious score fields if present
+    const clampField = (obj, key) => {
+      if (!obj || typeof obj !== "object") return;
+      if (typeof obj[key] === "number") obj[key] = clamp01(obj[key]);
+    };
+
+    clampField(parsed, "globalConfidence");
+    clampField(parsed.asymmetry, "overall");
+    clampField(parsed.asymmetry, "wrinkles");
+    clampField(parsed.asymmetry, "pigment");
+    clampField(parsed.asymmetry, "redness");
+    clampField(parsed.asymmetry, "sagging");
+
+    clampField(parsed.oilHydrationMismatch, "score");
+    clampField(parsed.pigmentPattern, "score");
+    clampField(parsed.barrierStressHotspots, "score");
+
+    clampField(parsed.lipsPerioral, "drynessScore");
+    clampField(parsed.lipsPerioral, "perioralLinesScore");
+    clampField(parsed.lipsPerioral, "borderDefinitionScore");
+
+    clampField(parsed.periorbital, "shadowScore");
+    clampField(parsed.periorbital, "fineLinesScore");
+    clampField(parsed.periorbital, "puffinessScore");
+
+    clampField(parsed.neckFaceRatio, "confidence");
+
+    clampField(parsed.microWrinkles, "densityScore");
+
+    clampField(parsed.poresByZone, "overallScore");
+    if (parsed.poresByZone && parsed.poresByZone.zones) {
+      clampField(parsed.poresByZone.zones, "tzone");
+      clampField(parsed.poresByZone.zones, "cheeks");
+      clampField(parsed.poresByZone.zones, "nose");
+      clampField(parsed.poresByZone.zones, "forehead");
+    }
+
+    clampField(parsed.glowReflectance, "score");
+    clampField(parsed.glowReflectance, "uniformityScore");
+
+    // Normalize arrays
+    if (parsed.asymmetry) parsed.asymmetry.notes = safeArray(parsed.asymmetry.notes, 5);
+    if (parsed.oilHydrationMismatch) parsed.oilHydrationMismatch.notes = safeArray(parsed.oilHydrationMismatch.notes, 4);
+    if (parsed.pigmentPattern) parsed.pigmentPattern.notes = safeArray(parsed.pigmentPattern.notes, 4);
+    if (parsed.barrierStressHotspots) parsed.barrierStressHotspots.notes = safeArray(parsed.barrierStressHotspots.notes, 4);
+    if (parsed.lipsPerioral) parsed.lipsPerioral.notes = safeArray(parsed.lipsPerioral.notes, 4);
+    if (parsed.periorbital) parsed.periorbital.notes = safeArray(parsed.periorbital.notes, 4);
+    if (parsed.neckFaceRatio) parsed.neckFaceRatio.notes = safeArray(parsed.neckFaceRatio.notes, 3);
+    if (parsed.microWrinkles) parsed.microWrinkles.notes = safeArray(parsed.microWrinkles.notes, 3);
+    if (parsed.poresByZone) parsed.poresByZone.notes = safeArray(parsed.poresByZone.notes, 4);
+    if (parsed.glowReflectance) parsed.glowReflectance.notes = safeArray(parsed.glowReflectance.notes, 3);
+
+    // Normalize zone arrays if any
+    if (parsed.oilHydrationMismatch) parsed.oilHydrationMismatch.zones = safeArray(parsed.oilHydrationMismatch.zones, 4);
+    if (parsed.pigmentPattern) parsed.pigmentPattern.commonZones = safeArray(parsed.pigmentPattern.commonZones, 4);
+    if (parsed.barrierStressHotspots) {
+      parsed.barrierStressHotspots.zones = safeArray(parsed.barrierStressHotspots.zones, 4);
+      parsed.barrierStressHotspots.overlapSignals = safeArray(parsed.barrierStressHotspots.overlapSignals, 4);
+    }
+    if (parsed.microWrinkles) parsed.microWrinkles.zones = safeArray(parsed.microWrinkles.zones, 4);
+
+    return parsed;
+  } catch (err) {
+    console.error("Visual Signals V2 extraction error:", err);
+    return {
+      globalConfidence: 0.35,
+      limitations: ["Secondary visual signal extraction failed."],
+    };
+  }
+}
+
+// -------------------------
+// LOW-LOE V2 VISUAL SIGNALS — letter insert (NO TITLES)
+// -------------------------
+function buildVisualSignalsV2LetterInsert(v2) {
+  if (!v2 || typeof v2 !== "object") return "";
+
+  const conf = normalizeConfidence01(v2.globalConfidence);
+  const lims = safeArray(v2.limitations, 3);
+
+  const asym = v2.asymmetry || {};
+  const oil = v2.oilHydrationMismatch || {};
+  const pigment = v2.pigmentPattern || {};
+  const barrier = v2.barrierStressHotspots || {};
+  const lips = v2.lipsPerioral || {};
+  const eye = v2.periorbital || {};
+  const micro = v2.microWrinkles || {};
+  const pores = v2.poresByZone || {};
+  const glow = v2.glowReflectance || {};
+
+  const paragraphs = [];
+
+  // Confidence qualifier paragraph (only if lower confidence)
+  if (conf < 0.45) {
+    paragraphs.push(
+      `A quick note on nuance: your photo still allowed a meaningful cosmetic assessment, but some fine-grain signals are less reliable today (angle, lighting, or sharpness can affect micro-detail). I’m weighting the more delicate observations conservatively.`
+    );
+  }
+
+  // Precision paragraph 1: asymmetry + oil/hydration + glow
+  const asymLevel = typeof asym.overall === "number" ? label01(asym.overall) : null;
+  const asymNotes = safeArray(asym.notes, 2).join(" ");
+  const oilPattern =
+    oil.pattern && oil.pattern !== "uncertain" ? oil.pattern.replaceAll("_", " ") : null;
+  const oilZones = safeArray(oil.zones, 3);
+  const glowLevel = typeof glow.score === "number" ? label01(glow.score) : null;
+
+  const p1Parts = [];
+
+  if (asymLevel) {
+    p1Parts.push(
+      `On left-to-right balance, I see a ${asymLevel} degree of asymmetry in the surface story (this is normal in real faces, and it can be informative).`
+    );
+    if (asymNotes) p1Parts.push(asymNotes);
+  }
+
+  if (oilPattern) {
+    const z = oilZones.length ? `—most noticeable through the ${oilZones.join(", ")}` : "";
+    p1Parts.push(
+      `Your oil-to-hydration pattern reads as ${oilPattern}${z}. This is one of the most common reasons skin can feel both “shiny” and “tight” at the same time.`
+    );
+  }
+
+  if (glowLevel) {
+    p1Parts.push(
+      `From an optical standpoint, your glow/reflectance reads as ${glowLevel}. In practice, glow improves most reliably when the barrier is stable, irritation is low, and hydration is consistent.`
+    );
+  }
+
+  if (p1Parts.length) paragraphs.push(p1Parts.join(" "));
+
+  // Precision paragraph 2: pigment + barrier hotspots + pores/micro-wrinkles + eye/lip cues
+  const pigmentType =
+    pigment.type && pigment.type !== "uncertain" ? pigment.type : null;
+  const pigmentZones = safeArray(pigment.commonZones, 3);
+
+  const barrierLevel = typeof barrier.score === "number" ? label01(barrier.score) : null;
+  const barrierZones = safeArray(barrier.zones, 3);
+
+  const microLevel = typeof micro.densityScore === "number" ? label01(micro.densityScore) : null;
+  const microOrientation =
+    micro.orientation && micro.orientation !== "uncertain" ? micro.orientation : null;
+
+  const poresLevel = typeof pores.overallScore === "number" ? label01(pores.overallScore) : null;
+
+  const p2Parts = [];
+
+  if (pigmentType) {
+    const z = pigmentZones.length ? ` (tending to show through ${pigmentZones.join(", ")})` : "";
+    p2Parts.push(
+      `Your tone distribution appears ${pigmentType}${z}. This distinction matters because “spot-correction” and “barrier-first brightening” are not the same strategy.`
+    );
+  }
+
+  if (barrierLevel) {
+    const z = barrierZones.length ? `—especially around ${barrierZones.join(", ")}` : "";
+    p2Parts.push(
+      `I also see ${barrierLevel} barrier-stress hotspots where texture and redness overlap${z}. When this is present, aggressive actives tend to backfire, and calm consistency tends to win.`
+    );
+  }
+
+  if (poresLevel) {
+    p2Parts.push(
+      `Pores and texture are not uniform across the face; overall pore visibility reads as ${poresLevel}, which usually means targeted zone-care will outperform blanket “one-step-for-everything” routines.`
+    );
+  }
+
+  if (microLevel || microOrientation) {
+    const o = microOrientation ? ` with a ${microOrientation} orientation bias` : "";
+    p2Parts.push(
+      `At a micro level, fine-line activity reads as ${microLevel || "present"}${o}. These patterns typically soften when hydration holds better and daily protection becomes non-negotiable.`
+    );
+  }
+
+  if (typeof eye.shadowScore === "number" || typeof eye.fineLinesScore === "number") {
+    p2Parts.push(
+      `Around the eyes, there are visible cues of shadowing and/or fine-line activity—this zone is highly sensitive to sleep quality, hydration, and UV exposure, so we treat it gently and consistently.`
+    );
+  }
+
+  if (typeof lips.drynessScore === "number" || typeof lips.perioralLinesScore === "number") {
+    p2Parts.push(
+      `And around the lips, I see mild signals consistent with dryness and early line patterning—this area responds best to steady hydration support rather than intensity.`
+    );
+  }
+
+  if (p2Parts.length) paragraphs.push(p2Parts.join(" "));
+
+  // Limitations (short)
+  if (lims.length) {
+    paragraphs.push(`Limits of today’s photo: ${lims.join(" ")}`);
+  }
+
+  // Convert to block (blank lines between paragraphs)
+  return paragraphs.map((p) => safeString(p, 700)).filter(Boolean).join("\n\n");
+}
+
+// -------------------------
 // LOCKED: Areas of Focus (EMAIL + UI DATA)
 // - Dynamic: 0–7 items based on analysis triggers (NOT static)
 // - Naming convention locked:
@@ -517,6 +884,7 @@ function buildBehaviorAnchors(visitorQuestion) {
       "glycol",
       "lactic",
       "salicylic",
+      "acid",
     ]),
     retinoidHeavy: includesAny(v, ["retinol", "retinoid", "tret", "adapalene"]),
     noSpf: includesAny(v, ["no spf", "dont use spf", "don't use spf", "skip spf", "not wearing sunscreen"]),
@@ -1501,6 +1869,7 @@ async function buildAnalysisContext({
   visitorQuestion,
   photoDataUrl,
   imageAnalysis,
+  visualSignalsV2,
 }) {
   const ia = imageAnalysis || {};
   const raw = ia.raw || {};
@@ -1547,6 +1916,9 @@ async function buildAnalysisContext({
     fineLinesAreas: vision.fineLinesAreas || null,
     elasticity: vision.elasticity || null,
     raw: raw || null,
+
+    // ADDITIVE: V2 signals (safe for LLM specificity; buildAnalysis will ignore unknown keys if strict)
+    visualSignalsV2: visualSignalsV2 || null,
   };
 
   return buildAnalysis({ form, selfie, vision: visionPayload });
@@ -1663,6 +2035,15 @@ module.exports = async function handler(req, res) {
       }
     }
 
+    // 1.5) NEW: Visual Signals V2 extraction (LOW LOE)
+    const visualSignalsV2 = await extractVisualSignalsV2({
+      client,
+      photoDataUrl,
+      firstName: cleanFirstName,
+      ageRange: cleanAgeRange,
+      primaryConcern: cleanPrimaryConcern,
+    });
+
     // 2) Build structured analysis context
     const analysisContext = await buildAnalysisContext({
       buildAnalysis,
@@ -1672,6 +2053,7 @@ module.exports = async function handler(req, res) {
       visitorQuestion: cleanVisitorQuestion || null,
       photoDataUrl: emailSafeSelfieUrl || photoDataUrl,
       imageAnalysis,
+      visualSignalsV2,
     });
 
     // 3) ADD: Dermatology Engine run (structured JSON; additive)
@@ -1773,6 +2155,9 @@ INTERNAL_SELFIE_DETAIL_OK: YES
 INTERNAL_COVERAGE: OK
 `.trim();
 
+    // Keep prompts compact: include V2 signals as a small, direct JSON supplement
+    const v2ForPrompt = visualSignalsV2 ? JSON.stringify(visualSignalsV2, null, 2) : "{}";
+
     const userPrompt = `
 Person details:
 - First name: ${cleanFirstName}
@@ -1785,6 +2170,9 @@ ${JSON.stringify(analysisContext, null, 2)}
 
 Raw image analysis (do NOT print JSON; use it to be specific):
 ${JSON.stringify(imageAnalysis || {}, null, 2)}
+
+Additional image-specific “precision signals” (V2) (do NOT print JSON; use to improve specificity):
+${v2ForPrompt}
 
 Important: Use only selfie details that appear in the provided context. Do NOT invent specifics.
 `.trim();
@@ -1835,6 +2223,17 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
     }
 
     reportText = stripInternalLines(reportText).trim();
+
+    // 4.5) NEW: Insert V2 precision paragraphs into the LETTER (NO TITLES)
+    const v2Insert = buildVisualSignalsV2LetterInsert(visualSignalsV2);
+    if (v2Insert) {
+      const split = splitForAgingPlacement(reportText);
+      if (split && split.closing) {
+        reportText = `${split.before}\n\n${v2Insert}\n\n${split.closing}`.trim();
+      } else {
+        reportText = `${reportText}\n\n${v2Insert}`.trim();
+      }
+    }
 
     // 5) Generate SELFIE-based aging preview images
     let agingPreviewImages = await generateAgingPreviewImages({
@@ -1934,6 +2333,16 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
       </div>
     `;
 
+    // ADD: V2 signals JSON block (clinic only)
+    const v2ClinicBlock = `
+      <div style="margin-top: 14px; padding: 12px 14px; border-radius: 10px; border: 1px dashed #D1D5DB; background: #FAFAFA;">
+        <p style="margin:0 0 8px 0; font-size: 12px; color: #374151;"><strong>Visual Signals V2 (Structured JSON)</strong> — internal QA / specificity layer</p>
+        <pre style="margin:0; font-size: 11px; color: #111827; white-space: pre-wrap;">${escapeHtml(
+          JSON.stringify(visualSignalsV2 || {}, null, 2)
+        )}</pre>
+      </div>
+    `;
+
     const clinicHtml = `
       <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111827; line-height: 1.5; background-color: #F9FAFB; padding: 16px;">
         <div style="max-width: 680px; margin: 0 auto; background-color: #FFFFFF; border-radius: 12px; border: 1px solid #E5E7EB; padding: 20px 24px;">
@@ -1964,6 +2373,7 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
             ${letterHtmlBody}
           </div>
 
+          ${v2ClinicBlock}
           ${dermEngineClinicBlock}
         </div>
       </div>
@@ -2002,6 +2412,9 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
       // ADD: Dermatology Engine payload (structured JSON)
       dermEngine: dermEngine || null,
 
+      // ADD: Visual Signals V2 payload (structured JSON)
+      visualSignalsV2: visualSignalsV2 || null,
+
       _debug: {
         usedIncomingImageAnalysis: !!incomingImageAnalysis,
         enrichedWithVision,
@@ -2014,6 +2427,14 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
           process.env.OPENAI_VISION_MODEL ||
           process.env.OPENAI_TEXT_MODEL ||
           "gpt-4o-mini",
+
+        v2SignalsModel:
+          process.env.OPENAI_V2_SIGNALS_MODEL ||
+          process.env.OPENAI_VISION_MODEL ||
+          process.env.OPENAI_DERM_ENGINE_MODEL ||
+          "gpt-4o-mini",
+
+        v2SignalsConfidence: visualSignalsV2?.globalConfidence ?? null,
       },
     });
   } catch (err) {
