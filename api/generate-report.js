@@ -59,12 +59,9 @@
 // ✅ Adds short, no-title, paragraph-only “precision detail” insert into the LETTER (no headings)
 // ✅ Appends visualSignalsV2 JSON to API response and clinic email QA block (visitor unchanged)
 //
-// NEW (12/26 — QUALITY GATE, SERVER-SIDE ENFORCEMENT):
-// ✅ Adds selfie usability grading (OK / LIMITED / REJECT) to block partial/non-frontal photos
-// ✅ If REJECT: return 400 with clear guidance (and DO NOT consume 30-day cooldown)
-// ✅ If LIMITED: proceed but suppress Areas of Focus + add conservative limitations language
-// ✅ Adds selfieQuality JSON to API response _debug (additive)
-// ✅ Adds INTERNAL_SELFIE_USABLE: YES line for report generation validation
+// NEW (12/26 — QUALITY HARDENING):
+// ✅ Adds server-side Capture Quality Gate (reject partial/side/poor selfies BEFORE cooldown consumption)
+// ✅ Makes Areas of Focus confidence-aware (suppresses course correction when photo confidence is low)
 //
 // -------------------------
 // Node built-ins (required)
@@ -501,6 +498,91 @@ function safeString(s, max = 220) {
 }
 
 // -------------------------
+// NEW: Capture Quality Gate (server-side)
+// - Reject partial/side/poor selfies early (before cooldown is consumed)
+// - Fail-open on parser errors (to avoid blocking if model returns unexpected text)
+// -------------------------
+async function evaluateCaptureQuality({ client, photoDataUrl }) {
+  if (!photoDataUrl) return { ok: false, isUsable: false, confidence: 0, reasons: ["Missing photo."], requirementsForRetry: [] };
+
+  const model =
+    process.env.OPENAI_CAPTURE_QUALITY_MODEL ||
+    process.env.OPENAI_VISION_MODEL ||
+    "gpt-4o-mini";
+
+  const prompt = `
+Return STRICT JSON ONLY. No markdown.
+
+You are evaluating whether a selfie is usable for a cosmetic VISUAL skin assessment.
+
+Reject if:
+- Face is not clearly visible
+- Face is not mostly frontal (strong profile / side angle)
+- Large occlusions (hand/phone/hat shadows), heavy glare, or extreme shadows
+- Only part of the face is shown (cropped forehead/chin/cheeks)
+- Too dark, too blurry, or strongly overexposed
+- Face too far away (low detail)
+
+Glasses are acceptable; glare may reduce quality.
+
+Scores 0..1.
+
+Return EXACT schema:
+{
+  "isUsable": true|false,
+  "confidence": number,
+  "reasons": ["string"],
+  "requirementsForRetry": ["string"]
+}
+`.trim();
+
+  try {
+    const resp = await client.chat.completions.create({
+      model,
+      temperature: 0.1,
+      max_tokens: 350,
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: prompt },
+            { type: "image_url", image_url: { url: photoDataUrl } },
+          ],
+        },
+      ],
+    });
+
+    const text = resp?.choices?.[0]?.message?.content || "";
+    const parsed = safeJsonParse(text);
+
+    if (!parsed) {
+      return {
+        ok: false,
+        isUsable: true, // fail-open
+        confidence: 0.35,
+        reasons: ["Capture quality check could not be parsed; proceeding conservatively."],
+        requirementsForRetry: [],
+      };
+    }
+
+    parsed.confidence = clamp01(typeof parsed.confidence === "number" ? parsed.confidence : 0.6);
+    if (!Array.isArray(parsed.reasons)) parsed.reasons = [];
+    if (!Array.isArray(parsed.requirementsForRetry)) parsed.requirementsForRetry = [];
+
+    return { ok: true, ...parsed };
+  } catch (err) {
+    console.error("Capture quality evaluation error:", err);
+    return {
+      ok: false,
+      isUsable: true, // fail-open
+      confidence: 0.35,
+      reasons: ["Capture quality evaluation failed; proceeding conservatively."],
+      requirementsForRetry: [],
+    };
+  }
+}
+
+// -------------------------
 // LOW-LOE V2 VISUAL SIGNALS — extraction (vision JSON)
 // -------------------------
 async function extractVisualSignalsV2({ client, photoDataUrl, firstName, ageRange, primaryConcern }) {
@@ -665,11 +747,9 @@ Context (use gently; do not invent details):
 
     // Normalize arrays
     if (parsed.asymmetry) parsed.asymmetry.notes = safeArray(parsed.asymmetry.notes, 5);
-    if (parsed.oilHydrationMismatch)
-      parsed.oilHydrationMismatch.notes = safeArray(parsed.oilHydrationMismatch.notes, 4);
+    if (parsed.oilHydrationMismatch) parsed.oilHydrationMismatch.notes = safeArray(parsed.oilHydrationMismatch.notes, 4);
     if (parsed.pigmentPattern) parsed.pigmentPattern.notes = safeArray(parsed.pigmentPattern.notes, 4);
-    if (parsed.barrierStressHotspots)
-      parsed.barrierStressHotspots.notes = safeArray(parsed.barrierStressHotspots.notes, 4);
+    if (parsed.barrierStressHotspots) parsed.barrierStressHotspots.notes = safeArray(parsed.barrierStressHotspots.notes, 4);
     if (parsed.lipsPerioral) parsed.lipsPerioral.notes = safeArray(parsed.lipsPerioral.notes, 4);
     if (parsed.periorbital) parsed.periorbital.notes = safeArray(parsed.periorbital.notes, 4);
     if (parsed.neckFaceRatio) parsed.neckFaceRatio.notes = safeArray(parsed.neckFaceRatio.notes, 3);
@@ -727,7 +807,8 @@ function buildVisualSignalsV2LetterInsert(v2) {
   // Precision paragraph 1: asymmetry + oil/hydration + glow
   const asymLevel = typeof asym.overall === "number" ? label01(asym.overall) : null;
   const asymNotes = safeArray(asym.notes, 2).join(" ");
-  const oilPattern = oil.pattern && oil.pattern !== "uncertain" ? oil.pattern.replaceAll("_", " ") : null;
+  const oilPattern =
+    oil.pattern && oil.pattern !== "uncertain" ? oil.pattern.replaceAll("_", " ") : null;
   const oilZones = safeArray(oil.zones, 3);
   const glowLevel = typeof glow.score === "number" ? label01(glow.score) : null;
 
@@ -756,14 +837,16 @@ function buildVisualSignalsV2LetterInsert(v2) {
   if (p1Parts.length) paragraphs.push(p1Parts.join(" "));
 
   // Precision paragraph 2: pigment + barrier hotspots + pores/micro-wrinkles + eye/lip cues
-  const pigmentType = pigment.type && pigment.type !== "uncertain" ? pigment.type : null;
+  const pigmentType =
+    pigment.type && pigment.type !== "uncertain" ? pigment.type : null;
   const pigmentZones = safeArray(pigment.commonZones, 3);
 
   const barrierLevel = typeof barrier.score === "number" ? label01(barrier.score) : null;
   const barrierZones = safeArray(barrier.zones, 3);
 
   const microLevel = typeof micro.densityScore === "number" ? label01(micro.densityScore) : null;
-  const microOrientation = micro.orientation && micro.orientation !== "uncertain" ? micro.orientation : null;
+  const microOrientation =
+    micro.orientation && micro.orientation !== "uncertain" ? micro.orientation : null;
 
   const poresLevel = typeof pores.overallScore === "number" ? label01(pores.overallScore) : null;
 
@@ -817,134 +900,6 @@ function buildVisualSignalsV2LetterInsert(v2) {
 
   // Convert to block (blank lines between paragraphs)
   return paragraphs.map((p) => safeString(p, 700)).filter(Boolean).join("\n\n");
-}
-
-// -------------------------
-// NEW: Selfie usability / coverage quality gate (SERVER-SIDE)
-// -------------------------
-function normalizeSelfieQuality(q) {
-  const base = q && typeof q === "object" ? q : {};
-  const statusRaw = String(base.status || "").toLowerCase();
-  const status = statusRaw === "ok" || statusRaw === "limited" || statusRaw === "reject" ? statusRaw : "limited";
-
-  const conf = clamp01(typeof base.confidence === "number" ? base.confidence : 0.55);
-
-  const reasons = Array.isArray(base.reasons) ? base.reasons.filter(Boolean).slice(0, 6) : [];
-  const fixes = Array.isArray(base.quickFixes) ? base.quickFixes.filter(Boolean).slice(0, 6) : [];
-
-  const metrics = base.metrics && typeof base.metrics === "object" ? base.metrics : {};
-  const m = {
-    faceVisiblePercent: clamp01(typeof metrics.faceVisiblePercent === "number" ? metrics.faceVisiblePercent : 0.6),
-    frontalness: clamp01(typeof metrics.frontalness === "number" ? metrics.frontalness : 0.6),
-    sharpness: clamp01(typeof metrics.sharpness === "number" ? metrics.sharpness : 0.6),
-    lighting: clamp01(typeof metrics.lighting === "number" ? metrics.lighting : 0.6),
-    occlusion: clamp01(typeof metrics.occlusion === "number" ? metrics.occlusion : 0.15),
-    expressionNeutral: clamp01(
-      typeof metrics.expressionNeutral === "number" ? metrics.expressionNeutral : 0.6
-    ),
-  };
-
-  // Additional guardrails: if model under-reports status but metrics look bad, escalate
-  let finalStatus = status;
-  if (m.faceVisiblePercent < 0.55 || m.frontalness < 0.45) finalStatus = "reject";
-  else if (m.sharpness < 0.35 || m.lighting < 0.35 || m.occlusion > 0.55) finalStatus = "limited";
-
-  return {
-    status: finalStatus, // ok | limited | reject
-    confidence: conf,
-    reasons,
-    quickFixes: fixes,
-    metrics: m,
-  };
-}
-
-async function assessSelfieUsabilityWithVision({ client, photoDataUrl }) {
-  if (!photoDataUrl) return normalizeSelfieQuality({ status: "reject", reasons: ["missing photo"] });
-
-  const model =
-    process.env.OPENAI_SELFIE_QA_MODEL ||
-    process.env.OPENAI_VISION_MODEL ||
-    process.env.OPENAI_DERM_ENGINE_MODEL ||
-    "gpt-4o-mini";
-
-  const prompt = `
-You are a strict selfie quality gate for a cosmetic skin analysis app.
-Return STRICT JSON ONLY. No markdown. No extra text.
-
-Goal:
-Determine whether the selfie is usable for a face-based cosmetic assessment.
-
-Reject conditions (examples):
-- Face is not fully visible (partial face, cut off forehead/chin, only side of face)
-- Extreme angle / profile view where key regions are not visible
-- Face too small in frame
-- Severe blur, heavy shadow, or severe overexposure
-- Major occlusion (hand, phone, hair covering face)
-- Multiple faces or ambiguous primary face
-
-Return EXACT JSON schema:
-
-{
-  "status": "ok"|"limited"|"reject",
-  "confidence": number, // 0..1
-  "reasons": string[], // short phrases
-  "quickFixes": string[], // short actionable tips
-  "metrics": {
-    "faceVisiblePercent": number, // 0..1 (approx portion of face visible)
-    "frontalness": number, // 0..1 (how front-facing)
-    "sharpness": number, // 0..1
-    "lighting": number, // 0..1
-    "occlusion": number, // 0..1
-    "expressionNeutral": number // 0..1
-  }
-}
-
-Be conservative. If uncertain, choose "limited" or "reject".
-`.trim();
-
-  try {
-    const resp = await client.chat.completions.create({
-      model,
-      temperature: 0.1,
-      max_tokens: 450,
-      messages: [
-        { role: "system", content: "Return STRICT JSON only." },
-        {
-          role: "user",
-          content: [
-            { type: "text", text: prompt },
-            { type: "image_url", image_url: { url: photoDataUrl } },
-          ],
-        },
-      ],
-    });
-
-    const text = resp?.choices?.[0]?.message?.content || "";
-    const parsed = safeJsonParse(text);
-    return normalizeSelfieQuality(parsed || { status: "limited" });
-  } catch (err) {
-    console.error("Selfie QA error:", err);
-    return normalizeSelfieQuality({
-      status: "limited",
-      confidence: 0.35,
-      reasons: ["Selfie quality gate could not be computed reliably."],
-      quickFixes: ["Use a bright window light and face the camera head-on.", "Fill the frame with your face."],
-      metrics: { faceVisiblePercent: 0.6, frontalness: 0.6, sharpness: 0.5, lighting: 0.5, occlusion: 0.2, expressionNeutral: 0.6 },
-    });
-  }
-}
-
-function buildSelfieRejectMessage(selfieQuality) {
-  const reasons = safeArray(selfieQuality?.reasons, 4);
-  const fixes = safeArray(selfieQuality?.quickFixes, 4);
-
-  const r = reasons.length ? `Reason(s): ${reasons.join(" • ")}.` : "Reason(s): insufficient face coverage or angle.";
-  const f =
-    fixes.length
-      ? `Quick fixes: ${fixes.join(" • ")}.`
-      : "Quick fixes: Face the camera head-on in bright light, remove shadows/obstructions, and ensure your full face is visible.";
-
-  return `${r} ${f}`;
 }
 
 // -------------------------
@@ -1165,7 +1120,7 @@ function buildAreaCopy({ title, kind, anchors }) {
     compoundingRisk:
       `Your photo suggests texture irregularity and pore visibility that are being amplified by surface instability. ` +
       `${reinforced} ` +
-      `If you keep trying to “scrub it smooth,” pores often look larger and texture rougher — within the next 6–8 weeks it becomes harder to refine once inflammation and dehydration are locked in.`,
+      `If you keep trying to “scrub it smooth,” pores often look larger and texture rougher — ${t.weeks} it becomes harder to refine once inflammation and dehydration are locked in.`,
     doThisNow:
       `Stop aggressive exfoliation and stabilize the surface. ` +
       `Hydrate consistently, keep irritation low, and refine gradually with measured turnover — texture typically improves downstream once the barrier calms.`,
@@ -1223,24 +1178,7 @@ function hasRiskLanguage(text, required = 1) {
   return riskHits >= required;
 }
 
-function detectAreasTriggered({ analysisContext, imageAnalysis, visitorQuestion, selfieQuality }) {
-  // HARD GATE: if selfie is not usable, do not produce Areas of Focus flags.
-  // This prevents "partial/non-frontal still triggers" behavior server-side.
-  if (selfieQuality && selfieQuality.status && selfieQuality.status !== "ok") {
-    return {
-      anchors: buildBehaviorAnchors(visitorQuestion),
-      flags: {
-        barrier: false,
-        sebum: false,
-        pigment: false,
-        recovery: false,
-        environment: false,
-        structural: false,
-        texturePores: false,
-      },
-    };
-  }
-
+function detectAreasTriggered({ analysisContext, imageAnalysis, visitorQuestion }) {
   // VALUE text only
   const blob = normalizeToTextBlob(analysisContext, imageAnalysis);
   const ia = imageAnalysis || {};
@@ -1313,8 +1251,8 @@ function detectAreasTriggered({ analysisContext, imageAnalysis, visitorQuestion,
 }
 
 // Dynamic builder: returns 0–7 items, ordered by impact / operations
-function buildAreasOfFocusItems({ analysisContext, imageAnalysis, visitorQuestion, selfieQuality }) {
-  const { anchors, flags } = detectAreasTriggered({ analysisContext, imageAnalysis, visitorQuestion, selfieQuality });
+function buildAreasOfFocusItems({ analysisContext, imageAnalysis, visitorQuestion }) {
+  const { anchors, flags } = detectAreasTriggered({ analysisContext, imageAnalysis, visitorQuestion });
 
   const ordered = [
     { key: "barrier_stability", kind: "barrier", title: "Barrier Stability" },
@@ -1353,8 +1291,8 @@ function buildAreasOfFocusItems({ analysisContext, imageAnalysis, visitorQuestio
   return out; // 0–7 items
 }
 
-function buildAreasOfFocusSectionHtml({ analysisContext, imageAnalysis, visitorQuestion, selfieQuality }) {
-  const items = buildAreasOfFocusItems({ analysisContext, imageAnalysis, visitorQuestion, selfieQuality });
+function buildAreasOfFocusSectionHtml({ analysisContext, imageAnalysis, visitorQuestion }) {
+  const items = buildAreasOfFocusItems({ analysisContext, imageAnalysis, visitorQuestion });
   if (!items || items.length === 0) return ""; // dynamic: can be none
 
   const itemHtml = items
@@ -1395,8 +1333,8 @@ function buildAreasOfFocusSectionHtml({ analysisContext, imageAnalysis, visitorQ
   `;
 }
 
-function buildAreasOfFocusText({ analysisContext, imageAnalysis, visitorQuestion, selfieQuality }) {
-  const items = buildAreasOfFocusItems({ analysisContext, imageAnalysis, visitorQuestion, selfieQuality });
+function buildAreasOfFocusText({ analysisContext, imageAnalysis, visitorQuestion }) {
+  const items = buildAreasOfFocusItems({ analysisContext, imageAnalysis, visitorQuestion });
   if (!items || items.length === 0) return "";
 
   const header =
@@ -1413,6 +1351,20 @@ function buildAreasOfFocusText({ analysisContext, imageAnalysis, visitorQuestion
     .join("\n");
 
   return (header + body).trim();
+}
+
+// NEW: Confidence-aware gate for Areas of Focus
+function shouldAllowAreasOfFocus({ imageAnalysis, visualSignalsV2 }) {
+  const v2c =
+    typeof visualSignalsV2?.globalConfidence === "number" ? visualSignalsV2.globalConfidence : null;
+
+  // If V2 reports low confidence, suppress course correction.
+  if (v2c !== null && v2c < 0.45) return false;
+
+  // If no V2, but imageAnalysis appears weak/missing, suppress.
+  if (!imageAnalysis || isLikelyWeakImageAnalysis(imageAnalysis)) return false;
+
+  return true;
 }
 
 // -------------------------
@@ -1454,10 +1406,7 @@ Protecting what’s already beautiful.
 And allowing your outer appearance to reflect the care you give yourself internally.
 
 Until then, take a breath.
-Let this information settle.
-
-With care,
-Dr. Iryna Lazuk`,
+Let this information settle.`,
 
   `It’s a fair question—and an important one.
 
@@ -1513,7 +1462,21 @@ By returning to this analysis when you feel ready, you’re not checking on your
 There is no required schedule.
 There is no expectation to act.
 
-But for those who choose to revisit, this becomes a way to stay informed, grounded, and thoughtful—making decisions based on evidence rather than emotion.`,
+But for those who choose to revisit, this becomes a way to stay informed, grounded, and thoughtful—making decisions based on evidence rather than emotion.
+
+A Final Thought
+
+Skin health is not a single moment.
+It’s a relationship—one that evolves with time, environment, and care.
+
+This tool exists to support that relationship.
+Nothing more.
+Nothing less.
+
+When you’re ready to listen again, it will be here.
+
+With care,
+Dr. Iryna Lazuk`,
 ];
 
 function toEmailParagraphHtml(text) {
@@ -1606,7 +1569,9 @@ async function uploadToVercelBlobAny(input) {
         ? "jpg"
         : "img";
 
-      const filename = `drlazuk/visitor-selfies/${Date.now()}-${Math.random().toString(16).slice(2)}.${ext}`;
+      const filename = `drlazuk/visitor-selfies/${Date.now()}-${Math.random()
+        .toString(16)
+        .slice(2)}.${ext}`;
 
       const out = await put(filename, buf, {
         access: "public",
@@ -1632,7 +1597,9 @@ async function uploadToVercelBlobAny(input) {
         ? "jpg"
         : "img";
 
-      const filename = `drlazuk/visitor-selfies/${Date.now()}-${Math.random().toString(16).slice(2)}.${ext}`;
+      const filename = `drlazuk/visitor-selfies/${Date.now()}-${Math.random()
+        .toString(16)
+        .slice(2)}.${ext}`;
 
       const out = await put(filename, buf, {
         access: "public",
@@ -1741,7 +1708,9 @@ async function generateAgingPreviewImages({ ageRange, primaryConcern, fitzpatric
     return { noChange10: null, noChange20: null, withCare10: null, withCare20: null };
   }
 
-  const fitzText = fitzpatrickType ? `with Fitzpatrick type ${fitzpatrickType}` : "with a realistic skin tone and texture";
+  const fitzText = fitzpatrickType
+    ? `with Fitzpatrick type ${fitzpatrickType}`
+    : "with a realistic skin tone and texture";
 
   const baseStyleNoChange =
     "ultra-realistic portrait, neutral expression, studio lighting, no makeup, no filters, no retouching, no beautification, no flattering bias, no skin smoothing, subtle signs of aging rendered honestly but respectfully, realistic pores and texture";
@@ -1882,7 +1851,13 @@ function isLikelyWeakImageAnalysis(imageAnalysis) {
   if (!imageAnalysis || typeof imageAnalysis !== "object") return true;
   const a = imageAnalysis.analysis || {};
   const meaningful =
-    a.skinFindings || a.texture || a.poreBehavior || a.pigment || a.fineLinesAreas || a.elasticity || a.complimentFeatures;
+    a.skinFindings ||
+    a.texture ||
+    a.poreBehavior ||
+    a.pigment ||
+    a.fineLinesAreas ||
+    a.elasticity ||
+    a.complimentFeatures;
   return !meaningful;
 }
 
@@ -2060,7 +2035,6 @@ function stripInternalLines(text) {
     .replace(/^\s*INTERNAL_COVERAGE:[^\n]*\n?/gm, "")
     .replace(/^\s*INTERNAL_SELFIE_DETAIL_OK:[^\n]*\n?/gm, "")
     .replace(/^\s*INTERNAL_GREETING_OK:[^\n]*\n?/gm, "")
-    .replace(/^\s*INTERNAL_SELFIE_USABLE:[^\n]*\n?/gm, "")
     .trim();
 }
 
@@ -2072,9 +2046,6 @@ function hasSelfieDetailOkLine(text) {
 }
 function hasGreetingOkLine(text) {
   return /INTERNAL_GREETING_OK:\s*YES/i.test(text || "");
-}
-function hasSelfieUsableLine(text) {
-  return /INTERNAL_SELFIE_USABLE:\s*YES/i.test(text || "");
 }
 
 // -------------------------
@@ -2140,24 +2111,24 @@ module.exports = async function handler(req, res) {
     }
 
     const client = await getOpenAIClient();
-    const buildAnalysis = await getBuildAnalysis();
 
-    // NEW: Selfie QA gate (runs BEFORE cooldown so bad photos do not burn the 30-day window)
-    const selfieQuality = await assessSelfieUsabilityWithVision({ client, photoDataUrl });
+    // ✅ NEW: Capture Quality Gate BEFORE cooldown consumption
+    const captureQuality = await evaluateCaptureQuality({ client, photoDataUrl });
 
-    if (selfieQuality.status === "reject") {
+    if (captureQuality && captureQuality.isUsable === false) {
       return res.status(400).json({
         ok: false,
         error: "photo_not_usable",
         message:
-          "We couldn’t run a reliable cosmetic analysis because the selfie does not show your full face clearly (partial or non-frontal framing). " +
-          buildSelfieRejectMessage(selfieQuality),
-        _debug: { selfieQuality },
+          "I’m not able to run a reliable cosmetic assessment from this photo. Please upload a clear, front-facing selfie with your full face visible in good lighting.",
+        captureQuality,
       });
     }
 
-    // Enforce 30-day cooldown per email (only after selfie is acceptable: OK or LIMITED)
+    // Enforce 30-day cooldown per email (only after photo is usable)
     checkCooldownOrThrow(cleanEmail);
+
+    const buildAnalysis = await getBuildAnalysis();
 
     // Ensure selfie is email-safe (public URL)
     const emailSafeSelfieUrl = await ensureEmailSafeImageUrl(photoDataUrl);
@@ -2238,12 +2209,7 @@ module.exports = async function handler(req, res) {
 - Beauty Injectables (Botox®, JUVÉDERM® fillers, PRP): conservative, natural-looking injectable treatments for lines, volume, and facial balance.
 `.trim();
 
-    // 4) Prompt: enforce name greeting + 15 categories + selfie detail + selfie usability acknowledgment (if LIMITED)
-    const selfieQualityNote =
-      selfieQuality.status === "limited"
-        ? `Important: The selfie quality is LIMITED today (angle/lighting/coverage). You must be conservative. Do NOT over-interpret micro-detail. Add one short sentence acknowledging limitations early in the letter (no headings).`
-        : `Important: The selfie quality is OK.`;
-
+    // 4) Prompt: enforce name greeting + 15 categories + selfie detail
     const systemPrompt = `
 You are Dr. Iryna Lazuk, a dermatologist and founder of Dr. Lazuk Esthetics® and Dr. Lazuk Cosmetics®.
 
@@ -2265,9 +2231,6 @@ PRODUCTS:
 ${productList}
 SERVICES:
 ${serviceList}
-
-SELFIE QUALITY RULE:
-${selfieQualityNote}
 
 NON-NEGOTIABLE REQUIREMENTS:
 1) The letter MUST begin EXACTLY with:
@@ -2303,10 +2266,9 @@ FITZPATRICK_SUMMARY: <2–4 sentences>
 <ONE continuous personal letter (no section headings). End with:
 "May your skin always glow as bright as your smile." ~ Dr. Lazuk
 
-FINAL FOUR LINES (INTERNAL, MUST INCLUDE — I will remove them before sending):
+FINAL THREE LINES (INTERNAL, MUST INCLUDE — I will remove them before sending):
 INTERNAL_GREETING_OK: YES
 INTERNAL_SELFIE_DETAIL_OK: YES
-INTERNAL_SELFIE_USABLE: YES
 INTERNAL_COVERAGE: OK
 `.trim();
 
@@ -2319,9 +2281,6 @@ Person details:
 - Age range: ${cleanAgeRange}
 - Primary cosmetic concern: ${cleanPrimaryConcern}
 - Visitor question: ${cleanVisitorQuestion || "none provided"}
-
-Selfie quality gate (use for cautious language; do NOT print JSON):
-${JSON.stringify(selfieQuality || {}, null, 2)}
 
 Structured analysis context (do NOT print JSON; weave it into the letter):
 ${JSON.stringify(analysisContext, null, 2)}
@@ -2352,12 +2311,7 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
 
       full = completion.choices?.[0]?.message?.content || "";
 
-      const ok =
-        hasCoverageLine(full) &&
-        hasSelfieDetailOkLine(full) &&
-        hasGreetingOkLine(full) &&
-        hasSelfieUsableLine(full);
-
+      const ok = hasCoverageLine(full) && hasSelfieDetailOkLine(full) && hasGreetingOkLine(full);
       if (ok) break;
 
       console.warn("Report validation failed, retrying...", {
@@ -2365,7 +2319,6 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
         hasCoverage: hasCoverageLine(full),
         hasSelfieDetail: hasSelfieDetailOkLine(full),
         hasGreeting: hasGreetingOkLine(full),
-        hasSelfieUsable: hasSelfieUsableLine(full),
       });
     }
 
@@ -2416,26 +2369,32 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
     // Reflection HTML (must be inserted AFTER aging images)
     const reflectionHtml = buildEmailReflectionSectionHtml();
 
-    // ✅ LOCKED: Areas of Focus card section (EMAIL + UI) — dynamic + “Do This Now”
-    // NEW: Server-side gate: if selfie is LIMITED, suppress Areas of Focus to prevent false urgency.
-    const areasOfFocusHtml = buildAreasOfFocusSectionHtml({
-      analysisContext,
-      imageAnalysis,
-      visitorQuestion: cleanVisitorQuestion,
-      selfieQuality,
-    });
-    const areasOfFocus = buildAreasOfFocusItems({
-      analysisContext,
-      imageAnalysis,
-      visitorQuestion: cleanVisitorQuestion,
-      selfieQuality,
-    });
-    const areasOfFocusText = buildAreasOfFocusText({
-      analysisContext,
-      imageAnalysis,
-      visitorQuestion: cleanVisitorQuestion,
-      selfieQuality,
-    });
+    // ✅ Confidence-aware Areas of Focus
+    const allowAof = shouldAllowAreasOfFocus({ imageAnalysis, visualSignalsV2 });
+
+    const areasOfFocusHtml = allowAof
+      ? buildAreasOfFocusSectionHtml({
+          analysisContext,
+          imageAnalysis,
+          visitorQuestion: cleanVisitorQuestion,
+        })
+      : "";
+
+    const areasOfFocus = allowAof
+      ? buildAreasOfFocusItems({
+          analysisContext,
+          imageAnalysis,
+          visitorQuestion: cleanVisitorQuestion,
+        })
+      : [];
+
+    const areasOfFocusText = allowAof
+      ? buildAreasOfFocusText({
+          analysisContext,
+          imageAnalysis,
+          visitorQuestion: cleanVisitorQuestion,
+        })
+      : "";
 
     // Place aging block near the end, just above Dr. Lazuk’s closing note/signature.
     // EMAIL order: before -> areas of focus -> aging images -> reflection -> closing
@@ -2511,16 +2470,6 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
       </div>
     `;
 
-    // ADD: Selfie quality gate block (clinic only)
-    const selfieQualityClinicBlock = `
-      <div style="margin-top: 14px; padding: 12px 14px; border-radius: 10px; border: 1px dashed #D1D5DB; background: #FAFAFA;">
-        <p style="margin:0 0 8px 0; font-size: 12px; color: #374151;"><strong>Selfie Quality Gate</strong> — internal QA</p>
-        <pre style="margin:0; font-size: 11px; color: #111827; white-space: pre-wrap;">${escapeHtml(
-          JSON.stringify(selfieQuality || {}, null, 2)
-        )}</pre>
-      </div>
-    `;
-
     const clinicHtml = `
       <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111827; line-height: 1.5; background-color: #F9FAFB; padding: 16px;">
         <div style="max-width: 680px; margin: 0 auto; background-color: #FFFFFF; border-radius: 12px; border: 1px solid #E5E7EB; padding: 20px 24px;">
@@ -2551,7 +2500,6 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
             ${letterHtmlBody}
           </div>
 
-          ${selfieQualityClinicBlock}
           ${v2ClinicBlock}
           ${dermEngineClinicBlock}
         </div>
@@ -2580,7 +2528,6 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
       report: reportText,
 
       // ✅ LOCKED: dynamic card data for visual report rendering
-      // (Will be empty if selfieQuality is LIMITED; ensures server-side suppression)
       areasOfFocus,
       areasOfFocusText,
 
@@ -2616,12 +2563,14 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
 
         v2SignalsConfidence: visualSignalsV2?.globalConfidence ?? null,
 
-        selfieQuality,
-        selfieQaModel:
-          process.env.OPENAI_SELFIE_QA_MODEL ||
+        // NEW: quality gate debug
+        captureQuality: captureQuality || null,
+        captureQualityModel:
+          process.env.OPENAI_CAPTURE_QUALITY_MODEL ||
           process.env.OPENAI_VISION_MODEL ||
-          process.env.OPENAI_DERM_ENGINE_MODEL ||
           "gpt-4o-mini",
+
+        allowAreasOfFocus: allowAof,
       },
     });
   } catch (err) {
