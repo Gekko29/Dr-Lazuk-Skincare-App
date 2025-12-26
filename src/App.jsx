@@ -587,32 +587,46 @@ const WatermarkOverlay = ({ text = "SkinDoctor.ai • Dr. Lazuk Esthetics® | Co
 const normalizeAreasOfFocus = (areas) => {
   if (!areas) return [];
 
+  const toItem = (x, fallbackTitle = "") => {
+    if (!x) return null;
+
+    // Support multiple possible shapes
+    const title = String(x?.title || x?.category || x?.name || fallbackTitle || "").trim();
+    const risk = String(x?.compoundingRisk || x?.risk || x?.implications || "").trim();
+    const now = String(x?.doThisNow || x?.action || x?.protocol || "").trim();
+
+    // Optional relevance fields (server can send these later)
+    const relevant =
+      x?.relevant === undefined ? true : !!x.relevant; // default true if missing
+    const scoreRaw = x?.score ?? x?.severity ?? x?.priority ?? null;
+    const score = scoreRaw === null ? null : Number(scoreRaw);
+
+    if (!title || (!risk && !now)) return null;
+    if (!relevant) return null;
+
+    return { title, risk, now, score };
+  };
+
+  let items = [];
+
   if (Array.isArray(areas)) {
-    return areas
-      .map((x) => {
-        const title = String(x?.title || x?.category || x?.name || "").trim();
-        const risk = String(x?.compoundingRisk || x?.risk || x?.implications || "").trim();
-        const now = String(x?.doThisNow || x?.action || x?.protocol || "").trim();
-        if (!title || (!risk && !now)) return null;
-        return { title, risk, now };
-      })
+    items = areas.map((x) => toItem(x)).filter(Boolean);
+  } else if (typeof areas === "object") {
+    items = Object.entries(areas)
+      .map(([key, val]) => toItem(val, key))
       .filter(Boolean);
   }
 
-  if (typeof areas === "object") {
-    return Object.entries(areas)
-      .map(([key, val]) => {
-        const title = String(val?.title || key || "").trim();
-        const risk = String(val?.compoundingRisk || val?.risk || val?.implications || "").trim();
-        const now = String(val?.doThisNow || val?.action || val?.protocol || "").trim();
-        if (!title || (!risk && !now)) return null;
-        return { title, risk, now };
-      })
-      .filter(Boolean);
+  // Sort by score if provided (desc). Otherwise keep natural order.
+  const hasAnyScore = items.some((it) => typeof it.score === "number" && !Number.isNaN(it.score));
+  if (hasAnyScore) {
+    items.sort((a, b) => (Number(b.score || 0) - Number(a.score || 0)));
   }
 
-  return [];
+  // ✅ UI failsafe: show only the top 3 by default
+  return items.slice(0, 3);
 };
+
 
 const AreasOfFocusCard = ({ areas }) => {
   const items = useMemo(() => normalizeAreasOfFocus(areas), [areas]);
