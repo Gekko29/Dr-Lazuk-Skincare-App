@@ -379,21 +379,27 @@ const validateCapturedImage = async ({ dataUrl, faces }) => {
 
   const { meanBrightness, gradVar } = computeBrightnessAndBlur(canvas);
 
+  // ✅ Debug bundle (used only when DEBUG_RETAKE is enabled)
+  const debug = {
+    meanBrightness: Number(meanBrightness?.toFixed?.(1) ?? meanBrightness),
+    gradVar: Number(gradVar?.toFixed?.(1) ?? gradVar)
+  };
+
   // Hard reject only if truly unusable
   if (meanBrightness < 40) {
-    return { ok: false, code: 'low_light', message: RETAKE_MESSAGES.low_light };
+    return { ok: false, code: 'low_light', message: RETAKE_MESSAGES.low_light, debug };
   }
 
   // Blur: keep conversion-friendly (less strict). Still blocks truly soft photos.
   if (gradVar < 40) {
-    return { ok: false, code: 'blurry', message: RETAKE_MESSAGES.blurry };
+    return { ok: false, code: 'blurry', message: RETAKE_MESSAGES.blurry, debug };
   }
 
   // ✅ Stricter face checks (partial / off-angle / clipped faces)
   if (faces && Array.isArray(faces)) {
     // If multiple faces are detected, reject (prevents group photos / background faces)
     if (faces.length > 1) {
-      return { ok: false, code: 'obstructed', message: RETAKE_MESSAGES.obstructed };
+      return { ok: false, code: 'obstructed', message: RETAKE_MESSAGES.obstructed, debug };
     }
 
     const bb = faces?.[0]?.boundingBox;
@@ -405,18 +411,22 @@ const validateCapturedImage = async ({ dataUrl, faces }) => {
       const imgArea = imgW * imgH;
       const ratio = faceArea / imgArea; // face coverage
 
-      // Require a reasonably large, not-too-close face in frame
-      // (Partial faces often show small boxes; extreme close-ups show huge boxes.)
-      if (ratio < 0.18 || ratio > 0.60) {
-        return { ok: false, code: 'framing', message: RETAKE_MESSAGES.framing };
-      }
-
-      // Require face center to be near image center (partial faces are often off-center)
       const cx = (bb.x + bb.width / 2) / imgW;  // 0..1
       const cy = (bb.y + bb.height / 2) / imgH; // 0..1
 
+      // ✅ add framing debug
+      debug.faceRatio = Number(ratio?.toFixed?.(3) ?? ratio);
+      debug.faceCenter = { cx: Number(cx?.toFixed?.(3) ?? cx), cy: Number(cy?.toFixed?.(3) ?? cy) };
+
+      // Require a reasonably large, not-too-close face in frame
+      // (Partial faces often show small boxes; extreme close-ups show huge boxes.)
+      if (ratio < 0.18 || ratio > 0.60) {
+        return { ok: false, code: 'framing', message: RETAKE_MESSAGES.framing, debug };
+      }
+
+      // Require face center to be near image center (partial faces are often off-center)
       if (cx < 0.35 || cx > 0.65 || cy < 0.28 || cy > 0.72) {
-        return { ok: false, code: 'framing', message: RETAKE_MESSAGES.framing };
+        return { ok: false, code: 'framing', message: RETAKE_MESSAGES.framing, debug };
       }
 
       // Reject if face box is too close to edges (common when only part of face is visible)
@@ -429,11 +439,12 @@ const validateCapturedImage = async ({ dataUrl, faces }) => {
       const bottom = bb.y + bb.height;
 
       if (left < padX || top < padY || right > (imgW - padX) || bottom > (imgH - padY)) {
-        return { ok: false, code: 'framing', message: RETAKE_MESSAGES.framing };
+        return { ok: false, code: 'framing', message: RETAKE_MESSAGES.framing, debug };
       }
     }
   }
-  return { ok: true };
+
+  return { ok: true, debug };
 };
 
 /* ---------------------------------------
@@ -626,7 +637,6 @@ const normalizeAreasOfFocus = (areas) => {
   // ✅ UI failsafe: show only the top 3 by default
   return items.slice(0, 3);
 };
-
 
 const AreasOfFocusCard = ({ areas }) => {
   const items = useMemo(() => normalizeAreasOfFocus(areas), [areas]);
@@ -850,6 +860,19 @@ const DermatologyApp = () => {
   const [captureGuidanceSeen, setCaptureGuidanceSeen] = useState(false);
   const [captureSupportMessage, setCaptureSupportMessage] = useState(null);
 
+  // ✅ Debug-only: stores why we asked for a retake (NOT shown unless DEBUG_RETAKE)
+  const [captureSupportReason, setCaptureSupportReason] = useState('');
+
+  // ✅ Debug-only: store measured values used by the retake logic (NOT shown unless DEBUG_RETAKE)
+  const [captureSupportDebug, setCaptureSupportDebug] = useState(null);
+  // shape: { meanBrightness?: number, gradVar?: number, faceRatio?: number, faceCenter?: {cx:number, cy:number} }
+
+  // ✅ Debug flag (localStorage-based) — safe to ship; only QA sees it
+  const DEBUG_RETAKE =
+    typeof window !== 'undefined' &&
+    (window.localStorage.getItem('dl_debugRetake') === '1' ||
+      window.localStorage.getItem('dl_debugRetake') === 'true');
+
   const [identityLockActivating, setIdentityLockActivating] = useState(false);
   const [identityLockEnabled, setIdentityLockEnabled] = useState(false);
   const [identityLockModalOpen, setIdentityLockModalOpen] = useState(false);
@@ -1064,7 +1087,11 @@ const DermatologyApp = () => {
     return estheticServices.filter((s) => s.recommendFor.includes(concern)).slice(0, 2);
   };
 
-  const showSupportiveRetake = (message) => {
+  // ✅ Updated: supports reasonCode + debug metrics (stored but only shown when DEBUG_RETAKE)
+  const showSupportiveRetake = (message, reasonCode = "", debug = null) => {
+    setCaptureSupportReason(String(reasonCode || ""));
+    setCaptureSupportDebug(debug || null);
+
     setCaptureSupportMessage(`${message}
 
 ${SUPPORTIVE_FOOTER_LINE}`);
@@ -1073,10 +1100,15 @@ ${SUPPORTIVE_FOOTER_LINE}`);
   const startCamera = async () => {
     gaEvent('camera_start_clicked', { step });
 
+    // Clear support UI (and debug) on a new attempt
+    setCaptureSupportMessage(null);
+    setCaptureSupportReason("");
+    setCaptureSupportDebug(null);
+
     const lock = getFaceLockStatus();
     if (lock.locked) {
       gaEvent('face_locked', { step });
-      showSupportiveRetake(lock.message);
+      showSupportiveRetake(lock.message, "locked_30_days", null);
       return;
     }
 
@@ -1092,7 +1124,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
       }
     } catch (err) {
       gaEvent('camera_error', { step });
-      showSupportiveRetake('Unable to access camera. Please ensure camera permissions are granted.');
+      showSupportiveRetake('Unable to access camera. Please ensure camera permissions are granted.', "camera_error", null);
     }
   };
 
@@ -1107,12 +1139,16 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 
   const capturePhoto = async () => {
     gaEvent('camera_capture_clicked', { step });
+
+    // Clear support UI (and debug) on each capture attempt
     setCaptureSupportMessage(null);
+    setCaptureSupportReason("");
+    setCaptureSupportDebug(null);
 
     const lock = getFaceLockStatus();
     if (lock.locked) {
       gaEvent('face_locked', { step });
-      showSupportiveRetake(lock.message);
+      showSupportiveRetake(lock.message, "locked_30_days", null);
       return;
     }
 
@@ -1128,7 +1164,11 @@ ${SUPPORTIVE_FOOTER_LINE}`);
       if (!faceCheck.ok) {
         const result = registerFaceFailure();
         gaEvent('face_not_detected', { source: 'camera', lockedNow: !!result.lockedNow });
-        showSupportiveRetake(result.message);
+        showSupportiveRetake(
+          result.message,
+          result.lockedNow ? "locked_30_days" : "non_face",
+          null
+        );
         stopCamera();
         return;
       }
@@ -1148,7 +1188,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 
         if (!q.ok) {
           gaEvent('retake_requested', { source: 'camera', reason: q.code });
-          showSupportiveRetake(q.message);
+          showSupportiveRetake(q.message, q.code, q.debug || null);
           return;
         }
       } catch {
@@ -1168,7 +1208,11 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 
   const handleFileUpload = async (e) => {
     gaEvent('upload_clicked', { step });
+
+    // Clear support UI (and debug) on a new upload attempt
     setCaptureSupportMessage(null);
+    setCaptureSupportReason("");
+    setCaptureSupportDebug(null);
 
     const file = e.target.files[0];
     if (!file) return;
@@ -1176,7 +1220,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
     const lock = getFaceLockStatus();
     if (lock.locked) {
       gaEvent('face_locked', { step });
-      showSupportiveRetake(lock.message);
+      showSupportiveRetake(lock.message, "locked_30_days", null);
       try { e.target.value = ""; } catch {}
       return;
     }
@@ -1189,7 +1233,11 @@ ${SUPPORTIVE_FOOTER_LINE}`);
       if (!faceCheck.ok) {
         const result = registerFaceFailure();
         gaEvent('face_not_detected', { source: 'upload', lockedNow: !!result.lockedNow });
-        showSupportiveRetake(result.message);
+        showSupportiveRetake(
+          result.message,
+          result.lockedNow ? "locked_30_days" : "non_face",
+          null
+        );
         try { e.target.value = ""; } catch {}
         return;
       }
@@ -1208,7 +1256,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 
         if (!q.ok) {
           gaEvent('retake_requested', { source: 'upload', reason: q.code });
-          showSupportiveRetake(q.message);
+          showSupportiveRetake(q.message, q.code, q.debug || null);
           try { e.target.value = ""; } catch {}
           return;
         }
@@ -1232,7 +1280,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
   const handleQuestionsSubmit = () => {
     if (!ageRange || !primaryConcern) {
       gaEvent('questions_incomplete', { ageRangeFilled: !!ageRange, concernFilled: !!primaryConcern });
-      showSupportiveRetake('Please answer all required questions so Dr. Lazuk can tailor your analysis.');
+      showSupportiveRetake('Please answer all required questions so Dr. Lazuk can tailor your analysis.', "questions_incomplete", null);
       return;
     }
     gaEvent('questions_submitted', { ageRange, primaryConcern });
@@ -1353,7 +1401,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
         status: error?.status || 'unknown'
       });
 
-      showSupportiveRetake(msg);
+      showSupportiveRetake(msg, "analysis_error", null);
     } finally {
       setEmailSubmitting(false);
     }
@@ -1363,14 +1411,14 @@ ${SUPPORTIVE_FOOTER_LINE}`);
     const fn = String(firstName || '').trim();
     if (!fn) {
       gaEvent('email_step_error', { reason: 'missing_first_name' });
-      showSupportiveRetake('Please enter your first name.');
+      showSupportiveRetake('Please enter your first name.', "missing_first_name", null);
       setAnalysisUiError('Please enter your first name.');
       return;
     }
 
     if (!userEmail || !userEmail.includes('@')) {
       gaEvent('email_step_error', { reason: 'invalid_email' });
-      showSupportiveRetake('Please enter a valid email address.');
+      showSupportiveRetake('Please enter a valid email address.', "invalid_email", null);
       setAnalysisUiError('Please enter a valid email address.');
       return;
     }
@@ -1449,6 +1497,11 @@ ${SUPPORTIVE_FOOTER_LINE}`);
     setCameraActive(false);
     setCaptureGuidanceSeen(false);
     setCaptureSupportMessage(null);
+
+    // ✅ reset debug-only states too
+    setCaptureSupportReason("");
+    setCaptureSupportDebug(null);
+
     setIdentityLockEnabled(false);
     setIdentityLockActivating(false);
     setReflectionSeen(false);
@@ -1698,6 +1751,8 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                           onClick={() => {
                             setCaptureGuidanceSeen(true);
                             setCaptureSupportMessage(null);
+                            setCaptureSupportReason("");
+                            setCaptureSupportDebug(null);
                             gaEvent('capture_guidance_seen', { step: 'photo' });
                           }}
                           className="mt-5 bg-gray-900 text-white px-6 py-3 font-bold hover:bg-gray-800"
@@ -1712,6 +1767,45 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 
                 {captureSupportMessage && (
                   <div className="bg-white border border-gray-300 p-5 mb-6">
+                    {/* ✅ Debug-only "why" line */}
+                    {DEBUG_RETAKE && captureSupportReason && (
+                      <div className="text-[12px] text-gray-600 mb-2">
+                        Reason: <span className="font-mono">{captureSupportReason}</span>
+                      </div>
+                    )}
+
+                    {/* ✅ Debug-only measured metrics */}
+                    {DEBUG_RETAKE && captureSupportDebug && (
+                      <div className="text-[12px] text-gray-600 mb-3 space-y-1">
+                        {"meanBrightness" in captureSupportDebug && (
+                          <div>
+                            brightness:{" "}
+                            <span className="font-mono">{captureSupportDebug.meanBrightness}</span>
+                          </div>
+                        )}
+                        {"gradVar" in captureSupportDebug && (
+                          <div>
+                            blurVar:{" "}
+                            <span className="font-mono">{captureSupportDebug.gradVar}</span>
+                          </div>
+                        )}
+                        {"faceRatio" in captureSupportDebug && (
+                          <div>
+                            faceRatio:{" "}
+                            <span className="font-mono">{captureSupportDebug.faceRatio}</span>
+                          </div>
+                        )}
+                        {captureSupportDebug?.faceCenter && (
+                          <div>
+                            faceCenter:{" "}
+                            <span className="font-mono">
+                              cx={captureSupportDebug.faceCenter.cx}, cy={captureSupportDebug.faceCenter.cy}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     <p className="text-sm text-gray-800 whitespace-pre-wrap">
                       {captureSupportMessage}
                     </p>
