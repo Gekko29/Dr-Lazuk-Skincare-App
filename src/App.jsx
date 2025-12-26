@@ -389,16 +389,50 @@ const validateCapturedImage = async ({ dataUrl, faces }) => {
     return { ok: false, code: 'blurry', message: RETAKE_MESSAGES.blurry };
   }
 
-  if (faces && Array.isArray(faces) && faces.length > 0 && faces[0]?.boundingBox) {
-    const bb = faces[0].boundingBox;
-    const faceArea = bb.width * bb.height;
-    const imgArea = img.width * img.height;
-    const ratio = faceArea / imgArea;
-    if (ratio < 0.10 || ratio > 0.70) {
-      return { ok: false, code: 'framing', message: RETAKE_MESSAGES.framing };
+  // ✅ Stricter face checks (partial / off-angle / clipped faces)
+  if (faces && Array.isArray(faces)) {
+    // If multiple faces are detected, reject (prevents group photos / background faces)
+    if (faces.length > 1) {
+      return { ok: false, code: 'obstructed', message: RETAKE_MESSAGES.obstructed };
+    }
+
+    const bb = faces?.[0]?.boundingBox;
+    if (bb) {
+      const imgW = img.width;
+      const imgH = img.height;
+
+      const faceArea = bb.width * bb.height;
+      const imgArea = imgW * imgH;
+      const ratio = faceArea / imgArea; // face coverage
+
+      // Require a reasonably large, not-too-close face in frame
+      // (Partial faces often show small boxes; extreme close-ups show huge boxes.)
+      if (ratio < 0.18 || ratio > 0.60) {
+        return { ok: false, code: 'framing', message: RETAKE_MESSAGES.framing };
+      }
+
+      // Require face center to be near image center (partial faces are often off-center)
+      const cx = (bb.x + bb.width / 2) / imgW;  // 0..1
+      const cy = (bb.y + bb.height / 2) / imgH; // 0..1
+
+      if (cx < 0.35 || cx > 0.65 || cy < 0.28 || cy > 0.72) {
+        return { ok: false, code: 'framing', message: RETAKE_MESSAGES.framing };
+      }
+
+      // Reject if face box is too close to edges (common when only part of face is visible)
+      const padX = 0.06 * imgW;
+      const padY = 0.06 * imgH;
+
+      const left = bb.x;
+      const top = bb.y;
+      const right = bb.x + bb.width;
+      const bottom = bb.y + bb.height;
+
+      if (left < padX || top < padY || right > (imgW - padX) || bottom > (imgH - padY)) {
+        return { ok: false, code: 'framing', message: RETAKE_MESSAGES.framing };
+      }
     }
   }
-
   return { ok: true };
 };
 
