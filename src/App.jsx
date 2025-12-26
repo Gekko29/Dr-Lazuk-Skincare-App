@@ -426,6 +426,29 @@ const downscaleDataUrl = async (dataUrl, maxW = 960, quality = 0.92) => {
 };
 
 /* ---------------------------------------
+   Option 1 helper: /api/analyzeImage first
+--------------------------------------- */
+const callAnalyzeImage = async ({ imageBase64, notes }) => {
+  const res = await fetch('/api/analyzeImage', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ imageBase64, notes })
+  });
+
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok || !data?.ok) {
+    const msg = data?.message || data?.error || 'Error analyzing image';
+    const err = new Error(String(msg));
+    err.status = res.status;
+    err.payload = data;
+    throw err;
+  }
+
+  return data;
+};
+
+/* ---------------------------------------
    Identity Lock Overlay (Calm)
 --------------------------------------- */
 const IdentityLockOverlay = ({ onComplete }) => {
@@ -526,14 +549,10 @@ const WatermarkOverlay = ({ text = "SkinDoctor.ai • Dr. Lazuk Esthetics® | Co
 
 /* ---------------------------------------
    Areas of Focus Card (ON-SCREEN)
-   - Shows only relevant categories returned by API
-   - Uses locked labels:
-     "The Compounding Risk" + "Do This Now"
 --------------------------------------- */
 const normalizeAreasOfFocus = (areas) => {
   if (!areas) return [];
 
-  // Accept either array or object-map from API
   if (Array.isArray(areas)) {
     return areas
       .map((x) => {
@@ -600,9 +619,6 @@ const AreasOfFocusCard = ({ areas }) => {
 
 /* ---------------------------------------
    Post-Image Reflection (BOTTOM ONLY)
-   - No section labels
-   - No internal scroll
-   - Unlocks on reaching the end
 --------------------------------------- */
 const PostImageReflection = ({ onSeen }) => {
   const endRef = useRef(null);
@@ -639,7 +655,6 @@ const PostImageReflection = ({ onSeen }) => {
         <div className="space-y-10">
           {REFLECTION_SECTIONS.map((s, idx) => (
             <div key={idx}>
-              {/* ✅ Section label removed by design */}
               <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
                 {s.body}
               </p>
@@ -647,7 +662,6 @@ const PostImageReflection = ({ onSeen }) => {
           ))}
         </div>
 
-        {/* Sentinel for unlock */}
         <div ref={endRef} className="h-1 w-full" />
       </div>
 
@@ -721,14 +735,12 @@ const safeCopyToClipboard = async (text) => {
 };
 
 const dataUrlToFile = async (dataUrl, filename) => {
-  // data URL → Blob → File
   const res = await fetch(dataUrl);
   const blob = await res.blob();
   return new File([blob], filename, { type: blob.type || "image/jpeg" });
 };
 
 const fetchUrlToFile = async (url, filename) => {
-  // Might fail if CORS blocks; caller handles fallback.
   const res = await fetch(url, { mode: "cors" });
   const blob = await res.blob();
   return new File([blob], filename, { type: blob.type || "image/jpeg" });
@@ -755,7 +767,6 @@ const downloadImage = async (urlOrDataUrl, filename) => {
     URL.revokeObjectURL(objectUrl);
     return true;
   } catch {
-    // fallback: open in new tab
     try {
       window.open(urlOrDataUrl, "_blank", "noopener,noreferrer");
       return false;
@@ -766,7 +777,6 @@ const downloadImage = async (urlOrDataUrl, filename) => {
 };
 
 const buildShareText = ({ label }) => {
-  // Ethical: avoid fear; focus on agency + education
   return `I tried Dr. Lazuk’s Identity Lock™ cosmetic skin analysis. Here is my “Future Story” preview (${label}).
 
 This is cosmetic education only—not medical advice.
@@ -1078,12 +1088,9 @@ ${SUPPORTIVE_FOOTER_LINE}`);
       clearFaceFailures();
       let imageData = canvas.toDataURL('image/jpeg');
 
-      // Downscale for payload + consistency
       try {
         imageData = await downscaleDataUrl(imageData, 960, 0.92);
-      } catch {
-        // ignore if downscale fails
-      }
+      } catch {}
 
       try {
         const q = await validateCapturedImage({
@@ -1103,7 +1110,6 @@ ${SUPPORTIVE_FOOTER_LINE}`);
       setCapturedImage(imageData);
       stopCamera();
 
-      // Identity Lock overlay is the single source of completion (no extra timers)
       setIdentityLockEnabled(false);
       setIdentityLockActivating(true);
       gaEvent('identity_lock_activation_started', { source: 'capture' });
@@ -1123,7 +1129,6 @@ ${SUPPORTIVE_FOOTER_LINE}`);
     if (lock.locked) {
       gaEvent('face_locked', { step });
       showSupportiveRetake(lock.message);
-      // allow re-selecting same file later
       try { e.target.value = ""; } catch {}
       return;
     }
@@ -1143,12 +1148,9 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 
       clearFaceFailures();
 
-      // Downscale uploads too
       try {
         dataUrl = await downscaleDataUrl(dataUrl, 960, 0.92);
-      } catch {
-        // ignore if downscale fails
-      }
+      } catch {}
 
       try {
         const q = await validateCapturedImage({
@@ -1174,7 +1176,6 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 
       gaEvent('selfie_uploaded', { source: 'upload' });
 
-      // allow selecting the same file again later
       try { e.target.value = ""; } catch {}
     };
     reader.readAsDataURL(file);
@@ -1191,10 +1192,8 @@ ${SUPPORTIVE_FOOTER_LINE}`);
   };
 
   const performAnalysis = async () => {
-    // ✅ Clear prior messages for the email step
     setAnalysisUiError('');
     setAnalysisUiNotice('Analysis can take up to 60 seconds to complete. Thank you for your patience.');
-
     setEmailSubmitting(true);
 
     const gaClientId = await getGaClientId();
@@ -1209,6 +1208,25 @@ ${SUPPORTIVE_FOOTER_LINE}`);
     });
 
     try {
+      // STEP 1: Vision analysis (concrete “image proof” + checklist15 + fitz/skinType)
+      gaEvent('vision_analyze_start', { primaryConcern, ageRange });
+
+      const vision = await callAnalyzeImage({
+        imageBase64: capturedImage,
+        notes: [
+          `Age range: ${ageRange || 'unknown'}`,
+          `Primary concern: ${primaryConcern || 'unknown'}`,
+          visitorQuestion ? `Question: ${visitorQuestion}` : null
+        ].filter(Boolean).join('\n')
+      });
+
+      gaEvent('vision_analyze_success', {
+        hasFitz: !!vision?.fitzpatrickType,
+        hasSkinType: !!vision?.skinType,
+        hasChecklist15: !!vision?.analysis?.checklist15
+      });
+
+      // STEP 2: Compose + email + aging images
       const response = await fetch('/api/generate-report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1219,7 +1237,10 @@ ${SUPPORTIVE_FOOTER_LINE}`);
           primaryConcern,
           visitorQuestion,
           photoDataUrl: capturedImage,
-          gaClientId
+          gaClientId,
+
+          // ✅ NEW: pass the vision payload through (additive)
+          incomingImageAnalysis: vision
         })
       });
 
@@ -1228,7 +1249,6 @@ ${SUPPORTIVE_FOOTER_LINE}`);
       if (!response.ok || !data.ok) {
         const msg = data?.message || data?.error || 'Error generating report';
 
-        // ✅ IMPORTANT: show cooldown + other server messages ON THE EMAIL SCREEN
         if (response.status === 429 || data?.error === 'cooldown_active') {
           setAnalysisUiError(String(msg));
           gaEvent('analysis_cooldown', {
@@ -1236,7 +1256,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
             ageRange,
             message: String(msg).slice(0, 160)
           });
-          return; // stop here; finally will clear spinner
+          return;
         }
 
         gaEvent('analysis_error', {
@@ -1247,7 +1267,6 @@ ${SUPPORTIVE_FOOTER_LINE}`);
         throw new Error(msg);
       }
 
-      // ✅ Reset gating on each new report
       setReflectionSeen(false);
       setAgencyChoice(null);
 
@@ -1255,16 +1274,9 @@ ${SUPPORTIVE_FOOTER_LINE}`);
         report: data.report,
         recommendedProducts: getRecommendedProducts(primaryConcern),
         recommendedServices: getRecommendedServices(primaryConcern),
-        // ✅ Fitzpatrick is intentionally kept in data (email can include it),
-        // but UI will not render it anywhere.
         fitzpatrickType: data.fitzpatrickType || null,
         fitzpatrickSummary: data.fitzpatrickSummary || null,
         agingPreviewImages: data.agingPreviewImages || null,
-
-        // ✅ NEW: Areas of Focus (must render on-screen)
-        // Server should return either:
-        // - data.areasOfFocus: array of { title, compoundingRisk, doThisNow }
-        // - or object map by key
         areasOfFocus: data.areasOfFocus || data.focusAreas || null
       });
 
@@ -1285,12 +1297,15 @@ ${SUPPORTIVE_FOOTER_LINE}`);
     } catch (error) {
       console.error('Analysis error:', error);
 
-      // ✅ Email-step visible error (prevents “app feels broken”)
-      setAnalysisUiError(error?.message || 'There was an error. Please try again.');
-      gaEvent('analysis_error', { message: String(error?.message || 'exception').slice(0, 160) });
+      const msg = error?.message || 'There was an error. Please try again.';
+      setAnalysisUiError(msg);
 
-      // keep your supportive messaging behavior (doesn't hurt)
-      showSupportiveRetake(error?.message || 'There was an error. Please try again.');
+      gaEvent('analysis_error', {
+        message: String(msg).slice(0, 160),
+        status: error?.status || 'unknown'
+      });
+
+      showSupportiveRetake(msg);
     } finally {
       setEmailSubmitting(false);
     }
@@ -1391,7 +1406,6 @@ ${SUPPORTIVE_FOOTER_LINE}`);
     setReflectionSeen(false);
     setAgencyChoice(null);
 
-    // ✅ reset email-step messages too
     setAnalysisUiError('');
     setAnalysisUiNotice('');
   };
@@ -1422,9 +1436,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
     const shareText = buildShareText({ label });
     gaEvent("share_clicked", { label });
 
-    // Prefer native share if possible
     try {
-      // If share supports files, share the image itself
       if (navigator?.canShare) {
         let file = null;
         const filename = `skindoctor_future_story_${label.replace(/\s+/g, "_").toLowerCase()}.jpg`;
@@ -1432,8 +1444,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
         try {
           if (String(url).startsWith("data:")) file = await dataUrlToFile(url, filename);
           else file = await fetchUrlToFile(url, filename);
-        } catch (e) {
-          // CORS likely blocked; fall back to text-only share
+        } catch {
           file = null;
         }
 
@@ -1456,9 +1467,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
         gaEvent("share_success", { label, mode: "text" });
         return;
       }
-    } catch (err) {
-      // fall through to clipboard
-    }
+    } catch {}
 
     const ok = await safeCopyToClipboard(shareText);
     gaEvent("share_fallback", { label, copied: ok ? 1 : 0 });
@@ -1512,7 +1521,6 @@ ${SUPPORTIVE_FOOTER_LINE}`);
         />
       )}
 
-      {/* Tiny toast for share/save */}
       {shareToast && (
         <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white px-5 py-3 text-sm shadow-lg">
           {shareToast}
@@ -1593,16 +1601,6 @@ ${SUPPORTIVE_FOOTER_LINE}`);
       <div className="max-w-6xl mx-auto px-4 py-8">
         {activeTab === 'home' && (
           <div className="bg-white border border-gray-200 shadow-sm p-8">
-            {/* ✅ Everything above this point unchanged */}
-            {/* ✅ RESULTS FLOW FIX:
-                - Report shows immediately (always)
-                - “Understand” ONLY reveals aging images
-                - Reflection is always at the very bottom
-                - Paths Forward buttons scroll reliably
-                - Fitzpatrick removed from UI rendering
-                - ✅ Areas of Focus card is visible on-screen
-            */}
-
             {step === 'photo' && (
               <>
                 <div className="flex items-center gap-3 mb-6">
@@ -1858,7 +1856,6 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                       )}
                     </button>
 
-                    {/* ✅ NEW: Patience notice + cooldown error shown right on this screen */}
                     {emailSubmitting && (
                       <p className="text-xs text-gray-300 mt-2">
                         {analysisUiNotice || "Analysis can take up to 60 seconds to complete. Thank you for your patience."}
@@ -1890,23 +1887,18 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                   </button>
                 </div>
 
-                {/* ✅ REPORT IS IMMEDIATE (always visible) */}
                 <div className="bg-white border border-gray-200 p-6">
                   <h4 className="text-xl font-bold text-gray-900 mb-2">
                     What I’m Seeing (Cosmetic Education)
                   </h4>
-
-                  {/* ✅ Fitzpatrick removed from onscreen UI by requirement */}
 
                   <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
                     {analysisReport?.report || "Your report is loading."}
                   </p>
                 </div>
 
-                {/* ✅ Areas of Focus (ON-SCREEN) */}
                 <AreasOfFocusCard areas={analysisReport?.areasOfFocus} />
 
-                {/* ✅ Paths Forward works + scrolls */}
                 <AgencyLayer
                   onChoose={(choice) => {
                     setAgencyChoice(choice);
@@ -1934,7 +1926,6 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                   </div>
                 )}
 
-                {/* ✅ UNDERSTAND = IMAGES ONLY */}
                 {agencyChoice === 'understand' && (
                   <div ref={understandRef}>
                     {agingImages.length > 0 ? (
@@ -2007,7 +1998,6 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                   </div>
                 )}
 
-                {/* GUIDANCE: products + treatments */}
                 {agencyChoice === 'guidance' && (
                   <div ref={guidanceRef} className="bg-white border-2 border-gray-900 p-8">
                     <h4 className="font-bold text-gray-900 mb-4 text-2xl">Recommended Products</h4>
@@ -2079,7 +2069,6 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                   </div>
                 )}
 
-                {/* OBSERVE */}
                 {agencyChoice === 'observe' && (
                   <div ref={observeRef} className="bg-gray-50 border border-gray-200 p-6">
                     <p className="text-sm text-gray-700">
@@ -2089,7 +2078,6 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                   </div>
                 )}
 
-                {/* ✅ Reflection is ALWAYS at the bottom (independent of choice) */}
                 <PostImageReflection
                   onSeen={() => {
                     if (!reflectionSeen) {
@@ -2106,7 +2094,6 @@ ${SUPPORTIVE_FOOTER_LINE}`);
           </div>
         )}
 
-        {/* chat + education tabs unchanged */}
         {activeTab === 'chat' && (
           <div className="bg-white border shadow-sm overflow-hidden" style={{ height: '600px' }}>
             <div className="flex flex-col h-full">
