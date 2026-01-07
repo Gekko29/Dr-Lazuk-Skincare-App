@@ -140,7 +140,7 @@ const LOCKED_CLUSTERS = [
   {
     cluster_id: "stress_damage",
     display_name: "Stress & Damage",
-    weight: 0.10,
+    weight: 0.1,
     order: 5,
     metrics: [
       { metric_id: "sensitivity_reactivity", display_name: "Sensitivity / Reactivity", order: 1 },
@@ -153,7 +153,6 @@ const LOCKED_CLUSTERS = [
 const ALL_METRIC_IDS = LOCKED_CLUSTERS.flatMap((c) => c.metrics.map((m) => m.metric_id));
 const LOCKED_VERSION = 1;
 
-// compute overall score per locked weights
 function computeOverallScore(clusters) {
   const byId = new Map(clusters.map((c) => [c.cluster_id, c]));
   let total = 0;
@@ -162,10 +161,7 @@ function computeOverallScore(clusters) {
     const c = byId.get(locked.cluster_id);
     if (!c || !Array.isArray(c.metrics) || c.metrics.length === 0) continue;
 
-    const scores = c.metrics
-      .map((m) => clampScore(m.score))
-      .filter((x) => typeof x === "number");
-
+    const scores = c.metrics.map((m) => clampScore(m.score)).filter((x) => typeof x === "number");
     if (!scores.length) continue;
 
     const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
@@ -354,8 +350,7 @@ Return VALID JSON ONLY (no markdown, no extra commentary) with EXACTLY this shap
   "fitzpatrickType": number | null,
   "skinType": "oily"|"dry"|"combination"|"normal"|null,
   "metric_scores": {
-    "<metric_id>": number,
-    "...": number
+    "<metric_id>": number
   }
 }
 
@@ -382,7 +377,9 @@ ${notes || "none provided"}
     });
 
     // Validate metric_scores. If incomplete, retry once with stricter instruction.
-    let metricScores = parsed?.metric_scores && typeof parsed?.metric_scores === "object" ? parsed.metric_scores : null;
+    let metricScores =
+      parsed?.metric_scores && typeof parsed?.metric_scores === "object" ? parsed.metric_scores : null;
+
     let validation = validateMetricScores(metricScores);
 
     if (!parsed || !validation.ok) {
@@ -407,7 +404,9 @@ Missing metric_ids you must include now: ${JSON.stringify(validation.missing || 
       rawContent = retry.rawContent;
       parsed = retry.parsed;
 
-      metricScores = parsed?.metric_scores && typeof parsed?.metric_scores === "object" ? parsed.metric_scores : null;
+      metricScores =
+        parsed?.metric_scores && typeof parsed?.metric_scores === "object" ? parsed.metric_scores : null;
+
       validation = validateMetricScores(metricScores);
     }
 
@@ -490,6 +489,7 @@ Missing metric_ids you must include now: ${JSON.stringify(validation.missing || 
     });
   }
 };
+
 
 
 
