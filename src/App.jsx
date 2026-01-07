@@ -23,7 +23,7 @@ const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 const RAG_THRESHOLDS = { green: 75, amber: 55 };
 
 function ragFromScore(score) {
-  if (typeof score !== "number" || Number.isNaN(score)) return "amber";
+  if (typeof score !== "number" || Number.isNaN(score)) return null;
   if (score >= RAG_THRESHOLDS.green) return "green";
   if (score >= RAG_THRESHOLDS.amber) return "amber";
   return "red";
@@ -33,9 +33,21 @@ function clampScore(n) {
   if (Number.isNaN(x)) return null;
   return Math.max(0, Math.min(100, Math.round(x)));
 }
-function inferScoreFromNarrative() {
+function inferScoreFromNarrative(narrative = "", keywords = []) {
+  const t = String(narrative || "").toLowerCase();
+  const hits = keywords.some((k) => t.includes(String(k).toLowerCase()));
+  if (!hits) return null;
+
+  const neg = /(concern|reduce|improve|needs|attention|issue|irritat|inflam|breakout|pigment|dark spot|wrinkl|sagg|dehydrat|dry|oil|congest|pore)/i.test(t);
+  const pos = /(healthy|balanced|resilient|strong|smooth|even tone|minimal|well-managed|intact)/i.test(t);
+
+  if (neg && !pos) return 58;
+  if (pos && !neg) return 82;
+
+  // IMPORTANT: do not fabricate a neutral score
   return null;
 }
+
 const LOCKED_CLUSTERS = [
   { cluster_id:"core_skin", display_name:"Core Skin Health", weight:0.35, order:1, metrics:[
     { metric_id:"barrier_stability", display_name:"Barrier Stability", keywords:["barrier","skin barrier"] },
