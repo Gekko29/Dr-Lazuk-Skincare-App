@@ -30,18 +30,11 @@ function ragFromScore(score) {
 }
 function clampScore(n) {
   const x = Number(n);
-  if (Number.isNaN(x)) return 70;
+  if (Number.isNaN(x)) return null;
   return Math.max(0, Math.min(100, Math.round(x)));
 }
-function inferScoreFromNarrative(narrative = "", keywords = []) {
-  const t = String(narrative || "").toLowerCase();
-  const hits = keywords.some((k) => t.includes(String(k).toLowerCase()));
-  if (!hits) return 70;
-  const neg = /(concern|reduce|improve|needs|attention|issue|irritat|inflam|breakout|pigment|dark spot|wrinkl|sagg|dehydrat|dry|oil|congest|pore)/i.test(t);
-  const pos = /(healthy|balanced|resilient|strong|smooth|even tone|minimal|well-managed|intact)/i.test(t);
-  if (neg && !pos) return 58;
-  if (pos && !neg) return 82;
-  return 70;
+function inferScoreFromNarrative() {
+  return null;
 }
 const LOCKED_CLUSTERS = [
   { cluster_id:"core_skin", display_name:"Core Skin Health", weight:0.35, order:1, metrics:[
