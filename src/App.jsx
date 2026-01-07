@@ -18,6 +18,84 @@ import { gaEvent, gaPageView, getGaClientId } from "./lib/ga";
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
 /* ---------------------------------------
+   Locked Scoring + RAG (Client-side scaffold)
+--------------------------------------- */
+const RAG_THRESHOLDS = { green: 75, amber: 55 };
+
+function ragFromScore(score) {
+  if (typeof score !== "number" || Number.isNaN(score)) return "amber";
+  if (score >= RAG_THRESHOLDS.green) return "green";
+  if (score >= RAG_THRESHOLDS.amber) return "amber";
+  return "red";
+}
+function clampScore(n) {
+  const x = Number(n);
+  if (Number.isNaN(x)) return 70;
+  return Math.max(0, Math.min(100, Math.round(x)));
+}
+function inferScoreFromNarrative(narrative = "", keywords = []) {
+  const t = String(narrative || "").toLowerCase();
+  const hits = keywords.some((k) => t.includes(String(k).toLowerCase()));
+  if (!hits) return 70;
+  const neg = /(concern|reduce|improve|needs|attention|issue|irritat|inflam|breakout|pigment|dark spot|wrinkl|sagg|dehydrat|dry|oil|congest|pore)/i.test(t);
+  const pos = /(healthy|balanced|resilient|strong|smooth|even tone|minimal|well-managed|intact)/i.test(t);
+  if (neg && !pos) return 58;
+  if (pos && !neg) return 82;
+  return 70;
+}
+const LOCKED_CLUSTERS = [
+  { cluster_id:"core_skin", display_name:"Core Skin Health", weight:0.35, order:1, metrics:[
+    { metric_id:"barrier_stability", display_name:"Barrier Stability", keywords:["barrier","skin barrier"] },
+    { metric_id:"hydration_level", display_name:"Hydration Level", keywords:["hydration","dehydr"] },
+    { metric_id:"oil_sebum_balance", display_name:"Oil / Sebum Balance", keywords:["oil","sebum"] },
+    { metric_id:"skin_texture", display_name:"Skin Texture", keywords:["texture"] },
+    { metric_id:"pore_visibility", display_name:"Pore Visibility", keywords:["pore"] }
+  ]},
+  { cluster_id:"aging_structure", display_name:"Aging & Structure", weight:0.25, order:2, metrics:[
+    { metric_id:"fine_lines", display_name:"Fine Lines", keywords:["fine lines"] },
+    { metric_id:"wrinkles", display_name:"Wrinkles", keywords:["wrinkles"] },
+    { metric_id:"skin_firmness", display_name:"Skin Firmness", keywords:["firmness","firm"] },
+    { metric_id:"skin_sagging", display_name:"Skin Sagging", keywords:["sagging","sag"] },
+    { metric_id:"elasticity", display_name:"Elasticity / Bounce-Back", keywords:["elastic","bounce"] }
+  ]},
+  { cluster_id:"eye_area", display_name:"Eye Area", weight:0.15, order:3, metrics:[
+    { metric_id:"ue_fine_lines", display_name:"Under-Eye Fine Lines", keywords:["under-eye fine lines","under eye fine lines"] },
+    { metric_id:"ue_sagging", display_name:"Under-Eye Sagging / Hollows", keywords:["under-eye","hollows","sagging"] },
+    { metric_id:"dark_circles", display_name:"Under-Eye Dark Circles", keywords:["dark circles"] },
+    { metric_id:"puffiness", display_name:"Under-Eye Puffiness", keywords:["puffiness","puffy"] }
+  ]},
+  { cluster_id:"pigmentation_tone", display_name:"Pigmentation & Tone", weight:0.15, order:4, metrics:[
+    { metric_id:"overall_pigmentation", display_name:"Overall Pigmentation", keywords:["pigment"] },
+    { metric_id:"dark_spots", display_name:"Dark Spots / Sun Spots", keywords:["dark spots","sun spots"] },
+    { metric_id:"uneven_tone", display_name:"Uneven Skin Tone", keywords:["uneven tone","uneven skin tone"] },
+    { metric_id:"redness", display_name:"Redness / Blotchiness", keywords:["redness","blotch"] }
+  ]},
+  { cluster_id:"stress_damage", display_name:"Stress & Damage", weight:0.10, order:5, metrics:[
+    { metric_id:"sensitivity", display_name:"Sensitivity / Reactivity", keywords:["sensitive","reactive"] },
+    { metric_id:"inflammation", display_name:"Inflammation Signals", keywords:["inflamm","irritat"] },
+    { metric_id:"environmental_damage", display_name:"Environmental Damage (UV / Pollution)", keywords:["uv","pollution","environmental"] }
+  ]}
+];
+function buildVisualPayload({ narrative, serverPayload }) {
+  if (serverPayload && typeof serverPayload === "object" && Array.isArray(serverPayload.clusters)) return serverPayload;
+  const clusters = LOCKED_CLUSTERS.map((c) => {
+    const metrics = c.metrics.map((m) => {
+      const score = clampScore(inferScoreFromNarrative(narrative, m.keywords));
+      return { metric_id:m.metric_id, display_name:m.display_name, score, rag:ragFromScore(score) };
+    });
+    const avg = clampScore(metrics.reduce((s,x)=>s+x.score,0)/Math.max(1,metrics.length));
+    return { cluster_id:c.cluster_id, display_name:c.display_name, weight:c.weight, order:c.order, metrics, avg };
+  });
+  const overallScore = clampScore(clusters.reduce((sum,c)=>sum + (c.avg*c.weight), 0));
+  return { version:1, generated_at:new Date().toISOString(), overall_score:{ score:overallScore, rag:ragFromScore(overallScore) }, clusters };
+}
+function ragColor(rag){
+  if(rag==="green") return "#16a34a";
+  if(rag==="red") return "#dc2626";
+  return "#f59e0b";
+}
+
+/* ---------------------------------------
    Reflection Layer (Locked Copy)
 --------------------------------------- */
 const REFLECTION_SECTIONS = [
@@ -674,6 +752,230 @@ const AreasOfFocusCard = ({ areas }) => {
     </div>
   );
 };
+/* ---------------------------------------
+   Default Summary View (ON-SCREEN)
+--------------------------------------- */
+const scoreToRag = (score) => {
+  if (typeof score !== "number" || Number.isNaN(score)) return { label: "A", text: "Attention", level: "amber" };
+  if (score >= 0.66) return { label: "R", text: "High Priority", level: "red" };
+  if (score >= 0.33) return { label: "A", text: "Moderate Priority", level: "amber" };
+  return { label: "G", text: "Stable", level: "green" };
+};
+
+const RagPill = ({ score }) => {
+  const rag = scoreToRag(score);
+  const cls =
+    rag.level === "red"
+      ? "bg-red-600 text-white"
+      : rag.level === "green"
+      ? "bg-green-600 text-white"
+      : "bg-yellow-500 text-white";
+  return (
+    <span className={`inline-flex items-center gap-2 px-3 py-1 text-xs font-bold ${cls}`}>
+      <span className="inline-block w-5 text-center">{rag.label}</span>
+      <span>{rag.text}</span>
+      {typeof score === "number" && !Number.isNaN(score) && (
+        <span className="ml-1 font-mono text-[11px] opacity-90">{Math.round(score * 100)}%</span>
+      )}
+    </span>
+  );
+};
+
+const StaticMapPreview = ({ clusters = [] }) => {
+  const safeClusters = Array.isArray(clusters) ? clusters.slice(0, 5) : [];
+  const rBase = 18;
+  const rStep = 6;
+  return (
+    <div className="staticMapPreview" style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:6 }}>
+      <svg width="92" height="92" viewBox="0 0 92 92" role="img" aria-label="static map preview">
+        <g transform="translate(46 46)">
+          {safeClusters.map((c, i) => {
+            const avg = typeof c?.avg === "number" ? c.avg : 70;
+            const rag = ragFromScore(avg);
+            const r = rBase + (i * rStep);
+            return (
+              <g key={c.cluster_id || i}>
+                <circle cx="0" cy="0" r={r} fill="none" stroke="#e5e7eb" strokeWidth="2" />
+                <circle cx={r} cy="0" r="3.2" fill={ragColor(rag)} />
+              </g>
+            );
+          })}
+          <circle cx="0" cy="0" r="8" fill="none" stroke="#cbd5e1" strokeWidth="2" />
+        </g>
+      </svg>
+      <div style={{ fontSize:10, color:"#64748b" }}>static map preview</div>
+    </div>
+  );
+};
+
+const deriveTopSignals = (areas) => {
+  const items = normalizeAreasOfFocus(areas);
+  return items.map((it) => ({
+    title: it.title,
+    score: typeof it.score === "number" ? it.score : null
+  }));
+};
+
+const SummaryCard = ({ ageRange, primaryConcern, analysisReport }) => {
+
+  const visualPayload = useMemo(() => {
+    const narrative = typeof analysisReport === "string" ? analysisReport : (analysisReport?.report || "");
+    const serverPayload = analysisReport?.canonical_payload || analysisReport?.short_report || null;
+    return buildVisualPayload({ narrative, serverPayload });
+  }, [analysisReport]);
+  const top = useMemo(() => deriveTopSignals(analysisReport?.areasOfFocus), [analysisReport]);
+  const excerpt = useMemo(() => {
+    const t = String(analysisReport?.report || "").trim();
+    if (!t) return "";
+    // A short excerpt that still reads well.
+    const cut = t.slice(0, 650);
+    const lastSpace = cut.lastIndexOf(" ");
+    return (lastSpace > 420 ? cut.slice(0, lastSpace) : cut).trim() + (t.length > cut.length ? "…" : "");
+  }, [analysisReport]);
+
+  return (
+    <div className="bg-white border-2 border-gray-900 p-6">
+      <div className="flex items-start justify-between gap-6">
+        <div className="flex-1">
+          <p className="text-[11px] tracking-wider text-gray-500 font-bold">DEFAULT SUMMARY VIEW</p>
+          <h4 className="text-2xl font-bold text-gray-900 mt-1">
+            What This Analysis Flagged — At a Glance
+          </h4>
+          <p className="text-sm text-gray-700 mt-2">
+            Everything below is optional. Expand only what you want to read.
+          </p>
+        </div>
+              <div style={{ display:"flex", justifyContent:"space-between", gap:16, alignItems:"flex-start", marginTop:14, paddingTop:12, borderTop:"1px solid #e5e7eb" }}>
+                <div>
+                  <div style={{ fontSize:24, fontWeight:700, lineHeight:1.15 }}>Your AI Facial Skin Analysis, by Dr. Lazuk</div>
+                  <div style={{ fontSize:15, marginTop:4, color:"#334155" }}>Your Personal Roadmap To Skin Health</div>
+                  <div style={{ fontSize:11, marginTop:2, color:"#64748b" }}>skindoctor.ai</div>
+                </div>
+
+                <div style={{ minWidth:280, textAlign:"right" }}>
+                  <div style={{ fontSize:12, color:"#64748b" }}>Overall Skin Health</div>
+                  <div style={{ display:"flex", justifyContent:"flex-end", alignItems:"baseline", gap:8, marginTop:6 }}>
+                    <span style={{ fontSize:56, fontWeight:800, lineHeight:1 }}>{visualPayload?.overall_score?.score ?? "—"}</span>
+                    <span style={{ fontSize:18, color:"#64748b" }}>/100</span>
+                    <span style={{ width:14, height:14, borderRadius:999, display:"inline-block", backgroundColor: ragColor(visualPayload?.overall_score?.rag || "amber") }} />
+                  </div>
+                  <div style={{ display:"flex", flexDirection:"column", gap:6, marginTop:10, fontSize:11, color:"#475569", alignItems:"flex-end" }}>
+                    <span><span style={{ width:10, height:10, borderRadius:999, display:"inline-block", marginRight:6, backgroundColor: ragColor("green") }} /> Green = Strong</span>
+                    <span><span style={{ width:10, height:10, borderRadius:999, display:"inline-block", marginRight:6, backgroundColor: ragColor("amber") }} /> Amber = Moderate opportunity</span>
+                    <span><span style={{ width:10, height:10, borderRadius:999, display:"inline-block", marginRight:6, backgroundColor: ragColor("red") }} /> Red = Priority focus</span>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display:"grid", gridTemplateColumns:"1fr", gap:14, marginTop:14 }}>
+                {(visualPayload?.clusters || []).map((c) => (
+                  <div key={c.cluster_id} style={{ border:"1px solid #e5e7eb", borderRadius:10, padding:12, background:"#fff" }}>
+                    <div style={{ fontSize:14, fontWeight:700, marginBottom:8 }}>{c.display_name}</div>
+                    <div style={{ display:"flex", gap:12, alignItems:"flex-start" }}>
+                      <div style={{ flex:"0 0 auto" }}>
+                        <svg width="140" height="140" viewBox="0 0 140 140" role="img" aria-label={`${c.display_name} radial cluster`}>
+                          <g transform="translate(70 70)">
+                            {(c.metrics || []).map((m, i) => {
+                              const r = 18 + (i * 8);
+                              return (
+                                <g key={m.metric_id || i}>
+                                  <circle cx="0" cy="0" r={r} fill="none" stroke="#e5e7eb" strokeWidth="4" />
+                                  <circle cx={r} cy="0" r="4.5" fill={ragColor(m.rag)} />
+                                </g>
+                              );
+                            })}
+                            <circle cx="0" cy="0" r="10" fill="none" stroke="#cbd5e1" strokeWidth="3" />
+                          </g>
+                        </svg>
+                      </div>
+
+                      <div style={{ flex:1, display:"flex", flexDirection:"column", gap:8 }}>
+                        {(c.metrics || []).map((m) => (
+                          <div key={m.metric_id} style={{ display:"flex", justifyContent:"space-between", gap:12, alignItems:"center" }}>
+                            <div style={{ fontSize:12, color:"#0f172a" }}>{m.display_name}</div>
+                            <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                              <span style={{ fontSize:16, fontWeight:700, minWidth:28, textAlign:"right" }}>{m.score}</span>
+                              <span style={{ width:10, height:10, borderRadius:999, display:"inline-block", backgroundColor: ragColor(m.rag) }} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+        <div className="text-gray-700">
+          <StaticMapPreview clusters={visualPayload?.clusters || []} />
+        </div>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-4 mt-6">
+        <div className="border border-gray-200 bg-gray-50 p-4">
+          <p className="text-[11px] tracking-wider text-gray-500 font-bold mb-2">CONTEXT</p>
+          <p className="text-sm text-gray-800">
+            <span className="font-bold text-gray-900">Age Range:</span> {ageRange || "—"}
+          </p>
+          <p className="text-sm text-gray-800 mt-1">
+            <span className="font-bold text-gray-900">Primary Concern:</span> {primaryConcern || "—"}
+          </p>
+          {analysisReport?.fitzpatrickType && (
+            <p className="text-sm text-gray-800 mt-1">
+              <span className="font-bold text-gray-900">Fitzpatrick:</span> {analysisReport.fitzpatrickType}
+            </p>
+          )}
+        </div>
+
+        <div className="border border-gray-200 bg-gray-50 p-4">
+          <p className="text-[11px] tracking-wider text-gray-500 font-bold mb-2">TOP SIGNALS</p>
+          {top.length ? (
+            <ul className="text-sm text-gray-800 space-y-2">
+              {top.slice(0, 3).map((s, i) => (
+                <li key={i} className="flex items-center justify-between gap-3">
+                  <span className="font-semibold">{s.title}</span>
+                  <RagPill score={typeof s.score === "number" ? s.score : NaN} />
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-gray-700">Signals will appear here when available.</p>
+          )}
+        </div>
+      </div>
+
+      <div className="border border-gray-200 bg-white p-4 mt-4">
+        <p className="text-[11px] tracking-wider text-gray-500 font-bold mb-2">SHORT EXCERPT</p>
+        <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+          {excerpt || "Your short excerpt will appear here when the report loads."}
+        </p>
+      </div>
+    </div>
+  );
+};
+
+/* ---------------------------------------
+   Accordion (multi-open)
+--------------------------------------- */
+const AccordionSection = ({ id, title, subtitle, open, onToggle, children }) => {
+  return (
+    <div className="border border-gray-200 bg-white">
+      <button
+        onClick={() => onToggle?.(id)}
+        className="w-full flex items-center justify-between gap-4 px-6 py-5 text-left hover:bg-gray-50"
+        type="button"
+        aria-expanded={open ? "true" : "false"}
+      >
+        <div>
+          <p className="text-base font-bold text-gray-900">{title}</p>
+          {subtitle && <p className="text-sm text-gray-700 mt-1">{subtitle}</p>}
+        </div>
+        <div className="text-gray-700 font-bold text-xl">{open ? "−" : "+"}</div>
+      </button>
+
+      {open && <div className="px-6 pb-6">{children}</div>}
+    </div>
+  );
+};
 
 /* ---------------------------------------
    Post-Image Reflection (BOTTOM ONLY)
@@ -738,10 +1040,10 @@ const AgencyLayer = ({ onChoose }) => {
     <div className="border border-gray-200 bg-white p-6">
       <h3 className="text-xl font-bold text-gray-900 mb-2">Possible Paths Forward</h3>
       <p className="text-sm text-gray-700 mb-6">
-        Nothing here is required. Choose what feels supportive — or simply save this and return later.
+        Nothing here is required. Choose what feels supportive.
       </p>
 
-      <div className="grid md:grid-cols-3 gap-3">
+      <div className="grid md:grid-cols-2 gap-3">
         <button
           onClick={() => onChoose?.("understand")}
           className="border-2 border-gray-300 hover:border-gray-900 hover:bg-gray-50 p-5 text-left"
@@ -750,17 +1052,6 @@ const AgencyLayer = ({ onChoose }) => {
           <p className="font-bold text-gray-900">Understand</p>
           <p className="text-sm text-gray-700 mt-1">
             View your Future Story projection (images).
-          </p>
-        </button>
-
-        <button
-          onClick={() => onChoose?.("observe")}
-          className="border-2 border-gray-300 hover:border-gray-900 hover:bg-gray-50 p-5 text-left"
-          type="button"
-        >
-          <p className="font-bold text-gray-900">Observe</p>
-          <p className="text-sm text-gray-700 mt-1">
-            Save this moment and revisit when you feel ready.
           </p>
         </button>
 
@@ -880,6 +1171,41 @@ const DermatologyApp = () => {
   const [reflectionSeen, setReflectionSeen] = useState(false);
   const [agencyChoice, setAgencyChoice] = useState(null);
 
+// ✅ Accordion (multi-open)
+const [openSections, setOpenSections] = useState({
+  focus: false,
+  paths: false,
+  report: false,
+  future: false,
+  guidance: false,
+  message: false
+});
+
+const toggleSection = (id) => {
+  setOpenSections((prev) => ({ ...prev, [id]: !prev?.[id] }));
+};
+
+const openKeySections = () => {
+  setOpenSections((prev) => ({
+    ...prev,
+    focus: true,
+    paths: true,
+    report: true
+  }));
+};
+
+const collapseAll = () => {
+  setOpenSections({
+    focus: false,
+    paths: false,
+    report: false,
+    future: false,
+    guidance: false,
+    message: false
+  });
+};
+
+
   const [shareToast, setShareToast] = useState(null);
 
   // ✅ NEW: email-step messaging (cooldown + patience notice)
@@ -900,11 +1226,6 @@ const DermatologyApp = () => {
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
   const fileInputRef = useRef(null);
-
-  // ✅ NEW: section refs so “Paths Forward” always works (scrolls correctly)
-  const understandRef = useRef(null);
-  const guidanceRef = useRef(null);
-  const observeRef = useRef(null);
 
   const showToast = (msg) => {
     setShareToast(msg);
@@ -2016,223 +2337,427 @@ ${SUPPORTIVE_FOOTER_LINE}`);
               </div>
             )}
 
-            {step === 'results' && analysisReport && (
-              <div className="space-y-6">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-2xl font-bold text-gray-900">Your Results</h3>
-                  <button
-                    onClick={resetAnalysis}
-                    className="px-4 py-2 bg-gray-300 text-gray-900 font-bold hover:bg-gray-400 text-sm"
-                    type="button"
-                  >
-                    New Analysis
-                  </button>
-                </div>
+            
+{step === 'results' && analysisReport && (
+  <div className="space-y-6">
+    <div className="flex justify-between items-center">
+      <h3 className="text-2xl font-bold text-gray-900">Your Results</h3>
+      <button
+        onClick={resetAnalysis}
+        className="px-4 py-2 bg-gray-300 text-gray-900 font-bold hover:bg-gray-400 text-sm"
+        type="button"
+      >
+        New Analysis
+      </button>
+    </div>
 
-                <div className="bg-white border border-gray-200 p-6">
-                  <h4 className="text-xl font-bold text-gray-900 mb-2">
-                    What I’m Seeing (Cosmetic Education)
-                  </h4>
+    {/* ✅ Default summary view (always visible) */}
+    <SummaryCard
+      ageRange={ageRange}
+      primaryConcern={primaryConcern}
+      analysisReport={analysisReport}
+    />
 
-                  <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-                    {analysisReport?.report || "Your report is loading."}
-                  </p>
-                </div>
+    <div className="flex flex-wrap gap-2 items-center">
+      <button
+        onClick={openKeySections}
+        className="px-4 py-2 bg-gray-900 text-white font-bold hover:bg-gray-800 text-sm"
+        type="button"
+      >
+        Expand Key Sections
+      </button>
+      <button
+        onClick={collapseAll}
+        className="px-4 py-2 bg-white text-gray-900 font-bold hover:bg-gray-50 text-sm border border-gray-300"
+        type="button"
+      >
+        Collapse All
+      </button>
+      <p className="text-xs text-gray-600 ml-1">Multi-open is enabled.</p>
+    </div>
 
-                <AreasOfFocusCard areas={analysisReport?.areasOfFocus} />
+    <div className="space-y-3">
+      <AccordionSection
+        id="focus"
+        title="Areas of Focus"
+        subtitle="The top signals most relevant right now (condensed)."
+        open={!!openSections.focus}
+        onToggle={toggleSection}
+      >
+        <AreasOfFocusCard areas={analysisReport?.areasOfFocus} />
+      </AccordionSection>
 
-                <AgencyLayer
-                  onChoose={(choice) => {
-                    setAgencyChoice(choice);
-                    gaEvent('agency_choice', { choice });
+      <AccordionSection
+        id="paths"
+        title="Possible Paths Forward"
+        subtitle="Optional. Choose a lens (Understand / Guidance)."
+        open={!!openSections.paths}
+        onToggle={toggleSection}
+      >
+        <AgencyLayer
+          onChoose={(choice) => {
+            setAgencyChoice(choice);
+            gaEvent('agency_choice', { choice });
+          }}
+        />
 
-                    window.requestAnimationFrame(() => {
-                      const map = {
-                        understand: understandRef.current,
-                        guidance: guidanceRef.current,
-                        observe: observeRef.current
-                      };
-                      const target = map[choice];
-                      if (target?.scrollIntoView) {
-                        target.scrollIntoView({ behavior: "smooth", block: "start" });
-                      }
-                    });
-                  }}
-                />
+        {agencyChoice === 'understand' && (
+          <div className="mt-6">
+            {agingImages.length > 0 ? (
+              <div className="bg-white border border-gray-200 p-6">
+                <h4 className="text-xl font-bold text-gray-900 mb-2">
+                  Your Future Story (Cosmetic Projection)
+                </h4>
+                <p className="text-sm text-gray-700 mb-6">
+                  These are visual projections anchored to your selfie.
+                </p>
 
-                {!agencyChoice && (
-                  <div className="bg-gray-50 border border-gray-200 p-5">
-                    <p className="text-sm text-gray-700">
-                      Your report is ready above. If you’d like, choose a path here — nothing is required.
-                    </p>
-                  </div>
-                )}
+                <div className="grid md:grid-cols-2 gap-4">
+                  {agingImages.map((img) => (
+                    <div key={img.key} className="relative border border-gray-200 bg-gray-50 p-3">
+                      <IdentityLockBadge
+                        placement="top-left"
+                        onClick={() => {
+                          gaEvent('identity_lock_badge_clicked', { key: img.key });
+                          setIdentityLockModalOpen(true);
+                        }}
+                      />
 
-                {agencyChoice === 'understand' && (
-                  <div ref={understandRef}>
-                    {agingImages.length > 0 ? (
-                      <div className="bg-white border border-gray-200 p-6">
-                        <h4 className="text-xl font-bold text-gray-900 mb-2">
-                          Your Future Story (Cosmetic Projection)
-                        </h4>
-                        <p className="text-sm text-gray-700 mb-6">
-                          These are visual projections anchored to your selfie.
-                        </p>
+                      <WatermarkOverlay />
 
-                        <div className="grid md:grid-cols-2 gap-4">
-                          {agingImages.map((img) => (
-                            <div key={img.key} className="relative border border-gray-200 bg-gray-50 p-3">
-                              <IdentityLockBadge
-                                placement="top-left"
-                                onClick={() => {
-                                  gaEvent('identity_lock_badge_clicked', { key: img.key });
-                                  setIdentityLockModalOpen(true);
-                                }}
-                              />
+                      <img
+                        src={img.url}
+                        alt={img.label}
+                        className="w-full border border-gray-200"
+                        onLoad={() => gaEvent('aging_image_loaded', { key: img.key })}
+                      />
 
-                              <WatermarkOverlay />
+                      <p className="text-sm font-bold text-gray-900 mt-3">{img.label}</p>
 
-                              <img
-                                src={img.url}
-                                alt={img.label}
-                                className="w-full border border-gray-200"
-                                onLoad={() => gaEvent('aging_image_loaded', { key: img.key })}
-                              />
+                      <div className="mt-3 grid grid-cols-3 gap-2">
+                        <button
+                          onClick={() => handleShare({ url: img.url, label: img.label })}
+                          className="py-2 text-sm font-bold border bg-gray-900 text-white hover:bg-gray-800 border-gray-900"
+                          type="button"
+                        >
+                          Share
+                        </button>
 
-                              <p className="text-sm font-bold text-gray-900 mt-3">{img.label}</p>
+                        <button
+                          onClick={() => handleSave({ url: img.url, label: img.label })}
+                          className="py-2 text-sm font-bold border bg-white text-gray-900 hover:bg-gray-50 border-gray-300"
+                          type="button"
+                        >
+                          Save
+                        </button>
 
-                              <div className="mt-3 grid grid-cols-3 gap-2">
-                                <button
-                                  onClick={() => handleShare({ url: img.url, label: img.label })}
-                                  className="py-2 text-sm font-bold border bg-gray-900 text-white hover:bg-gray-800 border-gray-900"
-                                  type="button"
-                                >
-                                  Share
-                                </button>
-
-                                <button
-                                  onClick={() => handleSave({ url: img.url, label: img.label })}
-                                  className="py-2 text-sm font-bold border bg-white text-gray-900 hover:bg-gray-50 border-gray-300"
-                                  type="button"
-                                >
-                                  Save
-                                </button>
-
-                                <button
-                                  onClick={() => handleCopyImageLink({ url: img.url, label: img.label })}
-                                  className="py-2 text-sm font-bold border bg-white text-gray-900 hover:bg-gray-50 border-gray-300"
-                                  type="button"
-                                >
-                                  Copy
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
+                        <button
+                          onClick={() => handleCopyImageLink({ url: img.url, label: img.label })}
+                          className="py-2 text-sm font-bold border bg-white text-gray-900 hover:bg-gray-50 border-gray-300"
+                          type="button"
+                        >
+                          Copy
+                        </button>
                       </div>
-                    ) : (
-                      <div className="bg-gray-50 border border-gray-200 p-6">
-                        <p className="text-sm text-gray-700">
-                          Your Future Story images are not available for this result.
+
+                      {!reflectionSeen && (
+                        <p className="text-xs text-gray-600 mt-3">
+                          Sharing/saving activates after you read Dr. Lazuk’s note below.
                         </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {agencyChoice === 'guidance' && (
-                  <div ref={guidanceRef} className="bg-white border-2 border-gray-900 p-8">
-                    <h4 className="font-bold text-gray-900 mb-4 text-2xl">Recommended Products</h4>
-                    <div className="grid md:grid-cols-3 gap-4 mb-8">
-                      {analysisReport.recommendedProducts.map((p, i) => (
-                        <div key={i} className="bg-gray-50 border p-4">
-                          <h5 className="font-bold text-gray-900 mb-1">{p.name}</h5>
-                          <p className="text-gray-900 font-bold mb-2">${p.price}</p>
-                          <ul className="text-sm text-gray-700 mb-3">
-                            {p.benefits.map((b, j) => (
-                              <li key={j}>✓ {b}</li>
-                            ))}
-                          </ul>
-                          <a
-                            href={p.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={() =>
-                              gaEvent('product_click', {
-                                productName: p.name,
-                                category: p.category,
-                                price: p.price,
-                                primaryConcern
-                              })
-                            }
-                            className="block text-center bg-gray-900 text-white py-2 font-bold hover:bg-gray-800"
-                          >
-                            View
-                          </a>
-                        </div>
-                      ))}
+                      )}
                     </div>
-
-                    <h4 className="font-bold text-gray-900 mb-4 text-2xl">
-                      Recommended Treatments
-                    </h4>
-                    <div className="grid md:grid-cols-2 gap-4">
-                      {analysisReport.recommendedServices.map((s, i) => (
-                        <div key={i} className="bg-blue-50 border-2 border-blue-200 p-5">
-                          <h5 className="font-bold text-blue-900 mb-2 text-lg">{s.name}</h5>
-                          <p className="text-sm text-blue-800 mb-3">{s.description}</p>
-                          <p className="text-sm text-blue-900 font-semibold mb-2">
-                            Why We Recommend This:
-                          </p>
-                          <p className="text-sm text-blue-800 mb-3">{s.whyRecommended}</p>
-                          <div className="mb-4">
-                            <p className="text-xs font-bold text-blue-900 mb-1">Benefits:</p>
-                            <ul className="text-sm text-blue-800">
-                              {s.benefits.map((b, j) => (
-                                <li key={j}>✓ {b}</li>
-                              ))}
-                            </ul>
-                          </div>
-                          <a
-                            href="mailto:contact@skindoctor.ai"
-                            onClick={() =>
-                              gaEvent('book_appointment_click', {
-                                serviceName: s.name,
-                                primaryConcern
-                              })
-                            }
-                            className="block text-center bg-blue-600 text-white py-3 font-bold hover:bg-blue-700"
-                          >
-                            Book Appointment
-                          </a>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {agencyChoice === 'observe' && (
-                  <div ref={observeRef} className="bg-gray-50 border border-gray-200 p-6">
-                    <p className="text-sm text-gray-700">
-                      If you’d like, you can simply return to your email later.
-                      There is no urgency — and no required schedule.
-                    </p>
-                  </div>
-                )}
-
-                <PostImageReflection
-                  onSeen={() => {
-                    if (!reflectionSeen) {
-                      setReflectionSeen(true);
-                      gaEvent('reflection_seen', { step: 'results' });
-                      showToast("Thank you. Sharing and saving are now available.");
-                    }
-                  }}
-                />
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="bg-gray-50 border border-gray-200 p-6">
+                <p className="text-sm text-gray-700">
+                  Your Future Story images are not available for this result.
+                </p>
               </div>
             )}
+          </div>
+        )}
 
-            <canvas ref={canvasRef} className="hidden" />
+        {agencyChoice === 'guidance' && (
+          <div className="mt-6 bg-white border-2 border-gray-900 p-8">
+            <h4 className="font-bold text-gray-900 mb-4 text-2xl">Recommended Products</h4>
+            <div className="grid md:grid-cols-3 gap-4 mb-8">
+              {analysisReport.recommendedProducts.map((p, i) => (
+                <div key={i} className="bg-gray-50 border p-4">
+                  <h5 className="font-bold text-gray-900 mb-1">{p.name}</h5>
+                  <p className="text-gray-900 font-bold mb-2">${p.price}</p>
+                  <ul className="text-sm text-gray-700 mb-3">
+                    {p.benefits.map((b, j) => (
+                      <li key={j}>✓ {b}</li>
+                    ))}
+                  </ul>
+                  <a
+                    href={p.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() =>
+                      gaEvent('product_click', {
+                        productName: p.name,
+                        category: p.category,
+                        price: p.price,
+                        primaryConcern
+                      })
+                    }
+                    className="block text-center bg-gray-900 text-white py-2 font-bold hover:bg-gray-800"
+                  >
+                    View
+                  </a>
+                </div>
+              ))}
+            </div>
+
+            <h4 className="font-bold text-gray-900 mb-4 text-2xl">
+              Recommended Treatments
+            </h4>
+            <div className="grid md:grid-cols-2 gap-4">
+              {analysisReport.recommendedServices.map((s, i) => (
+                <div key={i} className="bg-blue-50 border-2 border-blue-200 p-5">
+                  <h5 className="font-bold text-blue-900 mb-2 text-lg">{s.name}</h5>
+                  <p className="text-sm text-blue-800 mb-3">{s.description}</p>
+                  <p className="text-sm text-blue-900 font-semibold mb-2">
+                    Why We Recommend This:
+                  </p>
+                  <p className="text-sm text-blue-800 mb-3">{s.whyRecommended}</p>
+                  <div className="mb-4">
+                    <p className="text-xs font-bold text-blue-900 mb-1">Benefits:</p>
+                    <ul className="text-sm text-blue-800">
+                      {s.benefits.map((b, j) => (
+                        <li key={j}>✓ {b}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <a
+                    href="mailto:contact@skindoctor.ai"
+                    onClick={() =>
+                      gaEvent('book_appointment_click', {
+                        serviceName: s.name,
+                        primaryConcern
+                      })
+                    }
+                    className="block text-center bg-blue-600 text-white py-3 font-bold hover:bg-blue-700"
+                  >
+                    Book Appointment
+                  </a>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {!agencyChoice && (
+          <div className="mt-4 bg-gray-50 border border-gray-200 p-5">
+            <p className="text-sm text-gray-700">
+              Choose a path above — nothing is required.
+            </p>
+          </div>
+        )}
+      </AccordionSection>
+
+      <AccordionSection
+        id="report"
+        title="Full Cosmetic Report"
+        subtitle="The complete narrative report (expanded detail)."
+        open={!!openSections.report}
+        onToggle={toggleSection}
+      >
+        <div className="bg-white border border-gray-200 p-6">
+          <h4 className="text-xl font-bold text-gray-900 mb-2">
+            What I’m Seeing (Cosmetic Education)
+          </h4>
+
+          <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+            {analysisReport?.report || "Your report is loading."}
+          </p>
+        </div>
+      </AccordionSection>
+
+      <AccordionSection
+        id="future"
+        title="Your Future Story"
+        subtitle="Cosmetic projection images anchored to your selfie (optional)."
+        open={!!openSections.future}
+        onToggle={toggleSection}
+      >
+        {agingImages.length > 0 ? (
+          <div className="bg-white border border-gray-200 p-6">
+            <h4 className="text-xl font-bold text-gray-900 mb-2">
+              Your Future Story (Cosmetic Projection)
+            </h4>
+            <p className="text-sm text-gray-700 mb-6">
+              These are visual projections anchored to your selfie.
+            </p>
+
+            <div className="grid md:grid-cols-2 gap-4">
+              {agingImages.map((img) => (
+                <div key={img.key} className="relative border border-gray-200 bg-gray-50 p-3">
+                  <IdentityLockBadge
+                    placement="top-left"
+                    onClick={() => {
+                      gaEvent('identity_lock_badge_clicked', { key: img.key });
+                      setIdentityLockModalOpen(true);
+                    }}
+                  />
+
+                  <WatermarkOverlay />
+
+                  <img
+                    src={img.url}
+                    alt={img.label}
+                    className="w-full border border-gray-200"
+                    onLoad={() => gaEvent('aging_image_loaded', { key: img.key })}
+                  />
+
+                  <p className="text-sm font-bold text-gray-900 mt-3">{img.label}</p>
+
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    <button
+                      onClick={() => handleShare({ url: img.url, label: img.label })}
+                      className="py-2 text-sm font-bold border bg-gray-900 text-white hover:bg-gray-800 border-gray-900"
+                      type="button"
+                    >
+                      Share
+                    </button>
+
+                    <button
+                      onClick={() => handleSave({ url: img.url, label: img.label })}
+                      className="py-2 text-sm font-bold border bg-white text-gray-900 hover:bg-gray-50 border-gray-300"
+                      type="button"
+                    >
+                      Save
+                    </button>
+
+                    <button
+                      onClick={() => handleCopyImageLink({ url: img.url, label: img.label })}
+                      className="py-2 text-sm font-bold border bg-white text-gray-900 hover:bg-gray-50 border-gray-300"
+                      type="button"
+                    >
+                      Copy
+                    </button>
+                  </div>
+
+                  {!reflectionSeen && (
+                    <p className="text-xs text-gray-600 mt-3">
+                      Sharing/saving activates after you read Dr. Lazuk’s note below.
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="bg-gray-50 border border-gray-200 p-6">
+            <p className="text-sm text-gray-700">
+              Your Future Story images are not available for this result.
+            </p>
+          </div>
+        )}
+      </AccordionSection>
+
+      <AccordionSection
+        id="guidance"
+        title="Recommended Products and Treatments"
+        subtitle="Personalized guidance mapped to your primary concern."
+        open={!!openSections.guidance}
+        onToggle={toggleSection}
+      >
+        <div className="bg-white border-2 border-gray-900 p-8">
+          <h4 className="font-bold text-gray-900 mb-4 text-2xl">Recommended Products</h4>
+          <div className="grid md:grid-cols-3 gap-4 mb-8">
+            {analysisReport.recommendedProducts.map((p, i) => (
+              <div key={i} className="bg-gray-50 border p-4">
+                <h5 className="font-bold text-gray-900 mb-1">{p.name}</h5>
+                <p className="text-gray-900 font-bold mb-2">${p.price}</p>
+                <ul className="text-sm text-gray-700 mb-3">
+                  {p.benefits.map((b, j) => (
+                    <li key={j}>✓ {b}</li>
+                  ))}
+                </ul>
+                <a
+                  href={p.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() =>
+                    gaEvent('product_click', {
+                      productName: p.name,
+                      category: p.category,
+                      price: p.price,
+                      primaryConcern
+                    })
+                  }
+                  className="block text-center bg-gray-900 text-white py-2 font-bold hover:bg-gray-800"
+                >
+                  View
+                </a>
+              </div>
+            ))}
+          </div>
+
+          <h4 className="font-bold text-gray-900 mb-4 text-2xl">
+            Recommended Treatments
+          </h4>
+          <div className="grid md:grid-cols-2 gap-4">
+            {analysisReport.recommendedServices.map((s, i) => (
+              <div key={i} className="bg-blue-50 border-2 border-blue-200 p-5">
+                <h5 className="font-bold text-blue-900 mb-2 text-lg">{s.name}</h5>
+                <p className="text-sm text-blue-800 mb-3">{s.description}</p>
+                <p className="text-sm text-blue-900 font-semibold mb-2">
+                  Why We Recommend This:
+                </p>
+                <p className="text-sm text-blue-800 mb-3">{s.whyRecommended}</p>
+                <div className="mb-4">
+                  <p className="text-xs font-bold text-blue-900 mb-1">Benefits:</p>
+                  <ul className="text-sm text-blue-800">
+                    {s.benefits.map((b, j) => (
+                      <li key={j}>✓ {b}</li>
+                    ))}
+                  </ul>
+                </div>
+                <a
+                  href="mailto:contact@skindoctor.ai"
+                  onClick={() =>
+                    gaEvent('book_appointment_click', {
+                      serviceName: s.name,
+                      primaryConcern
+                    })
+                  }
+                  className="block text-center bg-blue-600 text-white py-3 font-bold hover:bg-blue-700"
+                >
+                  Book Appointment
+                </a>
+              </div>
+            ))}
+          </div>
+        </div>
+      </AccordionSection>
+
+      <AccordionSection
+        id="message"
+        title="A Message from Dr. Lazuk"
+        subtitle="Reading this activates sharing/saving on Future Story images."
+        open={!!openSections.message}
+        onToggle={toggleSection}
+      >
+        <PostImageReflection
+          onSeen={() => {
+            if (!reflectionSeen) {
+              setReflectionSeen(true);
+              gaEvent('reflection_seen', { step: 'results' });
+              showToast("Thank you. Sharing and saving are now available.");
+            }
+          }}
+        />
+      </AccordionSection>
+    </div>
+  </div>
+)}
+
+<canvas ref={canvasRef} className="hidden" />
           </div>
         )}
 
