@@ -34,18 +34,11 @@ function clampScore(n) {
   if (Number.isNaN(x)) return null;
   return Math.max(0, Math.min(100, Math.round(x)));
 }
-function inferScoreFromNarrative(narrative = "", keywords = []) {
-  const t = String(narrative || "").toLowerCase();
-  const hits = Array.isArray(keywords) && keywords.some((k) => t.includes(String(k).toLowerCase()));
-  if (!hits) return null;
-
-  const neg = /(concern|reduce|improve|needs|attention|issue|irritat|inflam|breakout|pigment|dark spot|wrinkl|sagg|dehydrat|dry|oil|congest|pore)/i.test(t);
-  const pos = /(healthy|balanced|resilient|strong|smooth|even tone|minimal|well-managed|intact)/i.test(t);
-
-  if (neg && !pos) return 58;
-  if (pos && !neg) return 82;
-  return 70;
+function inferScoreFromNarrative() {
+  // Locked: narrative is NOT a scoring source.
+  return null;
 }
+
 const LOCKED_CLUSTERS = [
   { cluster_id:"core_skin", display_name:"Core Skin Health", weight:0.35, order:1, metrics:[
     { metric_id:"barrier_stability", display_name:"Barrier Stability", keywords:["barrier","skin barrier"] },
@@ -80,26 +73,26 @@ const LOCKED_CLUSTERS = [
   ]}
 ];
 function buildVisualPayload({ narrative, serverPayload }) {
-  if (serverPayload && typeof serverPayload === "object" && Array.isArray(serverPayload.clusters)) return serverPayload;
-  const clusters = LOCKED_CLUSTERS.map((c) => {
-    const metrics = c.metrics.map((m) => {
-      const inferred = inferScoreFromNarrative(narrative, m.keywords);
-      const score = inferred === null ? null : clampScore(inferred);
-      return { metric_id:m.metric_id, display_name:m.display_name, score, rag:ragFromScore(score) };
-    });
-    const nums = metrics.map((x) => x.score).filter((v) => typeof v === "number" && !Number.isNaN(v));
-    const avg = nums.length ? clampScore(nums.reduce((s, v) => s + v, 0) / nums.length) : null;
-    return { cluster_id:c.cluster_id, display_name:c.display_name, weight:c.weight, order:c.order, metrics, avg };
-  });
-  const hasAllAverages = clusters.every((c) => typeof c.avg === "number" && !Number.isNaN(c.avg));
-  const overallScore = hasAllAverages ? clampScore(clusters.reduce((sum, c) => sum + (c.avg * c.weight), 0)) : null;
-  return { version:1, generated_at:new Date().toISOString(), overall_score:{ score:overallScore, rag:ragFromScore(overallScore) }, clusters };
-}
-function ragColor(rag){
-  if(rag==="green") return "#16a34a";
-  if(rag==="red") return "#dc2626";
-  if(rag==="amber") return "#f59e0b";
-  return "#9ca3af"; // unknown
+  // Accept ONLY server payload clusters
+  if (
+    serverPayload &&
+    typeof serverPayload === "object" &&
+    Array.isArray(serverPayload.clusters) &&
+    serverPayload.clusters.length
+  ) {
+    // Validate scores exist; if any metric score is null/undefined -> fail
+    for (const c of serverPayload.clusters) {
+      if (!Array.isArray(c.metrics) || !c.metrics.length) return null;
+      for (const m of c.metrics) {
+        if (typeof m.score !== "number" || !Number.isFinite(m.score)) return null;
+        if (!m.rag) return null;
+      }
+    }
+    return serverPayload;
+  }
+
+  // Locked: do NOT synthesize scores
+  return null;
 }
 
 /* ---------------------------------------
