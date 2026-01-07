@@ -23,19 +23,20 @@ const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 const RAG_THRESHOLDS = { green: 75, amber: 55 };
 
 function ragFromScore(score) {
-  if (typeof score !== "number" || Number.isNaN(score)) return null;
+  if (typeof score !== "number" || Number.isNaN(score)) return "unknown";
   if (score >= RAG_THRESHOLDS.green) return "green";
   if (score >= RAG_THRESHOLDS.amber) return "amber";
   return "red";
 }
 function clampScore(n) {
+  if (n === null || n === undefined || n === "") return null;
   const x = Number(n);
   if (Number.isNaN(x)) return null;
   return Math.max(0, Math.min(100, Math.round(x)));
 }
 function inferScoreFromNarrative(narrative = "", keywords = []) {
   const t = String(narrative || "").toLowerCase();
-  const hits = keywords.some((k) => t.includes(String(k).toLowerCase()));
+  const hits = Array.isArray(keywords) && keywords.some((k) => t.includes(String(k).toLowerCase()));
   if (!hits) return null;
 
   const neg = /(concern|reduce|improve|needs|attention|issue|irritat|inflam|breakout|pigment|dark spot|wrinkl|sagg|dehydrat|dry|oil|congest|pore)/i.test(t);
@@ -43,11 +44,8 @@ function inferScoreFromNarrative(narrative = "", keywords = []) {
 
   if (neg && !pos) return 58;
   if (pos && !neg) return 82;
-
-  // IMPORTANT: do not fabricate a neutral score
-  return null;
+  return 70;
 }
-
 const LOCKED_CLUSTERS = [
   { cluster_id:"core_skin", display_name:"Core Skin Health", weight:0.35, order:1, metrics:[
     { metric_id:"barrier_stability", display_name:"Barrier Stability", keywords:["barrier","skin barrier"] },
@@ -85,19 +83,23 @@ function buildVisualPayload({ narrative, serverPayload }) {
   if (serverPayload && typeof serverPayload === "object" && Array.isArray(serverPayload.clusters)) return serverPayload;
   const clusters = LOCKED_CLUSTERS.map((c) => {
     const metrics = c.metrics.map((m) => {
-      const score = clampScore(inferScoreFromNarrative(narrative, m.keywords));
+      const inferred = inferScoreFromNarrative(narrative, m.keywords);
+      const score = inferred === null ? null : clampScore(inferred);
       return { metric_id:m.metric_id, display_name:m.display_name, score, rag:ragFromScore(score) };
     });
-    const avg = clampScore(metrics.reduce((s,x)=>s+x.score,0)/Math.max(1,metrics.length));
+    const nums = metrics.map((x) => x.score).filter((v) => typeof v === "number" && !Number.isNaN(v));
+    const avg = nums.length ? clampScore(nums.reduce((s, v) => s + v, 0) / nums.length) : null;
     return { cluster_id:c.cluster_id, display_name:c.display_name, weight:c.weight, order:c.order, metrics, avg };
   });
-  const overallScore = clampScore(clusters.reduce((sum,c)=>sum + (c.avg*c.weight), 0));
+  const hasAllAverages = clusters.every((c) => typeof c.avg === "number" && !Number.isNaN(c.avg));
+  const overallScore = hasAllAverages ? clampScore(clusters.reduce((sum, c) => sum + (c.avg * c.weight), 0)) : null;
   return { version:1, generated_at:new Date().toISOString(), overall_score:{ score:overallScore, rag:ragFromScore(overallScore) }, clusters };
 }
 function ragColor(rag){
   if(rag==="green") return "#16a34a";
   if(rag==="red") return "#dc2626";
-  return "#f59e0b";
+  if(rag==="amber") return "#f59e0b";
+  return "#9ca3af"; // unknown
 }
 
 /* ---------------------------------------
