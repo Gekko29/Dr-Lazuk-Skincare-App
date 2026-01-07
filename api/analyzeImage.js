@@ -2,7 +2,6 @@
 // Vision-powered image analysis for the virtual skincare report.
 //
 // Accepts: { imageBase64, notes }
-// - imageBase64 can be a data URL ("data:image/...;base64,...") or a normal https URL
 //
 // Returns (additive-safe):
 // {
@@ -12,7 +11,7 @@
 //   fitzpatrickType: number (1–6) | null,
 //   skinType: "oily"|"dry"|"combination"|"normal"|null,
 //
-//   // NEW (locked-spec numeric payload; additive):
+//   // LOCKED-SPEC numeric payload (authoritative):
 //   report_id: string,
 //   version: 1,
 //   generated_at: string,
@@ -21,13 +20,8 @@
 //     { cluster_id, display_name, weight, order, metrics: [{ metric_id, display_name, score, rag, cluster_id, order }] }
 //   ]
 // }
-//
-// Notes:
-// - Cosmetic/appearance only (no disease naming / no diagnosis)
-// - US-only geo gate (matches generate-report.js behavior)
-// - Adds bodyParser size limit so selfies don’t 413/parse-fail on Next.js
 
-export const config = {
+module.exports.config = {
   api: {
     bodyParser: { sizeLimit: "10mb" },
   },
@@ -85,13 +79,13 @@ function clampScore(n) {
 // 🔒 Locked global RAG thresholds
 function ragFromScore(score) {
   const s = clampScore(score);
-  if (s === null) return "amber"; // neutral fallback; should not happen if model returns numbers
+  if (s === null) return "amber";
   if (s >= 75) return "green";
   if (s >= 55) return "amber";
   return "red";
 }
 
-// 🔒 Locked clusters + metric mapping (IDs are internal; display names are user-facing)
+// 🔒 Locked clusters + metric mapping
 const LOCKED_CLUSTERS = [
   {
     cluster_id: "core_skin",
@@ -156,9 +150,9 @@ const LOCKED_CLUSTERS = [
   },
 ];
 
-// compute overall score per locked weights
+const LOCKED_VERSION = 1;
+
 function computeOverallScore(clusters) {
-  // cluster score = avg(metric scores)
   const byId = new Map(clusters.map((c) => [c.cluster_id, c]));
   let total = 0;
 
@@ -181,8 +175,67 @@ function computeOverallScore(clusters) {
 }
 
 function makeReportId() {
-  // lightweight ID, deterministic enough for UI; you can swap to uuid later
   return `rpt_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function getAllMetricIds() {
+  return LOCKED_CLUSTERS.flatMap((c) => c.metrics.map((m) => m.metric_id));
+}
+
+function buildClustersFromMetricScores(metricScores) {
+  return LOCKED_CLUSTERS.map((c) => {
+    const metrics = c.metrics.map((m) => {
+      const score = clampScore(metricScores?.[m.metric_id]);
+      return {
+        metric_id: m.metric_id,
+        display_name: m.display_name,
+        score,
+        rag: ragFromScore(score),
+        cluster_id: c.cluster_id,
+        order: m.order,
+      };
+    });
+
+    return {
+      cluster_id: c.cluster_id,
+      display_name: c.display_name,
+      weight: c.weight,
+      order: c.order,
+      metrics,
+    };
+  });
+}
+
+function validateMetricScores(metricScores) {
+  if (!metricScores || typeof metricScores !== "object") return { ok: false, missing: getAllMetricIds() };
+
+  const missing = [];
+  for (const id of getAllMetricIds()) {
+    const v = clampScore(metricScores[id]);
+    if (v === null) missing.push(id);
+  }
+  return { ok: missing.length === 0, missing };
+}
+
+async function runVisionOnce({ client, visionModel, systemPrompt, userText, imageUrl, temperature }) {
+  const completion = await client.chat.completions.create({
+    model: visionModel,
+    temperature,
+    max_tokens: 1600,
+    messages: [
+      { role: "system", content: systemPrompt },
+      {
+        role: "user",
+        content: [
+          { type: "text", text: userText },
+          { type: "image_url", image_url: { url: imageUrl } },
+        ],
+      },
+    ],
+  });
+
+  const rawContent = completion.choices?.[0]?.message?.content || "";
+  return { rawContent, parsed: safeJsonParse(rawContent) };
 }
 
 module.exports = async function handler(req, res) {
@@ -195,7 +248,7 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ ok: false, error: "OPENAI_API_KEY is not set in the environment" });
   }
 
-  // US-only geo gate (align with /api/generate-report)
+  // US-only geo gate
   const country = req.headers["x-vercel-ip-country"];
   if (country && country !== "US") {
     return res.status(403).json({
@@ -227,10 +280,8 @@ module.exports = async function handler(req, res) {
 
     const client = await getOpenAIClient();
     const imageUrl = imageBase64;
-
     const visionModel = process.env.OPENAI_VISION_MODEL || "gpt-4o-mini";
 
-    // Provide the locked metric list to the model (so it outputs numeric scores deterministically)
     const metricListForModel = LOCKED_CLUSTERS.map((c) => ({
       cluster_id: c.cluster_id,
       display_name: c.display_name,
@@ -240,7 +291,7 @@ module.exports = async function handler(req, res) {
       })),
     }));
 
-    const systemPrompt = `
+    const systemPromptBase = `
 You are a cosmetic-only virtual assistant working alongside a dermatologist.
 You are analyzing a single selfie (face photo) for COSMETIC and APPEARANCE purposes only.
 
@@ -253,8 +304,8 @@ STRICT RULES:
 CRITICAL NUMERIC REQUIREMENT:
 You MUST provide numeric scores for each metric_id listed below.
 - score range: 0–100 (integer)
-- do NOT return the same number for all metrics
-- when uncertain, choose a conservative mid-range score (e.g., 55–75) but still vary across metrics
+- DO NOT return the same number for all metrics
+- when uncertain, choose conservative mid-range scores (55–75) BUT still vary across metrics
 - base scores ONLY on what is visible in the photo and the notes
 
 LOCKED METRICS LIST (you must score all of them):
@@ -322,31 +373,51 @@ Additional notes (may be empty):
 ${notes || "none provided"}
 `.trim();
 
-    const completion = await client.chat.completions.create({
-      model: visionModel,
-      temperature: 0.25,
-      max_tokens: 1500,
-      messages: [
-        { role: "system", content: systemPrompt },
-        {
-          role: "user",
-          content: [
-            { type: "text", text: userText },
-            { type: "image_url", image_url: { url: imageUrl } },
-          ],
-        },
-      ],
+    // Pass 1
+    let { rawContent, parsed } = await runVisionOnce({
+      client,
+      visionModel,
+      systemPrompt: systemPromptBase,
+      userText,
+      imageUrl,
+      temperature: 0.2,
     });
 
-    const rawContent = completion.choices?.[0]?.message?.content || "";
-    const parsed = safeJsonParse(rawContent);
+    // Validate metric_scores. If incomplete, retry once with stricter instruction.
+    let metricScores = parsed?.metric_scores;
+    let validation = validateMetricScores(metricScores);
 
-    if (!parsed) {
-      console.error("Failed to parse JSON from vision model:", rawContent);
+    if (!parsed || !validation.ok) {
+      const stricter = `
+${systemPromptBase}
+
+RETRY REQUIREMENT:
+Your previous output was missing metric_scores or missing some metric_ids.
+You MUST include metric_scores for ALL metric_ids. No omissions.
+Missing metric_ids you must include now: ${JSON.stringify(validation.missing || [], null, 2)}
+`.trim();
+
+      const retry = await runVisionOnce({
+        client,
+        visionModel,
+        systemPrompt: stricter,
+        userText,
+        imageUrl,
+        temperature: 0.1,
+      });
+
+      rawContent = retry.rawContent;
+      parsed = retry.parsed;
+      metricScores = parsed?.metric_scores;
+      validation = validateMetricScores(metricScores);
+    }
+
+    if (!parsed || !validation.ok) {
+      console.error("Vision JSON parse/metric validation failed:", { rawContent, missing: validation.missing });
       return res.status(500).json({
         ok: false,
-        error: "parse_failed",
-        message: "Problem interpreting the image analysis. Please try again in a moment.",
+        error: "metric_scores_invalid",
+        message: "Problem producing numeric scores for the visual report. Please try again.",
       });
     }
 
@@ -356,13 +427,11 @@ ${notes || "none provided"}
     const fitzpatrickType = normalizeFitzpatrick(parsed.fitzpatrickType);
     const skinType = normalizeSkinType(parsed.skinType);
 
-    // Minimal safety: ensure compliment exists (fallback only if model breaks)
     if (!analysis.complimentFeatures || typeof analysis.complimentFeatures !== "string") {
       analysis.complimentFeatures =
         "You have a calm, approachable presence — my goal is to help your skin reflect that same ease and radiance.";
     }
 
-    // Ensure checklist15 exists (fallback scaffold if missing)
     if (!analysis.checklist15 || typeof analysis.checklist15 !== "object") {
       analysis.checklist15 = {
         "1_skinTypeCharacteristics": "",
@@ -383,31 +452,8 @@ ${notes || "none provided"}
       };
     }
 
-    // Build locked clusters from metric_scores (authoritative numeric path)
-    const metricScores = parsed.metric_scores && typeof parsed.metric_scores === "object" ? parsed.metric_scores : null;
-
-    const clusters = LOCKED_CLUSTERS.map((c) => {
-      const metrics = c.metrics.map((m) => {
-        const score = metricScores ? clampScore(metricScores[m.metric_id]) : null;
-        return {
-          metric_id: m.metric_id,
-          display_name: m.display_name,
-          score: score ?? null,
-          rag: score === null ? "amber" : ragFromScore(score),
-          cluster_id: c.cluster_id,
-          order: m.order,
-        };
-      });
-
-      return {
-        cluster_id: c.cluster_id,
-        display_name: c.display_name,
-        weight: c.weight,
-        order: c.order,
-        metrics,
-      };
-    });
-
+    // Authoritative locked numeric payload
+    const clusters = buildClustersFromMetricScores(metricScores);
     const overall_score = computeOverallScore(clusters);
 
     return res.status(200).json({
@@ -417,9 +463,8 @@ ${notes || "none provided"}
       fitzpatrickType,
       skinType,
 
-      // additive locked-spec numeric payload
       report_id: makeReportId(),
-      version: 1,
+      version: LOCKED_VERSION,
       generated_at: new Date().toISOString(),
       overall_score,
       clusters,
