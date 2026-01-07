@@ -10,7 +10,16 @@
 //   raw: { ... },
 //   analysis: { ... checklist15 ... },
 //   fitzpatrickType: number (1–6) | null,
-//   skinType: "oily"|"dry"|"combination"|"normal"|null
+//   skinType: "oily"|"dry"|"combination"|"normal"|null,
+//
+//   // NEW (locked-spec numeric payload; additive):
+//   report_id: string,
+//   version: 1,
+//   generated_at: string,
+//   overall_score: { score: number, rag: "green"|"amber"|"red" },
+//   clusters: [
+//     { cluster_id, display_name, weight, order, metrics: [{ metric_id, display_name, score, rag, cluster_id, order }] }
+//   ]
 // }
 //
 // Notes:
@@ -20,9 +29,7 @@
 
 export const config = {
   api: {
-    bodyParser: {
-      sizeLimit: "10mb",
-    },
+    bodyParser: { sizeLimit: "10mb" },
   },
 };
 
@@ -34,18 +41,11 @@ async function getOpenAIClient() {
 
 function extractJson(rawText) {
   const text = String(rawText || "").trim();
-
-  // Strip ```json fences if present
   const fenceMatch = text.match(/```json\s*([\s\S]*?)\s*```/i);
   const candidate = fenceMatch?.[1]?.trim() || text;
-
-  // Otherwise slice from first { to last }
   const start = candidate.indexOf("{");
   const end = candidate.lastIndexOf("}");
-  if (start !== -1 && end !== -1 && end > start) {
-    return candidate.slice(start, end + 1).trim();
-  }
-
+  if (start !== -1 && end !== -1 && end > start) return candidate.slice(start, end + 1).trim();
   return candidate;
 }
 
@@ -73,8 +73,116 @@ function normalizeSkinType(value) {
 }
 
 function isProbablyTooLargeDataUrl(s, maxChars = 9_000_000) {
-  // Rough guardrail: extremely large base64 payloads can choke body parsing / memory
   return typeof s === "string" && s.startsWith("data:image/") && s.length > maxChars;
+}
+
+function clampScore(n) {
+  const x = Number(n);
+  if (!Number.isFinite(x)) return null;
+  return Math.max(0, Math.min(100, Math.round(x)));
+}
+
+// 🔒 Locked global RAG thresholds
+function ragFromScore(score) {
+  const s = clampScore(score);
+  if (s === null) return "amber"; // neutral fallback; should not happen if model returns numbers
+  if (s >= 75) return "green";
+  if (s >= 55) return "amber";
+  return "red";
+}
+
+// 🔒 Locked clusters + metric mapping (IDs are internal; display names are user-facing)
+const LOCKED_CLUSTERS = [
+  {
+    cluster_id: "core_skin",
+    display_name: "Core Skin Health",
+    weight: 0.35,
+    order: 1,
+    metrics: [
+      { metric_id: "barrier_stability", display_name: "Barrier Stability", order: 1 },
+      { metric_id: "hydration_level", display_name: "Hydration Level", order: 2 },
+      { metric_id: "oil_sebum_balance", display_name: "Oil / Sebum Balance", order: 3 },
+      { metric_id: "skin_texture", display_name: "Skin Texture", order: 4 },
+      { metric_id: "pore_visibility", display_name: "Pore Visibility", order: 5 },
+    ],
+  },
+  {
+    cluster_id: "aging_structure",
+    display_name: "Aging & Structure",
+    weight: 0.25,
+    order: 2,
+    metrics: [
+      { metric_id: "fine_lines", display_name: "Fine Lines", order: 1 },
+      { metric_id: "wrinkles", display_name: "Wrinkles", order: 2 },
+      { metric_id: "skin_firmness", display_name: "Skin Firmness", order: 3 },
+      { metric_id: "skin_sagging", display_name: "Skin Sagging", order: 4 },
+      { metric_id: "elasticity_bounceback", display_name: "Elasticity / Bounce-Back", order: 5 },
+    ],
+  },
+  {
+    cluster_id: "eye_area",
+    display_name: "Eye Area",
+    weight: 0.15,
+    order: 3,
+    metrics: [
+      { metric_id: "under_eye_fine_lines", display_name: "Under-Eye Fine Lines", order: 1 },
+      { metric_id: "under_eye_sagging_hollows", display_name: "Under-Eye Sagging / Hollows", order: 2 },
+      { metric_id: "under_eye_dark_circles", display_name: "Under-Eye Dark Circles", order: 3 },
+      { metric_id: "under_eye_puffiness", display_name: "Under-Eye Puffiness", order: 4 },
+    ],
+  },
+  {
+    cluster_id: "pigmentation_tone",
+    display_name: "Pigmentation & Tone",
+    weight: 0.15,
+    order: 4,
+    metrics: [
+      { metric_id: "overall_pigmentation", display_name: "Overall Pigmentation", order: 1 },
+      { metric_id: "dark_spots_sun_spots", display_name: "Dark Spots / Sun Spots", order: 2 },
+      { metric_id: "uneven_skin_tone", display_name: "Uneven Skin Tone", order: 3 },
+      { metric_id: "redness_blotchiness", display_name: "Redness / Blotchiness", order: 4 },
+    ],
+  },
+  {
+    cluster_id: "stress_damage",
+    display_name: "Stress & Damage",
+    weight: 0.10,
+    order: 5,
+    metrics: [
+      { metric_id: "sensitivity_reactivity", display_name: "Sensitivity / Reactivity", order: 1 },
+      { metric_id: "inflammation_signals", display_name: "Inflammation Signals", order: 2 },
+      { metric_id: "environmental_damage", display_name: "Environmental Damage (UV / Pollution)", order: 3 },
+    ],
+  },
+];
+
+// compute overall score per locked weights
+function computeOverallScore(clusters) {
+  // cluster score = avg(metric scores)
+  const byId = new Map(clusters.map((c) => [c.cluster_id, c]));
+  let total = 0;
+
+  for (const locked of LOCKED_CLUSTERS) {
+    const c = byId.get(locked.cluster_id);
+    if (!c || !Array.isArray(c.metrics) || c.metrics.length === 0) continue;
+
+    const scores = c.metrics
+      .map((m) => clampScore(m.score))
+      .filter((x) => typeof x === "number");
+
+    if (!scores.length) continue;
+
+    const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+    total += avg * locked.weight;
+  }
+
+  const score = Math.round(total);
+  return { score, rag: ragFromScore(score) };
+}
+
+function makeReportId() {
+  // lightweight ID, deterministic enough for UI; you can swap to uuid later
+  return `rpt_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
 module.exports = async function handler(req, res) {
@@ -122,6 +230,16 @@ module.exports = async function handler(req, res) {
 
     const visionModel = process.env.OPENAI_VISION_MODEL || "gpt-4o-mini";
 
+    // Provide the locked metric list to the model (so it outputs numeric scores deterministically)
+    const metricListForModel = LOCKED_CLUSTERS.map((c) => ({
+      cluster_id: c.cluster_id,
+      display_name: c.display_name,
+      metrics: c.metrics.map((m) => ({
+        metric_id: m.metric_id,
+        display_name: m.display_name,
+      })),
+    }));
+
     const systemPrompt = `
 You are a cosmetic-only virtual assistant working alongside a dermatologist.
 You are analyzing a single selfie (face photo) for COSMETIC and APPEARANCE purposes only.
@@ -131,6 +249,16 @@ STRICT RULES:
 - Only talk about cosmetic / visual aspects: redness, uneven tone, dryness, oiliness, texture, fine lines, pores, glow, puffiness.
 - You are not giving medical advice. You are describing appearance-only patterns.
 - Do not invent details you cannot see clearly.
+
+CRITICAL NUMERIC REQUIREMENT:
+You MUST provide numeric scores for each metric_id listed below.
+- score range: 0–100 (integer)
+- do NOT return the same number for all metrics
+- when uncertain, choose a conservative mid-range score (e.g., 55–75) but still vary across metrics
+- base scores ONLY on what is visible in the photo and the notes
+
+LOCKED METRICS LIST (you must score all of them):
+${JSON.stringify(metricListForModel, null, 2)}
 
 TASK:
 Return VALID JSON ONLY (no markdown, no extra commentary) with EXACTLY this shape:
@@ -175,7 +303,11 @@ Return VALID JSON ONLY (no markdown, no extra commentary) with EXACTLY this shap
     }
   },
   "fitzpatrickType": number | null,
-  "skinType": "oily"|"dry"|"combination"|"normal"|null
+  "skinType": "oily"|"dry"|"combination"|"normal"|null,
+  "metric_scores": {
+    "<metric_id>": number,
+    "...": number
+  }
 }
 
 IMPORTANT REQUIREMENT FOR complimentFeatures:
@@ -193,7 +325,7 @@ ${notes || "none provided"}
     const completion = await client.chat.completions.create({
       model: visionModel,
       temperature: 0.25,
-      max_tokens: 1200,
+      max_tokens: 1500,
       messages: [
         { role: "system", content: systemPrompt },
         {
@@ -251,12 +383,46 @@ ${notes || "none provided"}
       };
     }
 
+    // Build locked clusters from metric_scores (authoritative numeric path)
+    const metricScores = parsed.metric_scores && typeof parsed.metric_scores === "object" ? parsed.metric_scores : null;
+
+    const clusters = LOCKED_CLUSTERS.map((c) => {
+      const metrics = c.metrics.map((m) => {
+        const score = metricScores ? clampScore(metricScores[m.metric_id]) : null;
+        return {
+          metric_id: m.metric_id,
+          display_name: m.display_name,
+          score: score ?? null,
+          rag: score === null ? "amber" : ragFromScore(score),
+          cluster_id: c.cluster_id,
+          order: m.order,
+        };
+      });
+
+      return {
+        cluster_id: c.cluster_id,
+        display_name: c.display_name,
+        weight: c.weight,
+        order: c.order,
+        metrics,
+      };
+    });
+
+    const overall_score = computeOverallScore(clusters);
+
     return res.status(200).json({
       ok: true,
       raw,
       analysis,
       fitzpatrickType,
       skinType,
+
+      // additive locked-spec numeric payload
+      report_id: makeReportId(),
+      version: 1,
+      generated_at: new Date().toISOString(),
+      overall_score,
+      clusters,
     });
   } catch (error) {
     console.error("Error in /api/analyzeImage:", error);
@@ -267,6 +433,7 @@ ${notes || "none provided"}
     });
   }
 };
+
 
 
 
