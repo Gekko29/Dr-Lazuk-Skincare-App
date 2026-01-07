@@ -1512,102 +1512,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
   };
 
   useEffect(() => {
-    
-  /* ---------------------------------------
-     Canonical report payload (screen + PDF)
-     The API is authoritative; UI only renders.
-  --------------------------------------- */
-  const canonicalPayload = useMemo(() => {
-    if (!analysisReport) return null;
-    return (
-      analysisReport.report_payload ||
-      analysisReport.reportPayload ||
-      analysisReport.payload ||
-      analysisReport.dermatology_engine ||
-      analysisReport.dermatologyEngine ||
-      analysisReport.engine ||
-      null
-    );
-  }, [analysisReport]);
-
-  const ragFromScore = (score) => {
-    const s = Number(score);
-    if (!Number.isFinite(s)) return null;
-    if (s >= 75) return "green";
-    if (s >= 55) return "amber";
-    return "red";
-  };
-
-  const ragLabel = (rag) => {
-    if (rag === "green") return "G";
-    if (rag === "amber") return "A";
-    if (rag === "red") return "R";
-    return "?";
-  };
-
-  const ragStyles = (rag) => {
-    if (rag === "green") return { bg: "#16a34a", fg: "white", border: "#16a34a" };
-    if (rag === "amber") return { bg: "#ca8a04", fg: "white", border: "#ca8a04" };
-    if (rag === "red") return { bg: "#dc2626", fg: "white", border: "#dc2626" };
-    return { bg: "#e5e7eb", fg: "#111827", border: "#d1d5db" };
-  };
-
-  const pickOverall = () => {
-    const o = canonicalPayload?.overall_score || canonicalPayload?.overallScore || null;
-    if (!o) return null;
-    const score = (typeof o === "number") ? o : (o.score ?? o.value ?? null);
-    const rag = (typeof o === "object" && o.rag) ? o.rag : ragFromScore(score);
-    return { score, rag };
-  };
-
-  const normalizedClusters = useMemo(() => {
-    // Preferred: clusters[] already in canonical payload
-    const clusters = canonicalPayload?.clusters;
-    if (Array.isArray(clusters) && clusters.length) return clusters;
-
-    // Fallback: build from a flat metrics list if present
-    const flat = canonicalPayload?.metrics || analysisReport?.metrics || null;
-    if (!Array.isArray(flat) || !flat.length) return [];
-
-    const byCluster = new Map();
-    for (const m of flat) {
-      const clusterId = m.cluster_id || m.clusterId || "other";
-      const displayName = m.cluster_name || m.clusterName || clusterId;
-      const metric = {
-        metric_id: m.metric_id || m.metricId || m.id || "",
-        display_name: m.display_name || m.displayName || m.name || "",
-        score: m.score,
-        rag: m.rag || m.rag_status || m.ragStatus || ragFromScore(m.score),
-        order: m.order ?? m.order_index ?? m.orderIndex ?? 999
-      };
-      if (!byCluster.has(clusterId)) {
-        byCluster.set(clusterId, { cluster_id: clusterId, display_name: displayName, order: 999, metrics: [] });
-      }
-      byCluster.get(clusterId).metrics.push(metric);
-    }
-
-    const out = Array.from(byCluster.values());
-    for (const c of out) c.metrics.sort((a,b) => (a.order??999) - (b.order??999));
-    out.sort((a,b) => (a.order??999) - (b.order??999));
-    return out;
-  }, [canonicalPayload, analysisReport]);
-
-  const topSignals = useMemo(() => {
-    // Prefer explicit priority_summary/prioritySummary if present
-    const ps = canonicalPayload?.priority_summary || canonicalPayload?.prioritySummary;
-    const priority = ps?.priority || ps?.priority_ids || ps?.priorityIds || null;
-    if (Array.isArray(priority) && priority.length) return priority.slice(0, 3);
-
-    // Fallback: use areasOfFocus strings if present
-    const af = analysisReport?.areasOfFocus;
-    if (Array.isArray(af) && af.length) return af.slice(0, 3);
-
-    return [];
-  }, [canonicalPayload, analysisReport]);
-
-  const overall = pickOverall();
-
-return () => {
+    return () => {
       if (streamRef.current) streamRef.current.getTracks().forEach((track) => track.stop());
     };
   }, []);
@@ -2112,395 +2017,218 @@ return () => {
             )}
 
             {step === 'results' && analysisReport && (
-              <div className="mt-8">
-                <div className="flex items-center justify-between">
+              <div className="space-y-6">
+                <div className="flex justify-between items-center">
                   <h3 className="text-2xl font-bold text-gray-900">Your Results</h3>
                   <button
-                    onClick={resetAll}
-                    className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-900 rounded-md"
+                    onClick={resetAnalysis}
+                    className="px-4 py-2 bg-gray-300 text-gray-900 font-bold hover:bg-gray-400 text-sm"
+                    type="button"
                   >
                     New Analysis
                   </button>
                 </div>
 
-                {/* =========================================================
-                   DEFAULT SUMMARY VIEW (Locked: always on top)
-                ========================================================= */}
-                <div className="mt-4 border border-gray-300 bg-white p-6">
-                  <div className="flex items-start justify-between gap-6">
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[11px] tracking-widest text-gray-500 font-semibold">
-                        DEFAULT SUMMARY VIEW
-                      </div>
+                <div className="bg-white border border-gray-200 p-6">
+                  <h4 className="text-xl font-bold text-gray-900 mb-2">
+                    What I’m Seeing (Cosmetic Education)
+                  </h4>
 
-                      <div className="mt-2 text-2xl font-bold text-gray-900">
-                        Your AI Facial Skin Analysis, by Dr. Lazuk
-                      </div>
-                      <div className="mt-1 text-sm text-gray-600">
-                        Your Personal Roadmap To Skin Health · <span className="font-medium">skindoctor.ai</span>
-                      </div>
-
-                      <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {/* Context */}
-                        <div className="border border-gray-200 p-4">
-                          <div className="text-[11px] tracking-widest text-gray-500 font-semibold">CONTEXT</div>
-                          <div className="mt-2 space-y-1 text-sm text-gray-900">
-                            <div><span className="font-semibold">Age Range:</span> {analysisReport?.ageRange || "—"}</div>
-                            <div><span className="font-semibold">Primary Concern:</span> {analysisReport?.primaryConcern || "—"}</div>
-                            <div><span className="font-semibold">Fitzpatrick:</span> {analysisReport?.fitzpatrickType || "—"}</div>
-                          </div>
-                        </div>
-
-                        {/* Top signals */}
-                        <div className="border border-gray-200 p-4">
-                          <div className="text-[11px] tracking-widest text-gray-500 font-semibold">TOP SIGNALS</div>
-
-                          <div className="mt-2 space-y-2">
-                            {topSignals && topSignals.length ? (
-                              topSignals.map((sig, i) => {
-                                // sig can be a string OR metric_id; display the best available label
-                                const label =
-                                  typeof sig === "string"
-                                    ? sig
-                                    : (sig?.display_name || sig?.displayName || sig?.name || "Signal");
-
-                                // Default: Amber unless canonical data provides per-metric RAG
-                                let rag = "amber";
-                                const metricId = (typeof sig === "string") ? null : (sig?.metric_id || sig?.metricId || sig?.id || null);
-
-                                if (metricId && normalizedClusters?.length) {
-                                  for (const c of normalizedClusters) {
-                                    const hit = (c.metrics || []).find(m => (m.metric_id || m.metricId) === metricId);
-                                    if (hit?.rag) { rag = hit.rag; break; }
-                                  }
-                                }
-
-                                const st = ragStyles(rag);
-                                return (
-                                  <div key={`${label}-${i}`} className="flex items-center justify-between gap-3">
-                                    <div className="text-sm text-gray-900 truncate">{label}</div>
-                                    <span
-                                      className="inline-flex items-center justify-center rounded-sm px-3 py-1 text-xs font-semibold"
-                                      style={{ background: st.bg, color: st.fg, border: `1px solid ${st.border}` }}
-                                      aria-label={`RAG ${rag}`}
-                                    >
-                                      {ragLabel(rag)}
-                                    </span>
-                                  </div>
-                                );
-                              })
-                            ) : (
-                              <div className="text-sm text-gray-600">—</div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Short excerpt */}
-                      <div className="mt-4 border border-gray-200 p-4">
-                        <div className="text-[11px] tracking-widest text-gray-500 font-semibold">SHORT EXCERPT</div>
-                        <div className="mt-2 text-sm text-gray-800 whitespace-pre-wrap">
-                          {analysisReport?.summary || analysisReport?.shortExcerpt || "—"}
-                        </div>
-                      </div>
-
-                      {/* Overall score + legend (only if server provided structured payload) */}
-                      <div className="mt-4 border border-gray-200 p-4">
-                        <div className="text-[11px] tracking-widest text-gray-500 font-semibold">OVERALL SKIN HEALTH</div>
-                        {overall?.score != null ? (
-                          <div className="mt-3 flex items-center gap-6 flex-wrap">
-                            <div className="flex items-end gap-2">
-                              <div className="text-5xl font-bold text-gray-900 leading-none">{Math.round(overall.score)}</div>
-                              <div className="text-lg text-gray-700 mb-1">/100</div>
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                              {(() => {
-                                const st = ragStyles(overall.rag);
-                                return (
-                                  <span className="inline-flex items-center gap-2">
-                                    <span
-                                      className="inline-block rounded-full"
-                                      style={{ width: 14, height: 14, background: st.bg, border: `1px solid ${st.border}` }}
-                                    />
-                                    <span className="text-sm font-semibold text-gray-900">
-                                      {overall.rag?.toUpperCase?.() || "—"}
-                                    </span>
-                                  </span>
-                                );
-                              })()}
-                            </div>
-
-                            <div className="flex items-center gap-4 text-xs text-gray-700">
-                              <span className="inline-flex items-center gap-2"><span className="inline-block rounded-full" style={{ width: 10, height: 10, background: "#16a34a" }} /> Green = Strong</span>
-                              <span className="inline-flex items-center gap-2"><span className="inline-block rounded-full" style={{ width: 10, height: 10, background: "#ca8a04" }} /> Amber = Moderate</span>
-                              <span className="inline-flex items-center gap-2"><span className="inline-block rounded-full" style={{ width: 10, height: 10, background: "#dc2626" }} /> Red = Priority</span>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="mt-2 text-sm text-gray-600">
-                            Structured scoring was not returned by the API for this run. The narrative below is still valid, but the Visual Summary cannot render scores/rings without server-side metrics.
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Static map preview (non-emotional; optional) */}
-                    <div className="w-[140px] shrink-0 text-center">
-                      <div className="mx-auto w-[110px] h-[110px] flex items-center justify-center">
-                        {normalizedClusters?.length ? (
-                          <svg width="110" height="110" viewBox="0 0 110 110" role="img" aria-label="static map preview">
-                            <circle cx="55" cy="55" r="46" fill="none" stroke="#e5e7eb" strokeWidth="2" />
-                            <circle cx="55" cy="55" r="36" fill="none" stroke="#e5e7eb" strokeWidth="2" />
-                            <circle cx="55" cy="55" r="26" fill="none" stroke="#e5e7eb" strokeWidth="2" />
-                            <circle cx="55" cy="55" r="16" fill="none" stroke="#e5e7eb" strokeWidth="2" />
-                            <circle cx="55" cy="55" r="6"  fill="none" stroke="#e5e7eb" strokeWidth="2" />
-                            <circle cx="55" cy="55" r="3" fill="#111827" />
-                          </svg>
-                        ) : (
-                          <svg width="110" height="110" viewBox="0 0 110 110" role="img" aria-label="static map preview">
-                            <circle cx="55" cy="55" r="46" fill="none" stroke="#e5e7eb" strokeWidth="2" />
-                            <circle cx="55" cy="55" r="16" fill="none" stroke="#e5e7eb" strokeWidth="2" />
-                            <circle cx="55" cy="55" r="3" fill="#111827" />
-                          </svg>
-                        )}
-                      </div>
-                      <div className="text-[11px] text-gray-500 mt-2">static map preview</div>
-                    </div>
-                  </div>
-
-                  {/* Expand/collapse helpers */}
-                  <div className="mt-4 flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        document.querySelectorAll('[data-accordion]').forEach((d) => {
-                          try { d.open = true; } catch (e) {}
-                        });
-                      }}
-                      className="px-4 py-2 bg-gray-900 text-white rounded-md text-sm"
-                    >
-                      Expand Key Sections
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        document.querySelectorAll('[data-accordion]').forEach((d) => {
-                          try { d.open = false; } catch (e) {}
-                        });
-                      }}
-                      className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-900 rounded-md text-sm"
-                    >
-                      Collapse All
-                    </button>
-                    <div className="text-xs text-gray-500">Multi-open is enabled.</div>
-                  </div>
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                    {analysisReport?.report || "Your report is loading."}
+                  </p>
                 </div>
 
-                {/* =========================================================
-                   COLLAPSIBLE DETAIL (Multi-open accordion via <details>)
-                ========================================================= */}
-                <div className="mt-6 space-y-3">
-                  <details data-accordion className="border border-gray-200 bg-white">
-                    <summary className="cursor-pointer select-none px-5 py-4 font-semibold text-gray-900 flex items-center justify-between">
-                      <span>Visual Summary (Rings + Scores)</span>
-                      <span className="text-gray-500">+</span>
-                    </summary>
-                    <div className="px-5 pb-5">
-                      {normalizedClusters?.length ? (
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                          {normalizedClusters.map((c) => (
-                            <div key={c.cluster_id || c.display_name} className="border border-gray-200 p-4">
-                              <div className="font-semibold text-gray-900">{c.display_name || c.cluster_id}</div>
+                <AreasOfFocusCard areas={analysisReport?.areasOfFocus} />
 
-                              {/* Ring cluster (concentric) */}
-                              <div className="mt-3 flex items-start gap-4">
-                                <svg width="120" height="120" viewBox="0 0 120 120" role="img" aria-label={`${c.display_name} ring cluster`}>
-                                  {(() => {
-                                    const metrics = (c.metrics || []).slice(0, 5);
-                                    const baseR = 48;
-                                    const step = 7;
-                                    const cx = 60, cy = 60;
-                                    const strokeW = 4;
-                                    return metrics.map((m, idx) => {
-                                      const r = baseR - (idx * step);
-                                      const circ = 2 * Math.PI * r;
-                                      const s = Math.max(0, Math.min(100, Number(m.score ?? 0)));
-                                      const dash = (s / 100) * circ;
-                                      const rag = m.rag || ragFromScore(s) || "amber";
-                                      const st = ragStyles(rag);
-                                      return (
-                                        <g key={m.metric_id || idx}>
-                                          <circle cx={cx} cy={cy} r={r} fill="none" stroke="#e5e7eb" strokeWidth={strokeW} />
-                                          <circle
-                                            cx={cx}
-                                            cy={cy}
-                                            r={r}
-                                            fill="none"
-                                            stroke={st.bg}
-                                            strokeWidth={strokeW}
-                                            strokeLinecap="round"
-                                            strokeDasharray={`${dash} ${circ - dash}`}
-                                            transform={`rotate(-90 ${cx} ${cy})`}
-                                          />
-                                        </g>
-                                      );
-                                    });
-                                  })()}
-                                  <circle cx="60" cy="60" r="3" fill="#111827" />
-                                </svg>
+                <AgencyLayer
+                  onChoose={(choice) => {
+                    setAgencyChoice(choice);
+                    gaEvent('agency_choice', { choice });
 
-                                <div className="flex-1 min-w-0">
-                                  <div className="space-y-2">
-                                    {(c.metrics || []).slice(0, 8).map((m) => {
-                                      const rag = m.rag || ragFromScore(m.score) || "amber";
-                                      const st = ragStyles(rag);
-                                      return (
-                                        <div key={m.metric_id || m.display_name} className="flex items-center justify-between gap-3">
-                                          <div className="text-sm text-gray-900 truncate">{m.display_name || m.metric_id}</div>
-                                          <div className="flex items-center gap-3 shrink-0">
-                                            <div className="text-sm font-semibold text-gray-900 w-8 text-right">{Math.round(Number(m.score ?? 0))}</div>
-                                            <span
-                                              className="inline-flex items-center justify-center rounded-full"
-                                              style={{ width: 10, height: 10, background: st.bg, border: `1px solid ${st.border}` }}
-                                              aria-label={`RAG ${rag}`}
-                                            />
-                                          </div>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
+                    window.requestAnimationFrame(() => {
+                      const map = {
+                        understand: understandRef.current,
+                        guidance: guidanceRef.current,
+                        observe: observeRef.current
+                      };
+                      const target = map[choice];
+                      if (target?.scrollIntoView) {
+                        target.scrollIntoView({ behavior: "smooth", block: "start" });
+                      }
+                    });
+                  }}
+                />
+
+                {!agencyChoice && (
+                  <div className="bg-gray-50 border border-gray-200 p-5">
+                    <p className="text-sm text-gray-700">
+                      Your report is ready above. If you’d like, choose a path here — nothing is required.
+                    </p>
+                  </div>
+                )}
+
+                {agencyChoice === 'understand' && (
+                  <div ref={understandRef}>
+                    {agingImages.length > 0 ? (
+                      <div className="bg-white border border-gray-200 p-6">
+                        <h4 className="text-xl font-bold text-gray-900 mb-2">
+                          Your Future Story (Cosmetic Projection)
+                        </h4>
+                        <p className="text-sm text-gray-700 mb-6">
+                          These are visual projections anchored to your selfie.
+                        </p>
+
+                        <div className="grid md:grid-cols-2 gap-4">
+                          {agingImages.map((img) => (
+                            <div key={img.key} className="relative border border-gray-200 bg-gray-50 p-3">
+                              <IdentityLockBadge
+                                placement="top-left"
+                                onClick={() => {
+                                  gaEvent('identity_lock_badge_clicked', { key: img.key });
+                                  setIdentityLockModalOpen(true);
+                                }}
+                              />
+
+                              <WatermarkOverlay />
+
+                              <img
+                                src={img.url}
+                                alt={img.label}
+                                className="w-full border border-gray-200"
+                                onLoad={() => gaEvent('aging_image_loaded', { key: img.key })}
+                              />
+
+                              <p className="text-sm font-bold text-gray-900 mt-3">{img.label}</p>
+
+                              <div className="mt-3 grid grid-cols-3 gap-2">
+                                <button
+                                  onClick={() => handleShare({ url: img.url, label: img.label })}
+                                  className="py-2 text-sm font-bold border bg-gray-900 text-white hover:bg-gray-800 border-gray-900"
+                                  type="button"
+                                >
+                                  Share
+                                </button>
+
+                                <button
+                                  onClick={() => handleSave({ url: img.url, label: img.label })}
+                                  className="py-2 text-sm font-bold border bg-white text-gray-900 hover:bg-gray-50 border-gray-300"
+                                  type="button"
+                                >
+                                  Save
+                                </button>
+
+                                <button
+                                  onClick={() => handleCopyImageLink({ url: img.url, label: img.label })}
+                                  className="py-2 text-sm font-bold border bg-white text-gray-900 hover:bg-gray-50 border-gray-300"
+                                  type="button"
+                                >
+                                  Copy
+                                </button>
                               </div>
                             </div>
                           ))}
                         </div>
-                      ) : (
-                        <div className="text-sm text-gray-600">
-                          Visual Summary requires server-side metrics (clusters + per-metric scores). Once present, this section renders rings, numbers, and RAG icons 1:1 with PDF.
+                      </div>
+                    ) : (
+                      <div className="bg-gray-50 border border-gray-200 p-6">
+                        <p className="text-sm text-gray-700">
+                          Your Future Story images are not available for this result.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {agencyChoice === 'guidance' && (
+                  <div ref={guidanceRef} className="bg-white border-2 border-gray-900 p-8">
+                    <h4 className="font-bold text-gray-900 mb-4 text-2xl">Recommended Products</h4>
+                    <div className="grid md:grid-cols-3 gap-4 mb-8">
+                      {analysisReport.recommendedProducts.map((p, i) => (
+                        <div key={i} className="bg-gray-50 border p-4">
+                          <h5 className="font-bold text-gray-900 mb-1">{p.name}</h5>
+                          <p className="text-gray-900 font-bold mb-2">${p.price}</p>
+                          <ul className="text-sm text-gray-700 mb-3">
+                            {p.benefits.map((b, j) => (
+                              <li key={j}>✓ {b}</li>
+                            ))}
+                          </ul>
+                          <a
+                            href={p.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={() =>
+                              gaEvent('product_click', {
+                                productName: p.name,
+                                category: p.category,
+                                price: p.price,
+                                primaryConcern
+                              })
+                            }
+                            className="block text-center bg-gray-900 text-white py-2 font-bold hover:bg-gray-800"
+                          >
+                            View
+                          </a>
                         </div>
-                      )}
+                      ))}
                     </div>
-                  </details>
 
-                  <details data-accordion className="border border-gray-200 bg-white">
-                    <summary className="cursor-pointer select-none px-5 py-4 font-semibold text-gray-900 flex items-center justify-between">
-                      <span>Face Imagery & Visuals</span>
-                      <span className="text-gray-500">+</span>
-                    </summary>
-                    <div className="px-5 pb-5">
-                      <div className="text-sm text-gray-600">
-                        Visual projections are illustrative and for educational purposes only.
-                      </div>
-
-                      <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {photoPreview ? (
-                          <div className="border border-gray-200 p-3">
-                            <div className="text-xs font-semibold text-gray-700 mb-2">Base selfie</div>
-                            <img src={photoPreview} alt="Uploaded selfie" className="w-full rounded-md" />
-                          </div>
-                        ) : null}
-
-                        {(analysisReport?.agingPreviewImages && analysisReport.agingPreviewImages.length) ? (
-                          <div className="border border-gray-200 p-3">
-                            <div className="text-xs font-semibold text-gray-700 mb-2">Aging projections</div>
-                            <div className="grid grid-cols-2 gap-2">
-                              {analysisReport.agingPreviewImages.map((img, i) => (
-                                <img key={i} src={img} alt={`Aging projection ${i + 1}`} className="w-full rounded-md border border-gray-100" />
+                    <h4 className="font-bold text-gray-900 mb-4 text-2xl">
+                      Recommended Treatments
+                    </h4>
+                    <div className="grid md:grid-cols-2 gap-4">
+                      {analysisReport.recommendedServices.map((s, i) => (
+                        <div key={i} className="bg-blue-50 border-2 border-blue-200 p-5">
+                          <h5 className="font-bold text-blue-900 mb-2 text-lg">{s.name}</h5>
+                          <p className="text-sm text-blue-800 mb-3">{s.description}</p>
+                          <p className="text-sm text-blue-900 font-semibold mb-2">
+                            Why We Recommend This:
+                          </p>
+                          <p className="text-sm text-blue-800 mb-3">{s.whyRecommended}</p>
+                          <div className="mb-4">
+                            <p className="text-xs font-bold text-blue-900 mb-1">Benefits:</p>
+                            <ul className="text-sm text-blue-800">
+                              {s.benefits.map((b, j) => (
+                                <li key={j}>✓ {b}</li>
                               ))}
-                            </div>
+                            </ul>
                           </div>
-                        ) : null}
-                      </div>
-
-                      {/* Optional: any heatmaps/overlays returned by API */}
-                      {(() => {
-                        const fi = canonicalPayload?.face_imagery || canonicalPayload?.faceImagery || null;
-                        const heatmaps = fi?.heatmaps || [];
-                        const overlays = fi?.zone_overlays || fi?.zoneOverlays || [];
-                        if ((!heatmaps || !heatmaps.length) && (!overlays || !overlays.length)) return null;
-                        return (
-                          <div className="mt-4 border border-gray-200 p-4">
-                            <div className="text-xs font-semibold text-gray-700 mb-2">Additional overlays</div>
-                            <div className="text-sm text-gray-600">
-                              Heatmaps/zone overlays were returned by the API. If these are displayed on-screen, the same assets must be used for PDF export.
-                            </div>
-                          </div>
-                        );
-                      })()}
+                          <a
+                            href="mailto:contact@skindoctor.ai"
+                            onClick={() =>
+                              gaEvent('book_appointment_click', {
+                                serviceName: s.name,
+                                primaryConcern
+                              })
+                            }
+                            className="block text-center bg-blue-600 text-white py-3 font-bold hover:bg-blue-700"
+                          >
+                            Book Appointment
+                          </a>
+                        </div>
+                      ))}
                     </div>
-                  </details>
+                  </div>
+                )}
 
-                  <details data-accordion className="border border-gray-200 bg-white">
-                    <summary className="cursor-pointer select-none px-5 py-4 font-semibold text-gray-900 flex items-center justify-between">
-                      <span>Areas of Focus</span>
-                      <span className="text-gray-500">+</span>
-                    </summary>
-                    <div className="px-5 pb-5">
-                      {analysisReport?.areasOfFocus?.length ? (
-                        <ul className="list-disc pl-6 space-y-2 text-sm text-gray-800">
-                          {analysisReport.areasOfFocus.map((a, i) => (
-                            <li key={i}>{a}</li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <div className="text-sm text-gray-600">—</div>
-                      )}
-                    </div>
-                  </details>
+                {agencyChoice === 'observe' && (
+                  <div ref={observeRef} className="bg-gray-50 border border-gray-200 p-6">
+                    <p className="text-sm text-gray-700">
+                      If you’d like, you can simply return to your email later.
+                      There is no urgency — and no required schedule.
+                    </p>
+                  </div>
+                )}
 
-                  <details data-accordion className="border border-gray-200 bg-white">
-                    <summary className="cursor-pointer select-none px-5 py-4 font-semibold text-gray-900 flex items-center justify-between">
-                      <span>Possible Paths Forward</span>
-                      <span className="text-gray-500">+</span>
-                    </summary>
-                    <div className="px-5 pb-5">
-                      <div className="text-sm text-gray-800 whitespace-pre-wrap">
-                        {analysisReport?.pathsForward || "Optional. Choose a lens (Understand / Observe / Guidance)."}
-                      </div>
-                    </div>
-                  </details>
-
-                  <details data-accordion className="border border-gray-200 bg-white">
-                    <summary className="cursor-pointer select-none px-5 py-4 font-semibold text-gray-900 flex items-center justify-between">
-                      <span>Full Cosmetic Report</span>
-                      <span className="text-gray-500">+</span>
-                    </summary>
-                    <div className="px-5 pb-5">
-                      <div className="prose max-w-none text-gray-800">
-                        {analysisReport?.report ? (
-                          <div className="whitespace-pre-wrap">{analysisReport.report}</div>
-                        ) : (
-                          <div className="text-sm text-gray-600">—</div>
-                        )}
-                      </div>
-                    </div>
-                  </details>
-
-                  <details data-accordion className="border border-gray-200 bg-white">
-                    <summary className="cursor-pointer select-none px-5 py-4 font-semibold text-gray-900 flex items-center justify-between">
-                      <span>Recommended Products and Treatments</span>
-                      <span className="text-gray-500">+</span>
-                    </summary>
-                    <div className="px-5 pb-5">
-                      <div className="text-sm text-gray-800 whitespace-pre-wrap">
-                        {analysisReport?.recommendations || "Personalized guidance mapped to your primary concern."}
-                      </div>
-                    </div>
-                  </details>
-
-                  <details data-accordion className="border border-gray-200 bg-white">
-                    <summary className="cursor-pointer select-none px-5 py-4 font-semibold text-gray-900 flex items-center justify-between">
-                      <span>A Message from Dr. Lazuk</span>
-                      <span className="text-gray-500">+</span>
-                    </summary>
-                    <div className="px-5 pb-5">
-                      <div className="text-sm text-gray-800 whitespace-pre-wrap">
-                        {analysisReport?.messageFromDrLazuk || analysisReport?.closingNote || "—"}
-                      </div>
-                    </div>
-                  </details>
-                </div>
+                <PostImageReflection
+                  onSeen={() => {
+                    if (!reflectionSeen) {
+                      setReflectionSeen(true);
+                      gaEvent('reflection_seen', { step: 'results' });
+                      showToast("Thank you. Sharing and saving are now available.");
+                    }
+                  }}
+                />
               </div>
             )}
 
