@@ -419,16 +419,17 @@ const validateCapturedImage = async ({ dataUrl, faces }) => {
       debug.faceCenter = { cx: Number(cx?.toFixed?.(3) ?? cx), cy: Number(cy?.toFixed?.(3) ?? cy) };
 
       // Require a reasonably large, not-too-close face in frame
+      // (Partial faces often show small boxes; extreme close-ups show huge boxes.)
       if (ratio < 0.18 || ratio > 0.60) {
         return { ok: false, code: 'framing', message: RETAKE_MESSAGES.framing, debug };
       }
 
-      // Require face center to be near image center
+      // Require face center to be near image center (partial faces are often off-center)
       if (cx < 0.35 || cx > 0.65 || cy < 0.28 || cy > 0.72) {
         return { ok: false, code: 'framing', message: RETAKE_MESSAGES.framing, debug };
       }
 
-      // Reject if face box is too close to edges
+      // Reject if face box is too close to edges (common when only part of face is visible)
       const padX = 0.06 * imgW;
       const padY = 0.06 * imgH;
 
@@ -637,16 +638,16 @@ const normalizeAreasOfFocus = (areas) => {
   return items.slice(0, 3);
 };
 
-const AreasOfFocusCard = ({ areas, title = "Areas of Focus", subtitle }) => {
+const AreasOfFocusCard = ({ areas }) => {
   const items = useMemo(() => normalizeAreasOfFocus(areas), [areas]);
 
   if (!items || items.length === 0) return null;
 
   return (
     <div className="bg-white border-2 border-gray-900 p-6">
-      <h4 className="text-xl font-bold text-gray-900 mb-2">{title}</h4>
+      <h4 className="text-xl font-bold text-gray-900 mb-2">Areas of Focus</h4>
       <p className="text-sm text-gray-700 mb-5">
-        {subtitle || "These are the specific signals your analysis flagged as most relevant right now."}
+        These are the specific signals your analysis flagged as most relevant right now.
       </p>
 
       <div className="space-y-5">
@@ -670,6 +671,107 @@ const AreasOfFocusCard = ({ areas, title = "Areas of Focus", subtitle }) => {
           </div>
         ))}
       </div>
+    </div>
+  );
+};
+
+/* ---------------------------------------
+   NEW: Radial Cluster / Face Overlay Preview (static, calm)
+--------------------------------------- */
+const RadialFacePreview = ({ size = 92 }) => {
+  // Static SVG: simple face oval + calm radial nodes (non-emotional, no “expression”)
+  return (
+    <div
+      className="relative flex items-center justify-center"
+      style={{ width: size, height: size }}
+      aria-hidden="true"
+    >
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 100 100"
+        className="block"
+      >
+        {/* outer ring */}
+        <circle cx="50" cy="50" r="46" fill="none" stroke="currentColor" strokeOpacity="0.15" strokeWidth="2" />
+        {/* face oval */}
+        <ellipse cx="50" cy="52" rx="18" ry="24" fill="none" stroke="currentColor" strokeOpacity="0.55" strokeWidth="2" />
+        {/* nose line (minimal) */}
+        <path d="M50 45 L50 62" stroke="currentColor" strokeOpacity="0.35" strokeWidth="2" strokeLinecap="round" />
+        {/* radial nodes */}
+        {[
+          { x: 50, y: 6 },
+          { x: 80, y: 18 },
+          { x: 94, y: 50 },
+          { x: 82, y: 82 },
+          { x: 50, y: 94 },
+          { x: 18, y: 82 },
+          { x: 6, y: 50 },
+          { x: 20, y: 18 }
+        ].map((p, i) => (
+          <circle key={i} cx={p.x} cy={p.y} r="3.2" fill="currentColor" fillOpacity="0.35" />
+        ))}
+        {/* connectors (light) */}
+        <path
+          d="M50 6 L80 18 L94 50 L82 82 L50 94 L18 82 L6 50 L20 18 Z"
+          fill="none"
+          stroke="currentColor"
+          strokeOpacity="0.12"
+          strokeWidth="2"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </div>
+  );
+};
+
+/* ---------------------------------------
+   NEW: Accordion (multi-open)
+--------------------------------------- */
+const AccordionItem = ({ id, title, subtitle, isOpen, onToggle, children }) => {
+  return (
+    <div className="border border-gray-200 bg-white">
+      <button
+        type="button"
+        onClick={() => onToggle(id)}
+        className="w-full text-left px-5 py-4 flex items-start justify-between gap-4 hover:bg-gray-50"
+        aria-expanded={isOpen ? "true" : "false"}
+      >
+        <div>
+          <p className="text-base font-bold text-gray-900">{title}</p>
+          {subtitle ? (
+            <p className="text-sm text-gray-600 mt-1">{subtitle}</p>
+          ) : null}
+        </div>
+        <div className="text-gray-700 font-bold select-none">
+          {isOpen ? "–" : "+"}
+        </div>
+      </button>
+
+      {isOpen ? (
+        <div className="px-5 pb-5">
+          {children}
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
+const Accordion = ({ items, openIds, onToggle }) => {
+  return (
+    <div className="space-y-3">
+      {items.map((it) => (
+        <AccordionItem
+          key={it.id}
+          id={it.id}
+          title={it.title}
+          subtitle={it.subtitle}
+          isOpen={openIds.includes(it.id)}
+          onToggle={onToggle}
+        >
+          {it.content}
+        </AccordionItem>
+      ))}
     </div>
   );
 };
@@ -730,207 +832,49 @@ const PostImageReflection = ({ onSeen }) => {
 };
 
 /* ---------------------------------------
-   Accordion (multi-open)
+   Agency Layer
 --------------------------------------- */
-const AccordionItem = ({ id, title, isOpen, onToggle, children, subtitle }) => {
+const AgencyLayer = ({ onChoose }) => {
   return (
-    <div className="border border-gray-200 bg-white">
-      <button
-        type="button"
-        onClick={() => onToggle?.(id)}
-        className="w-full px-5 py-4 flex items-start justify-between gap-4 hover:bg-gray-50"
-      >
-        <div className="text-left">
-          <p className="text-base font-bold text-gray-900">{title}</p>
-          {subtitle ? <p className="text-sm text-gray-600 mt-1">{subtitle}</p> : null}
-        </div>
-        <div className="text-gray-900 font-bold">{isOpen ? "–" : "+"}</div>
-      </button>
+    <div className="border border-gray-200 bg-white p-6">
+      <h3 className="text-xl font-bold text-gray-900 mb-2">Possible Paths Forward</h3>
+      <p className="text-sm text-gray-700 mb-6">
+        Nothing here is required. Choose what feels supportive — or simply save this and return later.
+      </p>
 
-      {isOpen && (
-        <div className="px-5 pb-5">
-          {children}
-        </div>
-      )}
-    </div>
-  );
-};
-
-const MultiAccordion = ({ items, openSet, onToggle }) => {
-  return (
-    <div className="space-y-3">
-      {items.map((it) => (
-        <AccordionItem
-          key={it.id}
-          id={it.id}
-          title={it.title}
-          subtitle={it.subtitle}
-          isOpen={openSet?.has?.(it.id)}
-          onToggle={onToggle}
+      <div className="grid md:grid-cols-3 gap-3">
+        <button
+          onClick={() => onChoose?.("understand")}
+          className="border-2 border-gray-300 hover:border-gray-900 hover:bg-gray-50 p-5 text-left"
+          type="button"
         >
-          {it.render?.()}
-        </AccordionItem>
-      ))}
-    </div>
-  );
-};
-
-/* ---------------------------------------
-   Optional: Radial Cluster / Face Overlay Preview (static, non-emotional)
---------------------------------------- */
-const FaceSignalCluster = ({ size = 128 }) => {
-  const s = Number(size) || 128;
-  const c = s / 2;
-  const r1 = s * 0.34;
-  const r2 = s * 0.22;
-
-  const dots = [
-    { x: c - s * 0.18, y: c - s * 0.08, r: 3.2 },
-    { x: c + s * 0.17, y: c - s * 0.06, r: 3.2 },
-    { x: c,           y: c + s * 0.06, r: 3.6 },
-    { x: c - s * 0.12, y: c + s * 0.18, r: 3.0 },
-    { x: c + s * 0.12, y: c + s * 0.18, r: 3.0 }
-  ];
-
-  return (
-    <div className="flex items-center justify-center">
-      <svg
-        width={s}
-        height={s}
-        viewBox={`0 0 ${s} ${s}`}
-        className="border border-gray-200 bg-white"
-        aria-label="Signal cluster preview"
-        role="img"
-      >
-        {/* outer rings */}
-        <circle cx={c} cy={c} r={r1} fill="none" stroke="rgb(229,231,235)" strokeWidth="2" />
-        <circle cx={c} cy={c} r={r2} fill="none" stroke="rgb(229,231,235)" strokeWidth="2" />
-
-        {/* simple face scaffold (abstract) */}
-        <ellipse cx={c} cy={c} rx={s * 0.18} ry={s * 0.23} fill="none" stroke="rgb(209,213,219)" strokeWidth="2" />
-        <line x1={c} y1={c - s * 0.12} x2={c} y2={c + s * 0.18} stroke="rgb(209,213,219)" strokeWidth="2" />
-        <line x1={c - s * 0.10} y1={c + s * 0.10} x2={c + s * 0.10} y2={c + s * 0.10} stroke="rgb(209,213,219)" strokeWidth="2" />
-
-        {/* “signal points” */}
-        {dots.map((d, i) => (
-          <circle key={i} cx={d.x} cy={d.y} r={d.r} fill="rgb(17,24,39)" opacity="0.9" />
-        ))}
-      </svg>
-    </div>
-  );
-};
-
-/* ---------------------------------------
-   Results Summary Card (short view, default)
---------------------------------------- */
-const ResultsSummaryCard = ({
-  firstName,
-  primaryConcern,
-  ageRange,
-  analysisReport,
-  focusItems,
-  hasAgingImages,
-  onOpenSection
-}) => {
-  const fitz = analysisReport?.fitzpatrickType || analysisReport?.fitzpatrickSummary || null;
-
-  const focusTitles = (focusItems || []).map((x) => x.title).filter(Boolean).slice(0, 3);
-  const focusLine = focusTitles.length ? focusTitles.join(" • ") : "No priority flags were returned for this analysis.";
-
-  return (
-    <div className="bg-white border-2 border-gray-900 p-7">
-      <div className="flex items-start justify-between gap-6">
-        <div className="min-w-0">
-          <p className="text-xs text-gray-600 uppercase tracking-wider">
-            Results Summary (Default View)
+          <p className="font-bold text-gray-900">Understand</p>
+          <p className="text-sm text-gray-700 mt-1">
+            View your Future Story projection (images).
           </p>
-          <h3 className="text-2xl font-bold text-gray-900 mt-1">
-            {firstName ? `Dear ${firstName},` : "Your Results"}
-          </h3>
+        </button>
 
-          <div className="mt-3 text-sm text-gray-700 space-y-2">
-            <p>
-              <span className="font-bold text-gray-900">Profile:</span>{" "}
-              {ageRange ? `${ageRange}` : "Age range not provided"}{" "}
-              {primaryConcern ? `• Primary concern: ${primaryConcern}` : ""}
-            </p>
-
-            {fitz ? (
-              <p>
-                <span className="font-bold text-gray-900">Fitzpatrick:</span> {String(fitz)}
-              </p>
-            ) : (
-              <p>
-                <span className="font-bold text-gray-900">Fitzpatrick:</span> Not returned for this run.
-              </p>
-            )}
-
-            <p>
-              <span className="font-bold text-gray-900">Top Signals:</span> {focusLine}
-            </p>
-
-            <p>
-              <span className="font-bold text-gray-900">Future Story images:</span>{" "}
-              {hasAgingImages ? "Available" : "Not available for this result"}
-            </p>
-          </div>
-
-          <div className="mt-5 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => onOpenSection?.("full_report")}
-              className="px-4 py-2 bg-gray-900 text-white text-sm font-bold hover:bg-gray-800"
-            >
-              Open Full Report
-            </button>
-
-            <button
-              type="button"
-              onClick={() => onOpenSection?.("focus")}
-              className="px-4 py-2 bg-white text-gray-900 text-sm font-bold border border-gray-300 hover:bg-gray-50"
-            >
-              Open Areas of Focus
-            </button>
-
-            <button
-              type="button"
-              onClick={() => onOpenSection?.("future_story")}
-              className="px-4 py-2 bg-white text-gray-900 text-sm font-bold border border-gray-300 hover:bg-gray-50"
-              disabled={!hasAgingImages}
-              title={!hasAgingImages ? "Future Story images were not returned for this run." : ""}
-            >
-              Open Future Story
-            </button>
-
-            <button
-              type="button"
-              onClick={() => onOpenSection?.("guidance")}
-              className="px-4 py-2 bg-white text-gray-900 text-sm font-bold border border-gray-300 hover:bg-gray-50"
-            >
-              Open Guidance
-            </button>
-
-            <button
-              type="button"
-              onClick={() => onOpenSection?.("dr_note")}
-              className="px-4 py-2 bg-white text-gray-900 text-sm font-bold border border-gray-300 hover:bg-gray-50"
-            >
-              Open Dr. Lazuk’s Note
-            </button>
-          </div>
-
-          <p className="text-xs text-gray-600 mt-4">
-            Nothing below is required. Expand only what you want to see right now.
+        <button
+          onClick={() => onChoose?.("observe")}
+          className="border-2 border-gray-300 hover:border-gray-900 hover:bg-gray-50 p-5 text-left"
+          type="button"
+        >
+          <p className="font-bold text-gray-900">Observe</p>
+          <p className="text-sm text-gray-700 mt-1">
+            Save this moment and revisit when you feel ready.
           </p>
-        </div>
+        </button>
 
-        {/* Optional static radial cluster */}
-        <div className="hidden md:block flex-shrink-0">
-          <FaceSignalCluster size={140} />
-          <p className="text-[11px] text-gray-500 mt-2 text-center">
-            Static signal preview (non-emotional)
+        <button
+          onClick={() => onChoose?.("guidance")}
+          className="border-2 border-gray-300 hover:border-gray-900 hover:bg-gray-50 p-5 text-left"
+          type="button"
+        >
+          <p className="font-bold text-gray-900">Guidance</p>
+          <p className="text-sm text-gray-700 mt-1">
+            Explore products and treatments tailored to your concern.
           </p>
-        </div>
+        </button>
       </div>
     </div>
   );
@@ -1035,14 +979,16 @@ const DermatologyApp = () => {
   const [identityLockModalOpen, setIdentityLockModalOpen] = useState(false);
 
   const [reflectionSeen, setReflectionSeen] = useState(false);
+  const [agencyChoice, setAgencyChoice] = useState(null);
+
   const [shareToast, setShareToast] = useState(null);
 
   // ✅ NEW: email-step messaging (cooldown + patience notice)
   const [analysisUiError, setAnalysisUiError] = useState('');
   const [analysisUiNotice, setAnalysisUiNotice] = useState('');
 
-  // ✅ Results accordion open state (multi-open)
-  const [resultsOpenSet, setResultsOpenSet] = useState(() => new Set(["summary"]));
+  // ✅ NEW: Results accordion state (multi-open)
+  const [resultsOpenIds, setResultsOpenIds] = useState([]);
 
   const [chatMessages, setChatMessages] = useState([
     {
@@ -1457,7 +1403,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
     });
 
     try {
-      // STEP 1: Vision analysis
+      // STEP 1: Vision analysis (concrete “image proof” + checklist15 + fitz/skinType)
       gaEvent('vision_analyze_start', { primaryConcern, ageRange });
 
       const vision = await callAnalyzeImage({
@@ -1487,6 +1433,8 @@ ${SUPPORTIVE_FOOTER_LINE}`);
           visitorQuestion,
           photoDataUrl: capturedImage,
           gaClientId,
+
+          // ✅ NEW: pass the vision payload through (additive)
           incomingImageAnalysis: vision
         })
       });
@@ -1514,9 +1462,11 @@ ${SUPPORTIVE_FOOTER_LINE}`);
         throw new Error(msg);
       }
 
-      // ✅ Reset gating + default accordion state on new results
       setReflectionSeen(false);
-      setResultsOpenSet(new Set(["summary"]));
+      setAgencyChoice(null);
+
+      // ✅ reset accordion state for new results
+      setResultsOpenIds([]);
 
       setAnalysisReport({
         report: data.report,
@@ -1657,11 +1607,13 @@ ${SUPPORTIVE_FOOTER_LINE}`);
     setIdentityLockEnabled(false);
     setIdentityLockActivating(false);
     setReflectionSeen(false);
+    setAgencyChoice(null);
+
+    // ✅ reset accordion state
+    setResultsOpenIds([]);
 
     setAnalysisUiError('');
     setAnalysisUiNotice('');
-
-    setResultsOpenSet(new Set(["summary"]));
   };
 
   useEffect(() => {
@@ -1679,33 +1631,6 @@ ${SUPPORTIVE_FOOTER_LINE}`);
       { key: 'withCare20', label: '20 Years (With Care)', url: p.withCare20 || null }
     ].filter((x) => !!x.url);
   }, [analysisReport]);
-
-  const hasAgingImages = agingImages.length > 0;
-
-  const focusItems = useMemo(() => normalizeAreasOfFocus(analysisReport?.areasOfFocus), [analysisReport]);
-
-  const toggleAccordion = (key) => {
-    setResultsOpenSet((prev) => {
-      const next = new Set(prev || []);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  };
-
-  const openSection = (key) => {
-    setResultsOpenSet((prev) => {
-      const next = new Set(prev || []);
-      next.add(key);
-      return next;
-    });
-
-    // Small UX courtesy: scroll a touch after open (next frame)
-    window.requestAnimationFrame(() => {
-      const el = document.getElementById(`acc_${key}`);
-      if (el?.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-  };
 
   const handleShare = async ({ url, label }) => {
     if (!reflectionSeen) {
@@ -1779,214 +1704,23 @@ ${SUPPORTIVE_FOOTER_LINE}`);
     showToast(ok ? "Saved." : "Opened in a new tab (download may depend on your device).");
   };
 
-  // Build accordion items only when results exist
-  const resultsAccordionItems = useMemo(() => {
-    if (!analysisReport) return [];
+  const toggleResultsAccordion = (id) => {
+    setResultsOpenIds((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      return [...prev, id];
+    });
+    gaEvent('results_accordion_toggle', { id, open: resultsOpenIds.includes(id) ? 0 : 1 });
+  };
 
-    return [
-      {
-        id: "full_report",
-        title: "Full Narrative Report",
-        subtitle: "The complete written interpretation (cosmetic education).",
-        render: () => (
-          <div className="bg-white border border-gray-200 p-6">
-            <h4 className="text-xl font-bold text-gray-900 mb-2">
-              What I’m Seeing (Cosmetic Education)
-            </h4>
+  const areasTop = useMemo(() => normalizeAreasOfFocus(analysisReport?.areasOfFocus), [analysisReport?.areasOfFocus]);
 
-            <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-              {analysisReport?.report || "Your report is loading."}
-            </p>
-          </div>
-        )
-      },
-      {
-        id: "focus",
-        title: "Areas of Focus",
-        subtitle: "The top signal flags returned by your analysis.",
-        render: () => (
-          <AreasOfFocusCard
-            areas={analysisReport?.areasOfFocus}
-            title="Areas of Focus"
-            subtitle="These are the specific signals your analysis flagged as most relevant right now."
-          />
-        )
-      },
-      {
-        id: "future_story",
-        title: "Future Story (Cosmetic Projection)",
-        subtitle: hasAgingImages
-          ? "Your image projections anchored to your selfie."
-          : "Not available for this result.",
-        render: () => (
-          <div className="bg-white border border-gray-200 p-6">
-            {hasAgingImages ? (
-              <>
-                <h4 className="text-xl font-bold text-gray-900 mb-2">
-                  Your Future Story (Cosmetic Projection)
-                </h4>
-                <p className="text-sm text-gray-700 mb-6">
-                  These are visual projections anchored to your selfie.
-                </p>
-
-                <div className="grid md:grid-cols-2 gap-4">
-                  {agingImages.map((img) => (
-                    <div key={img.key} className="relative border border-gray-200 bg-gray-50 p-3">
-                      <IdentityLockBadge
-                        placement="top-left"
-                        onClick={() => {
-                          gaEvent('identity_lock_badge_clicked', { key: img.key });
-                          setIdentityLockModalOpen(true);
-                        }}
-                      />
-
-                      <WatermarkOverlay />
-
-                      <img
-                        src={img.url}
-                        alt={img.label}
-                        className="w-full border border-gray-200"
-                        onLoad={() => gaEvent('aging_image_loaded', { key: img.key })}
-                      />
-
-                      <p className="text-sm font-bold text-gray-900 mt-3">{img.label}</p>
-
-                      <div className="mt-3 grid grid-cols-3 gap-2">
-                        <button
-                          onClick={() => handleShare({ url: img.url, label: img.label })}
-                          className="py-2 text-sm font-bold border bg-gray-900 text-white hover:bg-gray-800 border-gray-900"
-                          type="button"
-                        >
-                          Share
-                        </button>
-
-                        <button
-                          onClick={() => handleSave({ url: img.url, label: img.label })}
-                          className="py-2 text-sm font-bold border bg-white text-gray-900 hover:bg-gray-50 border-gray-300"
-                          type="button"
-                        >
-                          Save
-                        </button>
-
-                        <button
-                          onClick={() => handleCopyImageLink({ url: img.url, label: img.label })}
-                          className="py-2 text-sm font-bold border bg-white text-gray-900 hover:bg-gray-50 border-gray-300"
-                          type="button"
-                        >
-                          Copy
-                        </button>
-                      </div>
-
-                      {!reflectionSeen && (
-                        <div className="mt-3 text-xs text-gray-600">
-                          Sharing/saving becomes available after you’ve read Dr. Lazuk’s note.
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <p className="text-sm text-gray-700">
-                Your Future Story images are not available for this result.
-              </p>
-            )}
-          </div>
-        )
-      },
-      {
-        id: "guidance",
-        title: "Guidance (Products + Treatments)",
-        subtitle: "Recommended options based on your selected concern.",
-        render: () => (
-          <div className="bg-white border-2 border-gray-900 p-8">
-            <h4 className="font-bold text-gray-900 mb-4 text-2xl">Recommended Products</h4>
-            <div className="grid md:grid-cols-3 gap-4 mb-8">
-              {analysisReport.recommendedProducts.map((p, i) => (
-                <div key={i} className="bg-gray-50 border p-4">
-                  <h5 className="font-bold text-gray-900 mb-1">{p.name}</h5>
-                  <p className="text-gray-900 font-bold mb-2">${p.price}</p>
-                  <ul className="text-sm text-gray-700 mb-3">
-                    {p.benefits.map((b, j) => (
-                      <li key={j}>✓ {b}</li>
-                    ))}
-                  </ul>
-                  <a
-                    href={p.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() =>
-                      gaEvent('product_click', {
-                        productName: p.name,
-                        category: p.category,
-                        price: p.price,
-                        primaryConcern
-                      })
-                    }
-                    className="block text-center bg-gray-900 text-white py-2 font-bold hover:bg-gray-800"
-                  >
-                    View
-                  </a>
-                </div>
-              ))}
-            </div>
-
-            <h4 className="font-bold text-gray-900 mb-4 text-2xl">
-              Recommended Treatments
-            </h4>
-            <div className="grid md:grid-cols-2 gap-4">
-              {analysisReport.recommendedServices.map((s, i) => (
-                <div key={i} className="bg-blue-50 border-2 border-blue-200 p-5">
-                  <h5 className="font-bold text-blue-900 mb-2 text-lg">{s.name}</h5>
-                  <p className="text-sm text-blue-800 mb-3">{s.description}</p>
-                  <p className="text-sm text-blue-900 font-semibold mb-2">
-                    Why We Recommend This:
-                  </p>
-                  <p className="text-sm text-blue-800 mb-3">{s.whyRecommended}</p>
-                  <div className="mb-4">
-                    <p className="text-xs font-bold text-blue-900 mb-1">Benefits:</p>
-                    <ul className="text-sm text-blue-800">
-                      {s.benefits.map((b, j) => (
-                        <li key={j}>✓ {b}</li>
-                      ))}
-                    </ul>
-                  </div>
-                  <a
-                    href="mailto:contact@skindoctor.ai"
-                    onClick={() =>
-                      gaEvent('book_appointment_click', {
-                        serviceName: s.name,
-                        primaryConcern
-                      })
-                    }
-                    className="block text-center bg-blue-600 text-white py-3 font-bold hover:bg-blue-700"
-                  >
-                    Book Appointment
-                  </a>
-                </div>
-              ))}
-            </div>
-          </div>
-        )
-      },
-      {
-        id: "dr_note",
-        title: "A Message from Dr. Lazuk",
-        subtitle: "Read to unlock sharing/saving for Future Story images.",
-        render: () => (
-          <PostImageReflection
-            onSeen={() => {
-              if (!reflectionSeen) {
-                setReflectionSeen(true);
-                gaEvent('reflection_seen', { step: 'results' });
-                showToast("Thank you. Sharing and saving are now available.");
-              }
-            }}
-          />
-        )
-      }
-    ];
-  }, [analysisReport, agingImages, hasAgingImages, reflectionSeen, primaryConcern]);
+  const reportPreview = useMemo(() => {
+    const txt = String(analysisReport?.report || "").trim();
+    if (!txt) return "";
+    // Take a calm excerpt for the top summary. Keep it short.
+    const trimmed = txt.replace(/\n{3,}/g, "\n\n");
+    return trimmed.length > 420 ? `${trimmed.slice(0, 420).trim()}…` : trimmed;
+  }, [analysisReport?.report]);
 
   return (
     <div className="min-h-screen bg-white">
@@ -2405,6 +2139,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
               </div>
             )}
 
+            {/* ✅ UPDATED RESULTS VIEW: Summary on top + multi-open accordion below */}
             {step === 'results' && analysisReport && (
               <div className="space-y-6">
                 <div className="flex justify-between items-center">
@@ -2418,56 +2153,353 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                   </button>
                 </div>
 
-                {/* ✅ Default summary view at the top */}
-                <div id="acc_summary">
-                  <ResultsSummaryCard
-                    firstName={firstName}
-                    primaryConcern={primaryConcern}
-                    ageRange={ageRange}
-                    analysisReport={analysisReport}
-                    focusItems={focusItems}
-                    hasAgingImages={hasAgingImages}
-                    onOpenSection={(key) => {
-                      gaEvent("results_summary_open_section", { key });
-                      openSection(key);
-                    }}
-                  />
-                </div>
+                {/* ✅ Default Short Summary View (always visible) */}
+                <div className="bg-white border-2 border-gray-900 p-6">
+                  <div className="flex items-start justify-between gap-6">
+                    <div className="flex-1">
+                      <p className="text-xs uppercase tracking-wider text-gray-500">
+                        Default Summary View
+                      </p>
+                      <h4 className="text-xl font-bold text-gray-900 mt-1">
+                        What This Analysis Flagged — At a Glance
+                      </h4>
+                      <p className="text-sm text-gray-700 mt-2">
+                        Everything below is optional. Expand only what you want to read.
+                      </p>
 
-                <div className="bg-gray-50 border border-gray-200 p-5">
-                  <p className="text-sm text-gray-700">
-                    Expand only what you want. Multiple sections can remain open at the same time.
-                  </p>
-                </div>
+                      <div className="mt-4 grid md:grid-cols-2 gap-3">
+                        <div className="border border-gray-200 bg-gray-50 p-4">
+                          <p className="text-xs text-gray-600 uppercase tracking-wider">Context</p>
+                          <p className="text-sm text-gray-900 mt-2">
+                            <span className="font-bold">Age Range:</span> {ageRange || "—"}
+                          </p>
+                          <p className="text-sm text-gray-900 mt-1">
+                            <span className="font-bold">Primary Concern:</span> {primaryConcern || "—"}
+                          </p>
+                          {(analysisReport?.fitzpatrickType || analysisReport?.fitzpatrickSummary) && (
+                            <p className="text-sm text-gray-900 mt-1">
+                              <span className="font-bold">Fitzpatrick:</span>{" "}
+                              {analysisReport?.fitzpatrickType ? String(analysisReport.fitzpatrickType) : "—"}
+                            </p>
+                          )}
+                        </div>
 
-                {/* ✅ Accordion sections (multi-open) */}
-                <div className="space-y-3">
-                  {resultsAccordionItems.map((it) => (
-                    <div key={it.id} id={`acc_${it.id}`}>
-                      <AccordionItem
-                        id={it.id}
-                        title={it.title}
-                        subtitle={it.subtitle}
-                        isOpen={resultsOpenSet.has(it.id)}
-                        onToggle={(id) => {
-                          gaEvent("results_accordion_toggle", { id, isOpen: resultsOpenSet.has(id) ? 1 : 0 });
-                          toggleAccordion(id);
-                        }}
-                      >
-                        {it.render?.()}
-                      </AccordionItem>
+                        <div className="border border-gray-200 bg-gray-50 p-4">
+                          <p className="text-xs text-gray-600 uppercase tracking-wider">Top Signals</p>
+                          {areasTop && areasTop.length > 0 ? (
+                            <ul className="text-sm text-gray-900 mt-2 space-y-1">
+                              {areasTop.map((a, i) => (
+                                <li key={i} className="flex gap-2">
+                                  <span className="font-bold">•</span>
+                                  <span>{a.title}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="text-sm text-gray-700 mt-2">
+                              Your analysis summary is available below.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {reportPreview ? (
+                        <div className="mt-4 border border-gray-200 bg-white p-4">
+                          <p className="text-xs text-gray-600 uppercase tracking-wider">Short Excerpt</p>
+                          <p className="text-sm text-gray-800 mt-2 whitespace-pre-wrap leading-relaxed">
+                            {reportPreview}
+                          </p>
+                        </div>
+                      ) : null}
+
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          className="px-4 py-2 bg-gray-900 text-white font-bold hover:bg-gray-800 text-sm"
+                          onClick={() => {
+                            // open the most common “next actions” sections without closing others
+                            setResultsOpenIds((prev) => Array.from(new Set([...prev, "areas", "full", "paths"])));
+                            gaEvent('results_expand_primary_sections', { sections: "areas,full,paths" });
+                          }}
+                        >
+                          Expand Key Sections
+                        </button>
+
+                        <button
+                          type="button"
+                          className="px-4 py-2 bg-white text-gray-900 font-bold border border-gray-300 hover:bg-gray-50 text-sm"
+                          onClick={() => {
+                            setResultsOpenIds([]);
+                            gaEvent('results_collapse_all', {});
+                          }}
+                        >
+                          Collapse All
+                        </button>
+
+                        <p className="text-xs text-gray-600 self-center">
+                          Multi-open is enabled.
+                        </p>
+                      </div>
                     </div>
-                  ))}
+
+                    {/* ✅ Optional small radial cluster preview */}
+                    <div className="text-gray-900 opacity-90">
+                      <RadialFacePreview size={92} />
+                      <p className="text-[11px] text-gray-600 mt-2 text-center">
+                        static map preview
+                      </p>
+                    </div>
+                  </div>
                 </div>
 
-                {/* Optional: keep a small note visible */}
-                {!reflectionSeen && hasAgingImages && (
-                  <div className="bg-white border border-gray-200 p-5">
-                    <p className="text-sm text-gray-700">
-                      Note: Future Story sharing and saving are intentionally locked until you’ve read Dr. Lazuk’s note.
-                    </p>
-                  </div>
-                )}
+                {/* ✅ Accordion (multi-open) */}
+                <Accordion
+                  openIds={resultsOpenIds}
+                  onToggle={toggleResultsAccordion}
+                  items={[
+                    {
+                      id: "areas",
+                      title: "Areas of Focus",
+                      subtitle: "The top signals most relevant right now (condensed).",
+                      content: <AreasOfFocusCard areas={analysisReport?.areasOfFocus} />
+                    },
+                    {
+                      id: "paths",
+                      title: "Possible Paths Forward",
+                      subtitle: "Optional. Choose a lens (Understand / Observe / Guidance).",
+                      content: (
+                        <div className="space-y-4">
+                          <AgencyLayer
+                            onChoose={(choice) => {
+                              setAgencyChoice(choice);
+                              gaEvent('agency_choice', { choice });
+
+                              // Auto-open the relevant section, without closing others
+                              if (choice === "understand") {
+                                setResultsOpenIds((prev) => Array.from(new Set([...prev, "future"])));
+                              } else if (choice === "guidance") {
+                                setResultsOpenIds((prev) => Array.from(new Set([...prev, "guidance"])));
+                              } else if (choice === "observe") {
+                                setResultsOpenIds((prev) => Array.from(new Set([...prev, "observe"])));
+                              }
+                            }}
+                          />
+
+                          {agencyChoice === 'observe' && (
+                            <div className="bg-gray-50 border border-gray-200 p-6">
+                              <p className="text-sm text-gray-700">
+                                If you’d like, you can simply return to your email later.
+                                There is no urgency — and no required schedule.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    },
+                    {
+                      id: "full",
+                      title: "Full Cosmetic Report",
+                      subtitle: "The complete narrative report (expanded detail).",
+                      content: (
+                        <div className="bg-white border border-gray-200 p-6">
+                          <h4 className="text-xl font-bold text-gray-900 mb-2">
+                            What I’m Seeing (Cosmetic Education)
+                          </h4>
+                          <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                            {analysisReport?.report || "Your report is loading."}
+                          </p>
+                        </div>
+                      )
+                    },
+                    {
+                      id: "future",
+                      title: "Your Future Story",
+                      subtitle: "Cosmetic projection images anchored to your selfie (optional).",
+                      content: (
+                        <div className="space-y-4">
+                          {agingImages.length > 0 ? (
+                            <div className="bg-white border border-gray-200 p-6">
+                              <h4 className="text-xl font-bold text-gray-900 mb-2">
+                                Your Future Story (Cosmetic Projection)
+                              </h4>
+                              <p className="text-sm text-gray-700 mb-6">
+                                These are visual projections anchored to your selfie.
+                              </p>
+
+                              <div className="grid md:grid-cols-2 gap-4">
+                                {agingImages.map((img) => (
+                                  <div key={img.key} className="relative border border-gray-200 bg-gray-50 p-3">
+                                    <IdentityLockBadge
+                                      placement="top-left"
+                                      onClick={() => {
+                                        gaEvent('identity_lock_badge_clicked', { key: img.key });
+                                        setIdentityLockModalOpen(true);
+                                      }}
+                                    />
+
+                                    <WatermarkOverlay />
+
+                                    <img
+                                      src={img.url}
+                                      alt={img.label}
+                                      className="w-full border border-gray-200"
+                                      onLoad={() => gaEvent('aging_image_loaded', { key: img.key })}
+                                    />
+
+                                    <p className="text-sm font-bold text-gray-900 mt-3">{img.label}</p>
+
+                                    <div className="mt-3 grid grid-cols-3 gap-2">
+                                      <button
+                                        onClick={() => handleShare({ url: img.url, label: img.label })}
+                                        className="py-2 text-sm font-bold border bg-gray-900 text-white hover:bg-gray-800 border-gray-900"
+                                        type="button"
+                                      >
+                                        Share
+                                      </button>
+
+                                      <button
+                                        onClick={() => handleSave({ url: img.url, label: img.label })}
+                                        className="py-2 text-sm font-bold border bg-white text-gray-900 hover:bg-gray-50 border-gray-300"
+                                        type="button"
+                                      >
+                                        Save
+                                      </button>
+
+                                      <button
+                                        onClick={() => handleCopyImageLink({ url: img.url, label: img.label })}
+                                        className="py-2 text-sm font-bold border bg-white text-gray-900 hover:bg-gray-50 border-gray-300"
+                                        type="button"
+                                      >
+                                        Copy
+                                      </button>
+                                    </div>
+
+                                    {!reflectionSeen && (
+                                      <p className="mt-3 text-xs text-gray-600">
+                                        Sharing/saving activates after reading Dr. Lazuk’s note below.
+                                      </p>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="bg-gray-50 border border-gray-200 p-6">
+                              <p className="text-sm text-gray-700">
+                                Your Future Story images are not available for this result.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    },
+                    {
+                      id: "guidance",
+                      title: "Recommended Products and Treatments",
+                      subtitle: "Personalized guidance mapped to your primary concern.",
+                      content: (
+                        <div className="bg-white border-2 border-gray-900 p-8">
+                          <h4 className="font-bold text-gray-900 mb-4 text-2xl">Recommended Products</h4>
+                          <div className="grid md:grid-cols-3 gap-4 mb-8">
+                            {analysisReport.recommendedProducts.map((p, i) => (
+                              <div key={i} className="bg-gray-50 border p-4">
+                                <h5 className="font-bold text-gray-900 mb-1">{p.name}</h5>
+                                <p className="text-gray-900 font-bold mb-2">${p.price}</p>
+                                <ul className="text-sm text-gray-700 mb-3">
+                                  {p.benefits.map((b, j) => (
+                                    <li key={j}>✓ {b}</li>
+                                  ))}
+                                </ul>
+                                <a
+                                  href={p.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={() =>
+                                    gaEvent('product_click', {
+                                      productName: p.name,
+                                      category: p.category,
+                                      price: p.price,
+                                      primaryConcern
+                                    })
+                                  }
+                                  className="block text-center bg-gray-900 text-white py-2 font-bold hover:bg-gray-800"
+                                >
+                                  View
+                                </a>
+                              </div>
+                            ))}
+                          </div>
+
+                          <h4 className="font-bold text-gray-900 mb-4 text-2xl">
+                            Recommended Treatments
+                          </h4>
+                          <div className="grid md:grid-cols-2 gap-4">
+                            {analysisReport.recommendedServices.map((s, i) => (
+                              <div key={i} className="bg-blue-50 border-2 border-blue-200 p-5">
+                                <h5 className="font-bold text-blue-900 mb-2 text-lg">{s.name}</h5>
+                                <p className="text-sm text-blue-800 mb-3">{s.description}</p>
+                                <p className="text-sm text-blue-900 font-semibold mb-2">
+                                  Why We Recommend This:
+                                </p>
+                                <p className="text-sm text-blue-800 mb-3">{s.whyRecommended}</p>
+                                <div className="mb-4">
+                                  <p className="text-xs font-bold text-blue-900 mb-1">Benefits:</p>
+                                  <ul className="text-sm text-blue-800">
+                                    {s.benefits.map((b, j) => (
+                                      <li key={j}>✓ {b}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                                <a
+                                  href="mailto:contact@skindoctor.ai"
+                                  onClick={() =>
+                                    gaEvent('book_appointment_click', {
+                                      serviceName: s.name,
+                                      primaryConcern
+                                    })
+                                  }
+                                  className="block text-center bg-blue-600 text-white py-3 font-bold hover:bg-blue-700"
+                                >
+                                  Book Appointment
+                                </a>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    },
+                    {
+                      id: "observe",
+                      title: "Observe and Revisit Later",
+                      subtitle: "A calm holding place (no urgency).",
+                      content: (
+                        <div className="bg-gray-50 border border-gray-200 p-6">
+                          <p className="text-sm text-gray-700">
+                            If you’d like, you can simply return to your email later.
+                            There is no urgency — and no required schedule.
+                          </p>
+                        </div>
+                      )
+                    },
+                    {
+                      id: "note",
+                      title: "A Message from Dr. Lazuk",
+                      subtitle: "Reading this activates sharing/saving on Future Story images.",
+                      content: (
+                        <PostImageReflection
+                          onSeen={() => {
+                            if (!reflectionSeen) {
+                              setReflectionSeen(true);
+                              gaEvent('reflection_seen', { step: 'results' });
+                              showToast("Thank you. Sharing and saving are now available.");
+                            }
+                          }}
+                        />
+                      )
+                    }
+                  ]}
+                />
+
               </div>
             )}
 
