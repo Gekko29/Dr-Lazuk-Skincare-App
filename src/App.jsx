@@ -674,104 +674,157 @@ const AreasOfFocusCard = ({ areas }) => {
     </div>
   );
 };
-
 /* ---------------------------------------
-   NEW: Radial Cluster / Face Overlay Preview (static, calm)
+   Default Summary View (ON-SCREEN)
 --------------------------------------- */
-const RadialFacePreview = ({ size = 92 }) => {
-  // Static SVG: simple face oval + calm radial nodes (non-emotional, no “expression”)
+const scoreToRag = (score) => {
+  if (typeof score !== "number" || Number.isNaN(score)) return { label: "A", text: "Attention", level: "amber" };
+  if (score >= 0.66) return { label: "R", text: "High Priority", level: "red" };
+  if (score >= 0.33) return { label: "A", text: "Moderate Priority", level: "amber" };
+  return { label: "G", text: "Stable", level: "green" };
+};
+
+const RagPill = ({ score }) => {
+  const rag = scoreToRag(score);
+  const cls =
+    rag.level === "red"
+      ? "bg-red-600 text-white"
+      : rag.level === "green"
+      ? "bg-green-600 text-white"
+      : "bg-yellow-500 text-white";
   return (
-    <div
-      className="relative flex items-center justify-center"
-      style={{ width: size, height: size }}
-      aria-hidden="true"
-    >
-      <svg
-        width={size}
-        height={size}
-        viewBox="0 0 100 100"
-        className="block"
-      >
-        {/* outer ring */}
-        <circle cx="50" cy="50" r="46" fill="none" stroke="currentColor" strokeOpacity="0.15" strokeWidth="2" />
-        {/* face oval */}
-        <ellipse cx="50" cy="52" rx="18" ry="24" fill="none" stroke="currentColor" strokeOpacity="0.55" strokeWidth="2" />
-        {/* nose line (minimal) */}
-        <path d="M50 45 L50 62" stroke="currentColor" strokeOpacity="0.35" strokeWidth="2" strokeLinecap="round" />
-        {/* radial nodes */}
+    <span className={`inline-flex items-center gap-2 px-3 py-1 text-xs font-bold ${cls}`}>
+      <span className="inline-block w-5 text-center">{rag.label}</span>
+      <span>{rag.text}</span>
+      {typeof score === "number" && !Number.isNaN(score) && (
+        <span className="ml-1 font-mono text-[11px] opacity-90">{Math.round(score * 100)}%</span>
+      )}
+    </span>
+  );
+};
+
+const StaticMapPreview = () => {
+  // Simple, non-emotional landmark preview (static)
+  return (
+    <div className="flex flex-col items-center justify-center">
+      <svg width="88" height="88" viewBox="0 0 88 88" aria-label="Static map preview">
+        <circle cx="44" cy="44" r="38" fill="none" stroke="currentColor" opacity="0.25" strokeWidth="2" />
+        <circle cx="44" cy="44" r="28" fill="none" stroke="currentColor" opacity="0.22" strokeWidth="2" />
+        <circle cx="44" cy="44" r="18" fill="none" stroke="currentColor" opacity="0.18" strokeWidth="2" />
+        <ellipse cx="44" cy="44" rx="14" ry="18" fill="none" stroke="currentColor" opacity="0.35" strokeWidth="2" />
         {[
-          { x: 50, y: 6 },
-          { x: 80, y: 18 },
-          { x: 94, y: 50 },
-          { x: 82, y: 82 },
-          { x: 50, y: 94 },
-          { x: 18, y: 82 },
-          { x: 6, y: 50 },
-          { x: 20, y: 18 }
-        ].map((p, i) => (
-          <circle key={i} cx={p.x} cy={p.y} r="3.2" fill="currentColor" fillOpacity="0.35" />
+          [44, 30], [37, 38], [51, 38],
+          [44, 44],
+          [38, 52], [50, 52],
+          [44, 60]
+        ].map(([x, y], i) => (
+          <circle key={i} cx={x} cy={y} r="2.2" fill="currentColor" opacity="0.55" />
         ))}
-        {/* connectors (light) */}
-        <path
-          d="M50 6 L80 18 L94 50 L82 82 L50 94 L18 82 L6 50 L20 18 Z"
-          fill="none"
-          stroke="currentColor"
-          strokeOpacity="0.12"
-          strokeWidth="2"
-          strokeLinejoin="round"
-        />
       </svg>
+      <p className="text-[11px] text-gray-600 mt-2">static map preview</p>
+    </div>
+  );
+};
+
+const deriveTopSignals = (areas) => {
+  const items = normalizeAreasOfFocus(areas);
+  return items.map((it) => ({
+    title: it.title,
+    score: typeof it.score === "number" ? it.score : null
+  }));
+};
+
+const SummaryCard = ({ ageRange, primaryConcern, analysisReport }) => {
+  const top = useMemo(() => deriveTopSignals(analysisReport?.areasOfFocus), [analysisReport]);
+  const excerpt = useMemo(() => {
+    const t = String(analysisReport?.report || "").trim();
+    if (!t) return "";
+    // A short excerpt that still reads well.
+    const cut = t.slice(0, 650);
+    const lastSpace = cut.lastIndexOf(" ");
+    return (lastSpace > 420 ? cut.slice(0, lastSpace) : cut).trim() + (t.length > cut.length ? "…" : "");
+  }, [analysisReport]);
+
+  return (
+    <div className="bg-white border-2 border-gray-900 p-6">
+      <div className="flex items-start justify-between gap-6">
+        <div className="flex-1">
+          <p className="text-[11px] tracking-wider text-gray-500 font-bold">DEFAULT SUMMARY VIEW</p>
+          <h4 className="text-2xl font-bold text-gray-900 mt-1">
+            What This Analysis Flagged — At a Glance
+          </h4>
+          <p className="text-sm text-gray-700 mt-2">
+            Everything below is optional. Expand only what you want to read.
+          </p>
+        </div>
+        <div className="text-gray-700">
+          <StaticMapPreview />
+        </div>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-4 mt-6">
+        <div className="border border-gray-200 bg-gray-50 p-4">
+          <p className="text-[11px] tracking-wider text-gray-500 font-bold mb-2">CONTEXT</p>
+          <p className="text-sm text-gray-800">
+            <span className="font-bold text-gray-900">Age Range:</span> {ageRange || "—"}
+          </p>
+          <p className="text-sm text-gray-800 mt-1">
+            <span className="font-bold text-gray-900">Primary Concern:</span> {primaryConcern || "—"}
+          </p>
+          {analysisReport?.fitzpatrickType && (
+            <p className="text-sm text-gray-800 mt-1">
+              <span className="font-bold text-gray-900">Fitzpatrick:</span> {analysisReport.fitzpatrickType}
+            </p>
+          )}
+        </div>
+
+        <div className="border border-gray-200 bg-gray-50 p-4">
+          <p className="text-[11px] tracking-wider text-gray-500 font-bold mb-2">TOP SIGNALS</p>
+          {top.length ? (
+            <ul className="text-sm text-gray-800 space-y-2">
+              {top.slice(0, 3).map((s, i) => (
+                <li key={i} className="flex items-center justify-between gap-3">
+                  <span className="font-semibold">{s.title}</span>
+                  <RagPill score={typeof s.score === "number" ? s.score : NaN} />
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-gray-700">Signals will appear here when available.</p>
+          )}
+        </div>
+      </div>
+
+      <div className="border border-gray-200 bg-white p-4 mt-4">
+        <p className="text-[11px] tracking-wider text-gray-500 font-bold mb-2">SHORT EXCERPT</p>
+        <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+          {excerpt || "Your short excerpt will appear here when the report loads."}
+        </p>
+      </div>
     </div>
   );
 };
 
 /* ---------------------------------------
-   NEW: Accordion (multi-open)
+   Accordion (multi-open)
 --------------------------------------- */
-const AccordionItem = ({ id, title, subtitle, isOpen, onToggle, children }) => {
+const AccordionSection = ({ id, title, subtitle, open, onToggle, children }) => {
   return (
     <div className="border border-gray-200 bg-white">
       <button
+        onClick={() => onToggle?.(id)}
+        className="w-full flex items-center justify-between gap-4 px-6 py-5 text-left hover:bg-gray-50"
         type="button"
-        onClick={() => onToggle(id)}
-        className="w-full text-left px-5 py-4 flex items-start justify-between gap-4 hover:bg-gray-50"
-        aria-expanded={isOpen ? "true" : "false"}
+        aria-expanded={open ? "true" : "false"}
       >
         <div>
           <p className="text-base font-bold text-gray-900">{title}</p>
-          {subtitle ? (
-            <p className="text-sm text-gray-600 mt-1">{subtitle}</p>
-          ) : null}
+          {subtitle && <p className="text-sm text-gray-700 mt-1">{subtitle}</p>}
         </div>
-        <div className="text-gray-700 font-bold select-none">
-          {isOpen ? "–" : "+"}
-        </div>
+        <div className="text-gray-700 font-bold text-xl">{open ? "−" : "+"}</div>
       </button>
 
-      {isOpen ? (
-        <div className="px-5 pb-5">
-          {children}
-        </div>
-      ) : null}
-    </div>
-  );
-};
-
-const Accordion = ({ items, openIds, onToggle }) => {
-  return (
-    <div className="space-y-3">
-      {items.map((it) => (
-        <AccordionItem
-          key={it.id}
-          id={it.id}
-          title={it.title}
-          subtitle={it.subtitle}
-          isOpen={openIds.includes(it.id)}
-          onToggle={onToggle}
-        >
-          {it.content}
-        </AccordionItem>
-      ))}
+      {open && <div className="px-6 pb-6">{children}</div>}
     </div>
   );
 };
@@ -839,10 +892,10 @@ const AgencyLayer = ({ onChoose }) => {
     <div className="border border-gray-200 bg-white p-6">
       <h3 className="text-xl font-bold text-gray-900 mb-2">Possible Paths Forward</h3>
       <p className="text-sm text-gray-700 mb-6">
-        Nothing here is required. Choose what feels supportive — or simply save this and return later.
+        Nothing here is required. Choose what feels supportive.
       </p>
 
-      <div className="grid md:grid-cols-3 gap-3">
+      <div className="grid md:grid-cols-2 gap-3">
         <button
           onClick={() => onChoose?.("understand")}
           className="border-2 border-gray-300 hover:border-gray-900 hover:bg-gray-50 p-5 text-left"
@@ -851,17 +904,6 @@ const AgencyLayer = ({ onChoose }) => {
           <p className="font-bold text-gray-900">Understand</p>
           <p className="text-sm text-gray-700 mt-1">
             View your Future Story projection (images).
-          </p>
-        </button>
-
-        <button
-          onClick={() => onChoose?.("observe")}
-          className="border-2 border-gray-300 hover:border-gray-900 hover:bg-gray-50 p-5 text-left"
-          type="button"
-        >
-          <p className="font-bold text-gray-900">Observe</p>
-          <p className="text-sm text-gray-700 mt-1">
-            Save this moment and revisit when you feel ready.
           </p>
         </button>
 
@@ -981,14 +1023,46 @@ const DermatologyApp = () => {
   const [reflectionSeen, setReflectionSeen] = useState(false);
   const [agencyChoice, setAgencyChoice] = useState(null);
 
+// ✅ Accordion (multi-open)
+const [openSections, setOpenSections] = useState({
+  focus: false,
+  paths: false,
+  report: false,
+  future: false,
+  guidance: false,
+  message: false
+});
+
+const toggleSection = (id) => {
+  setOpenSections((prev) => ({ ...prev, [id]: !prev?.[id] }));
+};
+
+const openKeySections = () => {
+  setOpenSections((prev) => ({
+    ...prev,
+    focus: true,
+    paths: true,
+    report: true
+  }));
+};
+
+const collapseAll = () => {
+  setOpenSections({
+    focus: false,
+    paths: false,
+    report: false,
+    future: false,
+    guidance: false,
+    message: false
+  });
+};
+
+
   const [shareToast, setShareToast] = useState(null);
 
   // ✅ NEW: email-step messaging (cooldown + patience notice)
   const [analysisUiError, setAnalysisUiError] = useState('');
   const [analysisUiNotice, setAnalysisUiNotice] = useState('');
-
-  // ✅ NEW: Results accordion state (multi-open)
-  const [resultsOpenIds, setResultsOpenIds] = useState([]);
 
   const [chatMessages, setChatMessages] = useState([
     {
@@ -1465,9 +1539,6 @@ ${SUPPORTIVE_FOOTER_LINE}`);
       setReflectionSeen(false);
       setAgencyChoice(null);
 
-      // ✅ reset accordion state for new results
-      setResultsOpenIds([]);
-
       setAnalysisReport({
         report: data.report,
         recommendedProducts: getRecommendedProducts(primaryConcern),
@@ -1609,9 +1680,6 @@ ${SUPPORTIVE_FOOTER_LINE}`);
     setReflectionSeen(false);
     setAgencyChoice(null);
 
-    // ✅ reset accordion state
-    setResultsOpenIds([]);
-
     setAnalysisUiError('');
     setAnalysisUiNotice('');
   };
@@ -1703,24 +1771,6 @@ ${SUPPORTIVE_FOOTER_LINE}`);
     gaEvent("save_complete", { label, openedNewTab: ok ? 0 : 1 });
     showToast(ok ? "Saved." : "Opened in a new tab (download may depend on your device).");
   };
-
-  const toggleResultsAccordion = (id) => {
-    setResultsOpenIds((prev) => {
-      if (prev.includes(id)) return prev.filter((x) => x !== id);
-      return [...prev, id];
-    });
-    gaEvent('results_accordion_toggle', { id, open: resultsOpenIds.includes(id) ? 0 : 1 });
-  };
-
-  const areasTop = useMemo(() => normalizeAreasOfFocus(analysisReport?.areasOfFocus), [analysisReport?.areasOfFocus]);
-
-  const reportPreview = useMemo(() => {
-    const txt = String(analysisReport?.report || "").trim();
-    if (!txt) return "";
-    // Take a calm excerpt for the top summary. Keep it short.
-    const trimmed = txt.replace(/\n{3,}/g, "\n\n");
-    return trimmed.length > 420 ? `${trimmed.slice(0, 420).trim()}…` : trimmed;
-  }, [analysisReport?.report]);
 
   return (
     <div className="min-h-screen bg-white">
@@ -2139,371 +2189,427 @@ ${SUPPORTIVE_FOOTER_LINE}`);
               </div>
             )}
 
-            {/* ✅ UPDATED RESULTS VIEW: Summary on top + multi-open accordion below */}
-            {step === 'results' && analysisReport && (
-              <div className="space-y-6">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-2xl font-bold text-gray-900">Your Results</h3>
-                  <button
-                    onClick={resetAnalysis}
-                    className="px-4 py-2 bg-gray-300 text-gray-900 font-bold hover:bg-gray-400 text-sm"
-                    type="button"
-                  >
-                    New Analysis
-                  </button>
-                </div>
+            
+{step === 'results' && analysisReport && (
+  <div className="space-y-6">
+    <div className="flex justify-between items-center">
+      <h3 className="text-2xl font-bold text-gray-900">Your Results</h3>
+      <button
+        onClick={resetAnalysis}
+        className="px-4 py-2 bg-gray-300 text-gray-900 font-bold hover:bg-gray-400 text-sm"
+        type="button"
+      >
+        New Analysis
+      </button>
+    </div>
 
-                {/* ✅ Default Short Summary View (always visible) */}
-                <div className="bg-white border-2 border-gray-900 p-6">
-                  <div className="flex items-start justify-between gap-6">
-                    <div className="flex-1">
-                      <p className="text-xs uppercase tracking-wider text-gray-500">
-                        Default Summary View
-                      </p>
-                      <h4 className="text-xl font-bold text-gray-900 mt-1">
-                        What This Analysis Flagged — At a Glance
-                      </h4>
-                      <p className="text-sm text-gray-700 mt-2">
-                        Everything below is optional. Expand only what you want to read.
-                      </p>
+    {/* ✅ Default summary view (always visible) */}
+    <SummaryCard
+      ageRange={ageRange}
+      primaryConcern={primaryConcern}
+      analysisReport={analysisReport}
+    />
 
-                      <div className="mt-4 grid md:grid-cols-2 gap-3">
-                        <div className="border border-gray-200 bg-gray-50 p-4">
-                          <p className="text-xs text-gray-600 uppercase tracking-wider">Context</p>
-                          <p className="text-sm text-gray-900 mt-2">
-                            <span className="font-bold">Age Range:</span> {ageRange || "—"}
-                          </p>
-                          <p className="text-sm text-gray-900 mt-1">
-                            <span className="font-bold">Primary Concern:</span> {primaryConcern || "—"}
-                          </p>
-                          {(analysisReport?.fitzpatrickType || analysisReport?.fitzpatrickSummary) && (
-                            <p className="text-sm text-gray-900 mt-1">
-                              <span className="font-bold">Fitzpatrick:</span>{" "}
-                              {analysisReport?.fitzpatrickType ? String(analysisReport.fitzpatrickType) : "—"}
-                            </p>
-                          )}
-                        </div>
+    <div className="flex flex-wrap gap-2 items-center">
+      <button
+        onClick={openKeySections}
+        className="px-4 py-2 bg-gray-900 text-white font-bold hover:bg-gray-800 text-sm"
+        type="button"
+      >
+        Expand Key Sections
+      </button>
+      <button
+        onClick={collapseAll}
+        className="px-4 py-2 bg-white text-gray-900 font-bold hover:bg-gray-50 text-sm border border-gray-300"
+        type="button"
+      >
+        Collapse All
+      </button>
+      <p className="text-xs text-gray-600 ml-1">Multi-open is enabled.</p>
+    </div>
 
-                        <div className="border border-gray-200 bg-gray-50 p-4">
-                          <p className="text-xs text-gray-600 uppercase tracking-wider">Top Signals</p>
-                          {areasTop && areasTop.length > 0 ? (
-                            <ul className="text-sm text-gray-900 mt-2 space-y-1">
-                              {areasTop.map((a, i) => (
-                                <li key={i} className="flex gap-2">
-                                  <span className="font-bold">•</span>
-                                  <span>{a.title}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <p className="text-sm text-gray-700 mt-2">
-                              Your analysis summary is available below.
-                            </p>
-                          )}
-                        </div>
+    <div className="space-y-3">
+      <AccordionSection
+        id="focus"
+        title="Areas of Focus"
+        subtitle="The top signals most relevant right now (condensed)."
+        open={!!openSections.focus}
+        onToggle={toggleSection}
+      >
+        <AreasOfFocusCard areas={analysisReport?.areasOfFocus} />
+      </AccordionSection>
+
+      <AccordionSection
+        id="paths"
+        title="Possible Paths Forward"
+        subtitle="Optional. Choose a lens (Understand / Guidance)."
+        open={!!openSections.paths}
+        onToggle={toggleSection}
+      >
+        <AgencyLayer
+          onChoose={(choice) => {
+            setAgencyChoice(choice);
+            gaEvent('agency_choice', { choice });
+          }}
+        />
+
+        {agencyChoice === 'understand' && (
+          <div className="mt-6">
+            {agingImages.length > 0 ? (
+              <div className="bg-white border border-gray-200 p-6">
+                <h4 className="text-xl font-bold text-gray-900 mb-2">
+                  Your Future Story (Cosmetic Projection)
+                </h4>
+                <p className="text-sm text-gray-700 mb-6">
+                  These are visual projections anchored to your selfie.
+                </p>
+
+                <div className="grid md:grid-cols-2 gap-4">
+                  {agingImages.map((img) => (
+                    <div key={img.key} className="relative border border-gray-200 bg-gray-50 p-3">
+                      <IdentityLockBadge
+                        placement="top-left"
+                        onClick={() => {
+                          gaEvent('identity_lock_badge_clicked', { key: img.key });
+                          setIdentityLockModalOpen(true);
+                        }}
+                      />
+
+                      <WatermarkOverlay />
+
+                      <img
+                        src={img.url}
+                        alt={img.label}
+                        className="w-full border border-gray-200"
+                        onLoad={() => gaEvent('aging_image_loaded', { key: img.key })}
+                      />
+
+                      <p className="text-sm font-bold text-gray-900 mt-3">{img.label}</p>
+
+                      <div className="mt-3 grid grid-cols-3 gap-2">
+                        <button
+                          onClick={() => handleShare({ url: img.url, label: img.label })}
+                          className="py-2 text-sm font-bold border bg-gray-900 text-white hover:bg-gray-800 border-gray-900"
+                          type="button"
+                        >
+                          Share
+                        </button>
+
+                        <button
+                          onClick={() => handleSave({ url: img.url, label: img.label })}
+                          className="py-2 text-sm font-bold border bg-white text-gray-900 hover:bg-gray-50 border-gray-300"
+                          type="button"
+                        >
+                          Save
+                        </button>
+
+                        <button
+                          onClick={() => handleCopyImageLink({ url: img.url, label: img.label })}
+                          className="py-2 text-sm font-bold border bg-white text-gray-900 hover:bg-gray-50 border-gray-300"
+                          type="button"
+                        >
+                          Copy
+                        </button>
                       </div>
 
-                      {reportPreview ? (
-                        <div className="mt-4 border border-gray-200 bg-white p-4">
-                          <p className="text-xs text-gray-600 uppercase tracking-wider">Short Excerpt</p>
-                          <p className="text-sm text-gray-800 mt-2 whitespace-pre-wrap leading-relaxed">
-                            {reportPreview}
-                          </p>
-                        </div>
-                      ) : null}
-
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          className="px-4 py-2 bg-gray-900 text-white font-bold hover:bg-gray-800 text-sm"
-                          onClick={() => {
-                            // open the most common “next actions” sections without closing others
-                            setResultsOpenIds((prev) => Array.from(new Set([...prev, "areas", "full", "paths"])));
-                            gaEvent('results_expand_primary_sections', { sections: "areas,full,paths" });
-                          }}
-                        >
-                          Expand Key Sections
-                        </button>
-
-                        <button
-                          type="button"
-                          className="px-4 py-2 bg-white text-gray-900 font-bold border border-gray-300 hover:bg-gray-50 text-sm"
-                          onClick={() => {
-                            setResultsOpenIds([]);
-                            gaEvent('results_collapse_all', {});
-                          }}
-                        >
-                          Collapse All
-                        </button>
-
-                        <p className="text-xs text-gray-600 self-center">
-                          Multi-open is enabled.
+                      {!reflectionSeen && (
+                        <p className="text-xs text-gray-600 mt-3">
+                          Sharing/saving activates after you read Dr. Lazuk’s note below.
                         </p>
-                      </div>
+                      )}
                     </div>
-
-                    {/* ✅ Optional small radial cluster preview */}
-                    <div className="text-gray-900 opacity-90">
-                      <RadialFacePreview size={92} />
-                      <p className="text-[11px] text-gray-600 mt-2 text-center">
-                        static map preview
-                      </p>
-                    </div>
-                  </div>
+                  ))}
                 </div>
-
-                {/* ✅ Accordion (multi-open) */}
-                <Accordion
-                  openIds={resultsOpenIds}
-                  onToggle={toggleResultsAccordion}
-                  items={[
-                    {
-                      id: "areas",
-                      title: "Areas of Focus",
-                      subtitle: "The top signals most relevant right now (condensed).",
-                      content: <AreasOfFocusCard areas={analysisReport?.areasOfFocus} />
-                    },
-                    {
-                      id: "paths",
-                      title: "Possible Paths Forward",
-                      subtitle: "Optional. Choose a lens (Understand / Observe / Guidance).",
-                      content: (
-                        <div className="space-y-4">
-                          <AgencyLayer
-                            onChoose={(choice) => {
-                              setAgencyChoice(choice);
-                              gaEvent('agency_choice', { choice });
-
-                              // Auto-open the relevant section, without closing others
-                              if (choice === "understand") {
-                                setResultsOpenIds((prev) => Array.from(new Set([...prev, "future"])));
-                              } else if (choice === "guidance") {
-                                setResultsOpenIds((prev) => Array.from(new Set([...prev, "guidance"])));
-                              } else if (choice === "observe") {
-                                setResultsOpenIds((prev) => Array.from(new Set([...prev, "observe"])));
-                              }
-                            }}
-                          />
-
-                          {agencyChoice === 'observe' && (
-                            <div className="bg-gray-50 border border-gray-200 p-6">
-                              <p className="text-sm text-gray-700">
-                                If you’d like, you can simply return to your email later.
-                                There is no urgency — and no required schedule.
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      )
-                    },
-                    {
-                      id: "full",
-                      title: "Full Cosmetic Report",
-                      subtitle: "The complete narrative report (expanded detail).",
-                      content: (
-                        <div className="bg-white border border-gray-200 p-6">
-                          <h4 className="text-xl font-bold text-gray-900 mb-2">
-                            What I’m Seeing (Cosmetic Education)
-                          </h4>
-                          <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-                            {analysisReport?.report || "Your report is loading."}
-                          </p>
-                        </div>
-                      )
-                    },
-                    {
-                      id: "future",
-                      title: "Your Future Story",
-                      subtitle: "Cosmetic projection images anchored to your selfie (optional).",
-                      content: (
-                        <div className="space-y-4">
-                          {agingImages.length > 0 ? (
-                            <div className="bg-white border border-gray-200 p-6">
-                              <h4 className="text-xl font-bold text-gray-900 mb-2">
-                                Your Future Story (Cosmetic Projection)
-                              </h4>
-                              <p className="text-sm text-gray-700 mb-6">
-                                These are visual projections anchored to your selfie.
-                              </p>
-
-                              <div className="grid md:grid-cols-2 gap-4">
-                                {agingImages.map((img) => (
-                                  <div key={img.key} className="relative border border-gray-200 bg-gray-50 p-3">
-                                    <IdentityLockBadge
-                                      placement="top-left"
-                                      onClick={() => {
-                                        gaEvent('identity_lock_badge_clicked', { key: img.key });
-                                        setIdentityLockModalOpen(true);
-                                      }}
-                                    />
-
-                                    <WatermarkOverlay />
-
-                                    <img
-                                      src={img.url}
-                                      alt={img.label}
-                                      className="w-full border border-gray-200"
-                                      onLoad={() => gaEvent('aging_image_loaded', { key: img.key })}
-                                    />
-
-                                    <p className="text-sm font-bold text-gray-900 mt-3">{img.label}</p>
-
-                                    <div className="mt-3 grid grid-cols-3 gap-2">
-                                      <button
-                                        onClick={() => handleShare({ url: img.url, label: img.label })}
-                                        className="py-2 text-sm font-bold border bg-gray-900 text-white hover:bg-gray-800 border-gray-900"
-                                        type="button"
-                                      >
-                                        Share
-                                      </button>
-
-                                      <button
-                                        onClick={() => handleSave({ url: img.url, label: img.label })}
-                                        className="py-2 text-sm font-bold border bg-white text-gray-900 hover:bg-gray-50 border-gray-300"
-                                        type="button"
-                                      >
-                                        Save
-                                      </button>
-
-                                      <button
-                                        onClick={() => handleCopyImageLink({ url: img.url, label: img.label })}
-                                        className="py-2 text-sm font-bold border bg-white text-gray-900 hover:bg-gray-50 border-gray-300"
-                                        type="button"
-                                      >
-                                        Copy
-                                      </button>
-                                    </div>
-
-                                    {!reflectionSeen && (
-                                      <p className="mt-3 text-xs text-gray-600">
-                                        Sharing/saving activates after reading Dr. Lazuk’s note below.
-                                      </p>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="bg-gray-50 border border-gray-200 p-6">
-                              <p className="text-sm text-gray-700">
-                                Your Future Story images are not available for this result.
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      )
-                    },
-                    {
-                      id: "guidance",
-                      title: "Recommended Products and Treatments",
-                      subtitle: "Personalized guidance mapped to your primary concern.",
-                      content: (
-                        <div className="bg-white border-2 border-gray-900 p-8">
-                          <h4 className="font-bold text-gray-900 mb-4 text-2xl">Recommended Products</h4>
-                          <div className="grid md:grid-cols-3 gap-4 mb-8">
-                            {analysisReport.recommendedProducts.map((p, i) => (
-                              <div key={i} className="bg-gray-50 border p-4">
-                                <h5 className="font-bold text-gray-900 mb-1">{p.name}</h5>
-                                <p className="text-gray-900 font-bold mb-2">${p.price}</p>
-                                <ul className="text-sm text-gray-700 mb-3">
-                                  {p.benefits.map((b, j) => (
-                                    <li key={j}>✓ {b}</li>
-                                  ))}
-                                </ul>
-                                <a
-                                  href={p.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  onClick={() =>
-                                    gaEvent('product_click', {
-                                      productName: p.name,
-                                      category: p.category,
-                                      price: p.price,
-                                      primaryConcern
-                                    })
-                                  }
-                                  className="block text-center bg-gray-900 text-white py-2 font-bold hover:bg-gray-800"
-                                >
-                                  View
-                                </a>
-                              </div>
-                            ))}
-                          </div>
-
-                          <h4 className="font-bold text-gray-900 mb-4 text-2xl">
-                            Recommended Treatments
-                          </h4>
-                          <div className="grid md:grid-cols-2 gap-4">
-                            {analysisReport.recommendedServices.map((s, i) => (
-                              <div key={i} className="bg-blue-50 border-2 border-blue-200 p-5">
-                                <h5 className="font-bold text-blue-900 mb-2 text-lg">{s.name}</h5>
-                                <p className="text-sm text-blue-800 mb-3">{s.description}</p>
-                                <p className="text-sm text-blue-900 font-semibold mb-2">
-                                  Why We Recommend This:
-                                </p>
-                                <p className="text-sm text-blue-800 mb-3">{s.whyRecommended}</p>
-                                <div className="mb-4">
-                                  <p className="text-xs font-bold text-blue-900 mb-1">Benefits:</p>
-                                  <ul className="text-sm text-blue-800">
-                                    {s.benefits.map((b, j) => (
-                                      <li key={j}>✓ {b}</li>
-                                    ))}
-                                  </ul>
-                                </div>
-                                <a
-                                  href="mailto:contact@skindoctor.ai"
-                                  onClick={() =>
-                                    gaEvent('book_appointment_click', {
-                                      serviceName: s.name,
-                                      primaryConcern
-                                    })
-                                  }
-                                  className="block text-center bg-blue-600 text-white py-3 font-bold hover:bg-blue-700"
-                                >
-                                  Book Appointment
-                                </a>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )
-                    },
-                    {
-                      id: "observe",
-                      title: "Observe and Revisit Later",
-                      subtitle: "A calm holding place (no urgency).",
-                      content: (
-                        <div className="bg-gray-50 border border-gray-200 p-6">
-                          <p className="text-sm text-gray-700">
-                            If you’d like, you can simply return to your email later.
-                            There is no urgency — and no required schedule.
-                          </p>
-                        </div>
-                      )
-                    },
-                    {
-                      id: "note",
-                      title: "A Message from Dr. Lazuk",
-                      subtitle: "Reading this activates sharing/saving on Future Story images.",
-                      content: (
-                        <PostImageReflection
-                          onSeen={() => {
-                            if (!reflectionSeen) {
-                              setReflectionSeen(true);
-                              gaEvent('reflection_seen', { step: 'results' });
-                              showToast("Thank you. Sharing and saving are now available.");
-                            }
-                          }}
-                        />
-                      )
-                    }
-                  ]}
-                />
-
+              </div>
+            ) : (
+              <div className="bg-gray-50 border border-gray-200 p-6">
+                <p className="text-sm text-gray-700">
+                  Your Future Story images are not available for this result.
+                </p>
               </div>
             )}
+          </div>
+        )}
 
-            <canvas ref={canvasRef} className="hidden" />
+        {agencyChoice === 'guidance' && (
+          <div className="mt-6 bg-white border-2 border-gray-900 p-8">
+            <h4 className="font-bold text-gray-900 mb-4 text-2xl">Recommended Products</h4>
+            <div className="grid md:grid-cols-3 gap-4 mb-8">
+              {analysisReport.recommendedProducts.map((p, i) => (
+                <div key={i} className="bg-gray-50 border p-4">
+                  <h5 className="font-bold text-gray-900 mb-1">{p.name}</h5>
+                  <p className="text-gray-900 font-bold mb-2">${p.price}</p>
+                  <ul className="text-sm text-gray-700 mb-3">
+                    {p.benefits.map((b, j) => (
+                      <li key={j}>✓ {b}</li>
+                    ))}
+                  </ul>
+                  <a
+                    href={p.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() =>
+                      gaEvent('product_click', {
+                        productName: p.name,
+                        category: p.category,
+                        price: p.price,
+                        primaryConcern
+                      })
+                    }
+                    className="block text-center bg-gray-900 text-white py-2 font-bold hover:bg-gray-800"
+                  >
+                    View
+                  </a>
+                </div>
+              ))}
+            </div>
+
+            <h4 className="font-bold text-gray-900 mb-4 text-2xl">
+              Recommended Treatments
+            </h4>
+            <div className="grid md:grid-cols-2 gap-4">
+              {analysisReport.recommendedServices.map((s, i) => (
+                <div key={i} className="bg-blue-50 border-2 border-blue-200 p-5">
+                  <h5 className="font-bold text-blue-900 mb-2 text-lg">{s.name}</h5>
+                  <p className="text-sm text-blue-800 mb-3">{s.description}</p>
+                  <p className="text-sm text-blue-900 font-semibold mb-2">
+                    Why We Recommend This:
+                  </p>
+                  <p className="text-sm text-blue-800 mb-3">{s.whyRecommended}</p>
+                  <div className="mb-4">
+                    <p className="text-xs font-bold text-blue-900 mb-1">Benefits:</p>
+                    <ul className="text-sm text-blue-800">
+                      {s.benefits.map((b, j) => (
+                        <li key={j}>✓ {b}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <a
+                    href="mailto:contact@skindoctor.ai"
+                    onClick={() =>
+                      gaEvent('book_appointment_click', {
+                        serviceName: s.name,
+                        primaryConcern
+                      })
+                    }
+                    className="block text-center bg-blue-600 text-white py-3 font-bold hover:bg-blue-700"
+                  >
+                    Book Appointment
+                  </a>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {!agencyChoice && (
+          <div className="mt-4 bg-gray-50 border border-gray-200 p-5">
+            <p className="text-sm text-gray-700">
+              Choose a path above — nothing is required.
+            </p>
+          </div>
+        )}
+      </AccordionSection>
+
+      <AccordionSection
+        id="report"
+        title="Full Cosmetic Report"
+        subtitle="The complete narrative report (expanded detail)."
+        open={!!openSections.report}
+        onToggle={toggleSection}
+      >
+        <div className="bg-white border border-gray-200 p-6">
+          <h4 className="text-xl font-bold text-gray-900 mb-2">
+            What I’m Seeing (Cosmetic Education)
+          </h4>
+
+          <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+            {analysisReport?.report || "Your report is loading."}
+          </p>
+        </div>
+      </AccordionSection>
+
+      <AccordionSection
+        id="future"
+        title="Your Future Story"
+        subtitle="Cosmetic projection images anchored to your selfie (optional)."
+        open={!!openSections.future}
+        onToggle={toggleSection}
+      >
+        {agingImages.length > 0 ? (
+          <div className="bg-white border border-gray-200 p-6">
+            <h4 className="text-xl font-bold text-gray-900 mb-2">
+              Your Future Story (Cosmetic Projection)
+            </h4>
+            <p className="text-sm text-gray-700 mb-6">
+              These are visual projections anchored to your selfie.
+            </p>
+
+            <div className="grid md:grid-cols-2 gap-4">
+              {agingImages.map((img) => (
+                <div key={img.key} className="relative border border-gray-200 bg-gray-50 p-3">
+                  <IdentityLockBadge
+                    placement="top-left"
+                    onClick={() => {
+                      gaEvent('identity_lock_badge_clicked', { key: img.key });
+                      setIdentityLockModalOpen(true);
+                    }}
+                  />
+
+                  <WatermarkOverlay />
+
+                  <img
+                    src={img.url}
+                    alt={img.label}
+                    className="w-full border border-gray-200"
+                    onLoad={() => gaEvent('aging_image_loaded', { key: img.key })}
+                  />
+
+                  <p className="text-sm font-bold text-gray-900 mt-3">{img.label}</p>
+
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    <button
+                      onClick={() => handleShare({ url: img.url, label: img.label })}
+                      className="py-2 text-sm font-bold border bg-gray-900 text-white hover:bg-gray-800 border-gray-900"
+                      type="button"
+                    >
+                      Share
+                    </button>
+
+                    <button
+                      onClick={() => handleSave({ url: img.url, label: img.label })}
+                      className="py-2 text-sm font-bold border bg-white text-gray-900 hover:bg-gray-50 border-gray-300"
+                      type="button"
+                    >
+                      Save
+                    </button>
+
+                    <button
+                      onClick={() => handleCopyImageLink({ url: img.url, label: img.label })}
+                      className="py-2 text-sm font-bold border bg-white text-gray-900 hover:bg-gray-50 border-gray-300"
+                      type="button"
+                    >
+                      Copy
+                    </button>
+                  </div>
+
+                  {!reflectionSeen && (
+                    <p className="text-xs text-gray-600 mt-3">
+                      Sharing/saving activates after you read Dr. Lazuk’s note below.
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="bg-gray-50 border border-gray-200 p-6">
+            <p className="text-sm text-gray-700">
+              Your Future Story images are not available for this result.
+            </p>
+          </div>
+        )}
+      </AccordionSection>
+
+      <AccordionSection
+        id="guidance"
+        title="Recommended Products and Treatments"
+        subtitle="Personalized guidance mapped to your primary concern."
+        open={!!openSections.guidance}
+        onToggle={toggleSection}
+      >
+        <div className="bg-white border-2 border-gray-900 p-8">
+          <h4 className="font-bold text-gray-900 mb-4 text-2xl">Recommended Products</h4>
+          <div className="grid md:grid-cols-3 gap-4 mb-8">
+            {analysisReport.recommendedProducts.map((p, i) => (
+              <div key={i} className="bg-gray-50 border p-4">
+                <h5 className="font-bold text-gray-900 mb-1">{p.name}</h5>
+                <p className="text-gray-900 font-bold mb-2">${p.price}</p>
+                <ul className="text-sm text-gray-700 mb-3">
+                  {p.benefits.map((b, j) => (
+                    <li key={j}>✓ {b}</li>
+                  ))}
+                </ul>
+                <a
+                  href={p.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() =>
+                    gaEvent('product_click', {
+                      productName: p.name,
+                      category: p.category,
+                      price: p.price,
+                      primaryConcern
+                    })
+                  }
+                  className="block text-center bg-gray-900 text-white py-2 font-bold hover:bg-gray-800"
+                >
+                  View
+                </a>
+              </div>
+            ))}
+          </div>
+
+          <h4 className="font-bold text-gray-900 mb-4 text-2xl">
+            Recommended Treatments
+          </h4>
+          <div className="grid md:grid-cols-2 gap-4">
+            {analysisReport.recommendedServices.map((s, i) => (
+              <div key={i} className="bg-blue-50 border-2 border-blue-200 p-5">
+                <h5 className="font-bold text-blue-900 mb-2 text-lg">{s.name}</h5>
+                <p className="text-sm text-blue-800 mb-3">{s.description}</p>
+                <p className="text-sm text-blue-900 font-semibold mb-2">
+                  Why We Recommend This:
+                </p>
+                <p className="text-sm text-blue-800 mb-3">{s.whyRecommended}</p>
+                <div className="mb-4">
+                  <p className="text-xs font-bold text-blue-900 mb-1">Benefits:</p>
+                  <ul className="text-sm text-blue-800">
+                    {s.benefits.map((b, j) => (
+                      <li key={j}>✓ {b}</li>
+                    ))}
+                  </ul>
+                </div>
+                <a
+                  href="mailto:contact@skindoctor.ai"
+                  onClick={() =>
+                    gaEvent('book_appointment_click', {
+                      serviceName: s.name,
+                      primaryConcern
+                    })
+                  }
+                  className="block text-center bg-blue-600 text-white py-3 font-bold hover:bg-blue-700"
+                >
+                  Book Appointment
+                </a>
+              </div>
+            ))}
+          </div>
+        </div>
+      </AccordionSection>
+
+      <AccordionSection
+        id="message"
+        title="A Message from Dr. Lazuk"
+        subtitle="Reading this activates sharing/saving on Future Story images."
+        open={!!openSections.message}
+        onToggle={toggleSection}
+      >
+        <PostImageReflection
+          onSeen={() => {
+            if (!reflectionSeen) {
+              setReflectionSeen(true);
+              gaEvent('reflection_seen', { step: 'results' });
+              showToast("Thank you. Sharing and saving are now available.");
+            }
+          }}
+        />
+      </AccordionSection>
+    </div>
+  </div>
+)}
+
+<canvas ref={canvasRef} className="hidden" />
           </div>
         )}
 
@@ -2599,6 +2705,8 @@ ${SUPPORTIVE_FOOTER_LINE}`);
     </div>
   );
 };
+
+export default DermatologyApp;
 
 export default DermatologyApp;
 
