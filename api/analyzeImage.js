@@ -84,7 +84,6 @@ function ragFromScore(score) {
   if (s >= 55) return "amber";
   return "red";
 }
-const ALL_METRIC_IDS = LOCKED_CLUSTERS.flatMap(c => c.metrics.map(m => m.metric_id));
 
 // 🔒 Locked clusters + metric mapping
 const LOCKED_CLUSTERS = [
@@ -151,8 +150,10 @@ const LOCKED_CLUSTERS = [
   },
 ];
 
+const ALL_METRIC_IDS = LOCKED_CLUSTERS.flatMap((c) => c.metrics.map((m) => m.metric_id));
 const LOCKED_VERSION = 1;
 
+// compute overall score per locked weights
 function computeOverallScore(clusters) {
   const byId = new Map(clusters.map((c) => [c.cluster_id, c]));
   let total = 0;
@@ -179,10 +180,6 @@ function makeReportId() {
   return `rpt_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function getAllMetricIds() {
-  return LOCKED_CLUSTERS.flatMap((c) => c.metrics.map((m) => m.metric_id));
-}
-
 function buildClustersFromMetricScores(metricScores) {
   return LOCKED_CLUSTERS.map((c) => {
     const metrics = c.metrics.map((m) => {
@@ -191,7 +188,7 @@ function buildClustersFromMetricScores(metricScores) {
         metric_id: m.metric_id,
         display_name: m.display_name,
         score,
-        rag: ragFromScore(score),
+        rag: score === null ? "amber" : ragFromScore(score),
         cluster_id: c.cluster_id,
         order: m.order,
       };
@@ -208,10 +205,10 @@ function buildClustersFromMetricScores(metricScores) {
 }
 
 function validateMetricScores(metricScores) {
-  if (!metricScores || typeof metricScores !== "object") return { ok: false, missing: getAllMetricIds() };
+  if (!metricScores || typeof metricScores !== "object") return { ok: false, missing: [...ALL_METRIC_IDS] };
 
   const missing = [];
-  for (const id of getAllMetricIds()) {
+  for (const id of ALL_METRIC_IDS) {
     const v = clampScore(metricScores[id]);
     if (v === null) missing.push(id);
   }
@@ -385,7 +382,7 @@ ${notes || "none provided"}
     });
 
     // Validate metric_scores. If incomplete, retry once with stricter instruction.
-    let metricScores = parsed?.metric_scores;
+    let metricScores = parsed?.metric_scores && typeof parsed?.metric_scores === "object" ? parsed.metric_scores : null;
     let validation = validateMetricScores(metricScores);
 
     if (!parsed || !validation.ok) {
@@ -409,7 +406,8 @@ Missing metric_ids you must include now: ${JSON.stringify(validation.missing || 
 
       rawContent = retry.rawContent;
       parsed = retry.parsed;
-      metricScores = parsed?.metric_scores;
+
+      metricScores = parsed?.metric_scores && typeof parsed?.metric_scores === "object" ? parsed.metric_scores : null;
       validation = validateMetricScores(metricScores);
     }
 
@@ -422,30 +420,21 @@ Missing metric_ids you must include now: ${JSON.stringify(validation.missing || 
       });
     }
 
+    // Final hard validation (explicit and early-fail with metric_id)
+    for (const id of ALL_METRIC_IDS) {
+      const v = metricScores[id];
+      const n = Number(v);
+      if (!Number.isFinite(n)) {
+        return res.status(500).json({
+          ok: false,
+          error: "invalid_metric_score",
+          message: `Metric score missing/invalid for ${id}`,
+        });
+      }
+    }
+
     const analysis = parsed.analysis && typeof parsed.analysis === "object" ? parsed.analysis : {};
     const raw = parsed.raw && typeof parsed.raw === "object" ? parsed.raw : {};
-    
-    const metricScores =
-    parsed.metric_scores && typeof parsed.metric_scores === "object"
-    ? parsed.metric_scores
-    : null;
-
-    if (!metricScores) {
-    return res.status(500).json({ ok: false, error: "missing_metric_scores" });
-}
-
-    // Validate every locked metric exists and is numeric
-    for (const id of ALL_METRIC_IDS) {
-    const v = metricScores[id];
-    const n = Number(v);
-    if (!Number.isFinite(n)) {
-    return res.status(500).json({
-      ok: false,
-      error: "invalid_metric_score",
-      message: `Metric score missing/invalid for ${id}`,
-    });
-    }
-    }
 
     const fitzpatrickType = normalizeFitzpatrick(parsed.fitzpatrickType);
     const skinType = normalizeSkinType(parsed.skinType);
