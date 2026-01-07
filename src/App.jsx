@@ -2707,6 +2707,3 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 };
 
 export default DermatologyApp;
-
-export default DermatologyApp;
-
