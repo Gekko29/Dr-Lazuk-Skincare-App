@@ -21,11 +21,79 @@
 //   ]
 // }
 
-module.exports.config = {
+const CONFIG = {
   api: {
     bodyParser: { sizeLimit: "10mb" },
   },
 };
+
+// 🔒 Locked clusters + metric mapping
+const LOCKED_CLUSTERS = [
+  {
+    cluster_id: "core_skin",
+    display_name: "Core Skin Health",
+    weight: 0.35,
+    order: 1,
+    metrics: [
+      { metric_id: "barrier_stability", display_name: "Barrier Stability", order: 1 },
+      { metric_id: "hydration_level", display_name: "Hydration Level", order: 2 },
+      { metric_id: "oil_sebum_balance", display_name: "Oil / Sebum Balance", order: 3 },
+      { metric_id: "skin_texture", display_name: "Skin Texture", order: 4 },
+      { metric_id: "pore_visibility", display_name: "Pore Visibility", order: 5 },
+    ],
+  },
+  {
+    cluster_id: "aging_structure",
+    display_name: "Aging & Structure",
+    weight: 0.25,
+    order: 2,
+    metrics: [
+      { metric_id: "fine_lines", display_name: "Fine Lines", order: 1 },
+      { metric_id: "wrinkles", display_name: "Wrinkles", order: 2 },
+      { metric_id: "skin_firmness", display_name: "Skin Firmness", order: 3 },
+      { metric_id: "skin_sagging", display_name: "Skin Sagging", order: 4 },
+      { metric_id: "elasticity_bounceback", display_name: "Elasticity / Bounce-Back", order: 5 },
+    ],
+  },
+  {
+    cluster_id: "eye_area",
+    display_name: "Eye Area",
+    weight: 0.15,
+    order: 3,
+    metrics: [
+      { metric_id: "under_eye_fine_lines", display_name: "Under-Eye Fine Lines", order: 1 },
+      { metric_id: "under_eye_sagging_hollows", display_name: "Under-Eye Sagging / Hollows", order: 2 },
+      { metric_id: "under_eye_dark_circles", display_name: "Under-Eye Dark Circles", order: 3 },
+      { metric_id: "under_eye_puffiness", display_name: "Under-Eye Puffiness", order: 4 },
+    ],
+  },
+  {
+    cluster_id: "pigmentation_tone",
+    display_name: "Pigmentation & Tone",
+    weight: 0.15,
+    order: 4,
+    metrics: [
+      { metric_id: "overall_pigmentation", display_name: "Overall Pigmentation", order: 1 },
+      { metric_id: "dark_spots_sun_spots", display_name: "Dark Spots / Sun Spots", order: 2 },
+      { metric_id: "uneven_skin_tone", display_name: "Uneven Skin Tone", order: 3 },
+      { metric_id: "redness_blotchiness", display_name: "Redness / Blotchiness", order: 4 },
+    ],
+  },
+  {
+    cluster_id: "stress_damage",
+    display_name: "Stress & Damage",
+    weight: 0.10,
+    order: 5,
+    metrics: [
+      { metric_id: "sensitivity_reactivity", display_name: "Sensitivity / Reactivity", order: 1 },
+      { metric_id: "inflammation_signals", display_name: "Inflammation Signals", order: 2 },
+      { metric_id: "environmental_damage", display_name: "Environmental Damage (UV / Pollution)", order: 3 },
+    ],
+  },
+];
+
+const LOCKED_VERSION = 1;
+const ALL_METRIC_IDS = LOCKED_CLUSTERS.flatMap((c) => c.metrics.map((m) => m.metric_id));
 
 async function getOpenAIClient() {
   const mod = await import("openai");
@@ -85,74 +153,6 @@ function ragFromScore(score) {
   return "red";
 }
 
-// 🔒 Locked clusters + metric mapping
-const LOCKED_CLUSTERS = [
-  {
-    cluster_id: "core_skin",
-    display_name: "Core Skin Health",
-    weight: 0.35,
-    order: 1,
-    metrics: [
-      { metric_id: "barrier_stability", display_name: "Barrier Stability", order: 1 },
-      { metric_id: "hydration_level", display_name: "Hydration Level", order: 2 },
-      { metric_id: "oil_sebum_balance", display_name: "Oil / Sebum Balance", order: 3 },
-      { metric_id: "skin_texture", display_name: "Skin Texture", order: 4 },
-      { metric_id: "pore_visibility", display_name: "Pore Visibility", order: 5 },
-    ],
-  },
-  {
-    cluster_id: "aging_structure",
-    display_name: "Aging & Structure",
-    weight: 0.25,
-    order: 2,
-    metrics: [
-      { metric_id: "fine_lines", display_name: "Fine Lines", order: 1 },
-      { metric_id: "wrinkles", display_name: "Wrinkles", order: 2 },
-      { metric_id: "skin_firmness", display_name: "Skin Firmness", order: 3 },
-      { metric_id: "skin_sagging", display_name: "Skin Sagging", order: 4 },
-      { metric_id: "elasticity_bounceback", display_name: "Elasticity / Bounce-Back", order: 5 },
-    ],
-  },
-  {
-    cluster_id: "eye_area",
-    display_name: "Eye Area",
-    weight: 0.15,
-    order: 3,
-    metrics: [
-      { metric_id: "under_eye_fine_lines", display_name: "Under-Eye Fine Lines", order: 1 },
-      { metric_id: "under_eye_sagging_hollows", display_name: "Under-Eye Sagging / Hollows", order: 2 },
-      { metric_id: "under_eye_dark_circles", display_name: "Under-Eye Dark Circles", order: 3 },
-      { metric_id: "under_eye_puffiness", display_name: "Under-Eye Puffiness", order: 4 },
-    ],
-  },
-  {
-    cluster_id: "pigmentation_tone",
-    display_name: "Pigmentation & Tone",
-    weight: 0.15,
-    order: 4,
-    metrics: [
-      { metric_id: "overall_pigmentation", display_name: "Overall Pigmentation", order: 1 },
-      { metric_id: "dark_spots_sun_spots", display_name: "Dark Spots / Sun Spots", order: 2 },
-      { metric_id: "uneven_skin_tone", display_name: "Uneven Skin Tone", order: 3 },
-      { metric_id: "redness_blotchiness", display_name: "Redness / Blotchiness", order: 4 },
-    ],
-  },
-  {
-    cluster_id: "stress_damage",
-    display_name: "Stress & Damage",
-    weight: 0.1,
-    order: 5,
-    metrics: [
-      { metric_id: "sensitivity_reactivity", display_name: "Sensitivity / Reactivity", order: 1 },
-      { metric_id: "inflammation_signals", display_name: "Inflammation Signals", order: 2 },
-      { metric_id: "environmental_damage", display_name: "Environmental Damage (UV / Pollution)", order: 3 },
-    ],
-  },
-];
-
-const ALL_METRIC_IDS = LOCKED_CLUSTERS.flatMap((c) => c.metrics.map((m) => m.metric_id));
-const LOCKED_VERSION = 1;
-
 function computeOverallScore(clusters) {
   const byId = new Map(clusters.map((c) => [c.cluster_id, c]));
   let total = 0;
@@ -201,7 +201,9 @@ function buildClustersFromMetricScores(metricScores) {
 }
 
 function validateMetricScores(metricScores) {
-  if (!metricScores || typeof metricScores !== "object") return { ok: false, missing: [...ALL_METRIC_IDS] };
+  if (!metricScores || typeof metricScores !== "object") {
+    return { ok: false, missing: [...ALL_METRIC_IDS] };
+  }
 
   const missing = [];
   for (const id of ALL_METRIC_IDS) {
@@ -215,7 +217,7 @@ async function runVisionOnce({ client, visionModel, systemPrompt, userText, imag
   const completion = await client.chat.completions.create({
     model: visionModel,
     temperature,
-    max_tokens: 1600,
+    max_tokens: 1700,
     messages: [
       { role: "system", content: systemPrompt },
       {
@@ -232,7 +234,7 @@ async function runVisionOnce({ client, visionModel, systemPrompt, userText, imag
   return { rawContent, parsed: safeJsonParse(rawContent) };
 }
 
-module.exports = async function handler(req, res) {
+async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", ["POST"]);
     return res.status(405).json({ ok: false, error: "Method not allowed. Use POST." });
@@ -279,10 +281,7 @@ module.exports = async function handler(req, res) {
     const metricListForModel = LOCKED_CLUSTERS.map((c) => ({
       cluster_id: c.cluster_id,
       display_name: c.display_name,
-      metrics: c.metrics.map((m) => ({
-        metric_id: m.metric_id,
-        display_name: m.display_name,
-      })),
+      metrics: c.metrics.map((m) => ({ metric_id: m.metric_id, display_name: m.display_name })),
     }));
 
     const systemPromptBase = `
@@ -350,7 +349,8 @@ Return VALID JSON ONLY (no markdown, no extra commentary) with EXACTLY this shap
   "fitzpatrickType": number | null,
   "skinType": "oily"|"dry"|"combination"|"normal"|null,
   "metric_scores": {
-    "<metric_id>": number
+    "<metric_id>": number,
+    "...": number
   }
 }
 
@@ -376,10 +376,8 @@ ${notes || "none provided"}
       temperature: 0.2,
     });
 
-    // Validate metric_scores. If incomplete, retry once with stricter instruction.
-    let metricScores =
-      parsed?.metric_scores && typeof parsed?.metric_scores === "object" ? parsed.metric_scores : null;
-
+    // Validate metric_scores; retry once if missing/incomplete
+    let metricScores = parsed?.metric_scores;
     let validation = validateMetricScores(metricScores);
 
     if (!parsed || !validation.ok) {
@@ -404,9 +402,7 @@ Missing metric_ids you must include now: ${JSON.stringify(validation.missing || 
       rawContent = retry.rawContent;
       parsed = retry.parsed;
 
-      metricScores =
-        parsed?.metric_scores && typeof parsed?.metric_scores === "object" ? parsed.metric_scores : null;
-
+      metricScores = parsed?.metric_scores; // ✅ REASSIGN (do NOT redeclare)
       validation = validateMetricScores(metricScores);
     }
 
@@ -417,19 +413,6 @@ Missing metric_ids you must include now: ${JSON.stringify(validation.missing || 
         error: "metric_scores_invalid",
         message: "Problem producing numeric scores for the visual report. Please try again.",
       });
-    }
-
-    // Final hard validation (explicit and early-fail with metric_id)
-    for (const id of ALL_METRIC_IDS) {
-      const v = metricScores[id];
-      const n = Number(v);
-      if (!Number.isFinite(n)) {
-        return res.status(500).json({
-          ok: false,
-          error: "invalid_metric_score",
-          message: `Metric score missing/invalid for ${id}`,
-        });
-      }
     }
 
     const analysis = parsed.analysis && typeof parsed.analysis === "object" ? parsed.analysis : {};
@@ -463,7 +446,7 @@ Missing metric_ids you must include now: ${JSON.stringify(validation.missing || 
       };
     }
 
-    // Authoritative locked numeric payload
+    // Final authoritative locked numeric payload
     const clusters = buildClustersFromMetricScores(metricScores);
     const overall_score = computeOverallScore(clusters);
 
@@ -488,9 +471,8 @@ Missing metric_ids you must include now: ${JSON.stringify(validation.missing || 
       message: "I’m having trouble analyzing the image right now. Please try again in a moment.",
     });
   }
-};
+}
 
-
-
-
-
+// ✅ CJS export that preserves Vercel config
+module.exports = handler;
+module.exports.config = CONFIG;
