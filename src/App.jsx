@@ -726,16 +726,112 @@ const StaticMapPreview = () => {
   );
 };
 
+/* ---------------------------------------
+   Radial Signal Rings (Summary Visual)
+   - Static, non-emotional "face/cluster" preview
+   - Uses top signals + normalized scores (0..100) and RAG
+--------------------------------------- */
+const SignalRingCluster = ({ signals = [] }) => {
+  const items = (signals || []).slice(0, 3);
+
+  const ragStroke = (rag) => {
+    if (rag === "R") return "#DC2626"; // red-600
+    if (rag === "A") return "#D97706"; // amber-600
+    return "#16A34A"; // green-600
+  };
+
+  // SVG arc helpers
+  const arc = ({ r, pct, stroke }) => {
+    const circ = 2 * Math.PI * r;
+    const dash = Math.max(0, Math.min(circ, (pct / 100) * circ));
+    const gap = circ - dash;
+    return { r, stroke, dasharray: `${dash} ${gap}` };
+  };
+
+  // Outer → inner rings
+  const rings = items.map((s, i) =>
+    arc({
+      r: 26 - (i * 6),          // 26, 20, 14
+      pct: Number(s?.score) || 0,
+      stroke: ragStroke(s?.rag)
+    })
+  );
+
+  return (
+    <div className="flex items-start justify-end">
+      <div className="w-[110px]">
+        <div className="flex justify-end">
+          <svg width="90" height="90" viewBox="0 0 90 90" aria-label="static map preview">
+            {/* base ring */}
+            <circle cx="45" cy="45" r="30" fill="none" stroke="#E5E7EB" strokeWidth="2" />
+            <circle cx="45" cy="45" r="24" fill="none" stroke="#F3F4F6" strokeWidth="2" />
+            <circle cx="45" cy="45" r="18" fill="none" stroke="#F3F4F6" strokeWidth="2" />
+
+            {/* value rings */}
+            {rings.map((r, idx) => (
+              <circle
+                key={idx}
+                cx="45"
+                cy="45"
+                r={r.r}
+                fill="none"
+                stroke={r.stroke}
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeDasharray={r.dasharray}
+                transform="rotate(-90 45 45)"
+              />
+            ))}
+
+            {/* center "face landmark" glyph (neutral) */}
+            <rect x="41" y="30" width="8" height="30" rx="4" fill="none" stroke="#111827" strokeWidth="2" />
+            <circle cx="45" cy="26" r="2" fill="#111827" />
+            <circle cx="45" cy="64" r="2" fill="#111827" />
+          </svg>
+        </div>
+
+        <div className="text-[11px] text-gray-500 text-right mt-1">signal rings preview</div>
+      </div>
+    </div>
+  );
+};
+
+
+
 const deriveTopSignals = (areas) => {
-  const items = normalizeAreasOfFocus(areas);
-  return items.map((it) => ({
-    title: it.title,
-    score: typeof it.score === "number" ? it.score : null
-  }));
+  const raw = normalizeAreasOfFocus(areas) || [];
+  const max = Math.max(1, raw.length);
+
+  const normalizeScore01 = (value, fallback01) => {
+    if (typeof value !== "number" || Number.isNaN(value)) return fallback01;
+
+    // If server sends 0..100 or 0..10, normalize down.
+    if (value > 1) {
+      if (value <= 10) return Math.min(1, Math.max(0, value / 10));
+      if (value <= 100) return Math.min(1, Math.max(0, value / 100));
+      return 1;
+    }
+    if (value < 0) return 0;
+    return value; // already 0..1
+  };
+
+  return raw.slice(0, 3).map((a, idx) => {
+    // Fallback scores if the backend doesn't provide one yet.
+    // (Keeps UI deterministic and avoids blank RAG pills.)
+    const fallback01 = Math.max(0.2, 0.8 - (idx * 0.2)); // 0.8, 0.6, 0.4
+    const score01 = normalizeScore01(a?.score, fallback01);
+
+    return {
+      title: a?.title || `Signal ${idx + 1}`,
+      score01,
+      score: Math.round(score01 * 100),
+      rag: scoreToRag(score01)
+    };
+  });
 };
 
 const SummaryCard = ({ ageRange, primaryConcern, analysisReport }) => {
-  const top = useMemo(() => deriveTopSignals(analysisReport?.areasOfFocus), [analysisReport]);
+  const topSignals = useMemo(() => deriveTopSignals(analysisReport?.areasOfFocus), [analysisReport]);
   const excerpt = useMemo(() => {
     const t = String(analysisReport?.report || "").trim();
     if (!t) return "";
@@ -758,7 +854,7 @@ const SummaryCard = ({ ageRange, primaryConcern, analysisReport }) => {
           </p>
         </div>
         <div className="text-gray-700">
-          <StaticMapPreview />
+          <SignalRingCluster signals={topSignals} />
         </div>
       </div>
 
@@ -780,12 +876,15 @@ const SummaryCard = ({ ageRange, primaryConcern, analysisReport }) => {
 
         <div className="border border-gray-200 bg-gray-50 p-4">
           <p className="text-[11px] tracking-wider text-gray-500 font-bold mb-2">TOP SIGNALS</p>
-          {top.length ? (
+          {topSignals.length ? (
             <ul className="text-sm text-gray-800 space-y-2">
-              {top.slice(0, 3).map((s, i) => (
+              {topSignals.slice(0, 3).map((s, i) => (
                 <li key={i} className="flex items-center justify-between gap-3">
-                  <span className="font-semibold">{s.title}</span>
-                  <RagPill score={typeof s.score === "number" ? s.score : NaN} />
+                  <div className="min-w-0">
+                    <div className="font-semibold truncate">{s.title}</div>
+                    <div className="text-[12px] text-gray-500 tabular-nums">{s.score} / 100</div>
+                  </div>
+                  <RagPill score={s.score01} />
                 </li>
               ))}
             </ul>
