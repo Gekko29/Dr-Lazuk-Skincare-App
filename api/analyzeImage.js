@@ -84,6 +84,7 @@ function ragFromScore(score) {
   if (s >= 55) return "amber";
   return "red";
 }
+const ALL_METRIC_IDS = LOCKED_CLUSTERS.flatMap(c => c.metrics.map(m => m.metric_id));
 
 // 🔒 Locked clusters + metric mapping
 const LOCKED_CLUSTERS = [
@@ -423,6 +424,28 @@ Missing metric_ids you must include now: ${JSON.stringify(validation.missing || 
 
     const analysis = parsed.analysis && typeof parsed.analysis === "object" ? parsed.analysis : {};
     const raw = parsed.raw && typeof parsed.raw === "object" ? parsed.raw : {};
+    
+    const metricScores =
+    parsed.metric_scores && typeof parsed.metric_scores === "object"
+    ? parsed.metric_scores
+    : null;
+
+    if (!metricScores) {
+    return res.status(500).json({ ok: false, error: "missing_metric_scores" });
+}
+
+    // Validate every locked metric exists and is numeric
+    for (const id of ALL_METRIC_IDS) {
+    const v = metricScores[id];
+    const n = Number(v);
+    if (!Number.isFinite(n)) {
+    return res.status(500).json({
+      ok: false,
+      error: "invalid_metric_score",
+      message: `Metric score missing/invalid for ${id}`,
+    });
+    }
+    }
 
     const fitzpatrickType = normalizeFitzpatrick(parsed.fitzpatrickType);
     const skinType = normalizeSkinType(parsed.skinType);
