@@ -677,31 +677,51 @@ const AreasOfFocusCard = ({ areas }) => {
 /* ---------------------------------------
    Default Summary View (ON-SCREEN)
 --------------------------------------- */
-const scoreToRag = (score) => {
-  if (typeof score !== "number" || Number.isNaN(score)) return { label: "A", text: "Attention", level: "amber" };
-  if (score >= 0.66) return { label: "R", text: "High Priority", level: "red" };
-  if (score >= 0.33) return { label: "A", text: "Moderate Priority", level: "amber" };
-  return { label: "G", text: "Stable", level: "green" };
+const clampScore100 = (v) => {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return null;
+  // Accept either 0–1 or 0–100 inputs (some upstream models emit 0–1).
+  const s = n <= 1 ? n * 100 : n;
+  return Math.max(0, Math.min(100, Math.round(s)));
 };
 
-const RagPill = ({ score }) => {
-  const rag = scoreToRag(score);
-  const cls =
-    rag.level === "red"
-      ? "bg-red-600 text-white"
-      : rag.level === "green"
-      ? "bg-green-600 text-white"
-      : "bg-yellow-500 text-white";
+const scoreToRag = (score100) => {
+  const s = clampScore100(score100);
+  if (s === null) return null;
+  if (s >= 75) return "green";
+  if (s >= 55) return "amber";
+  return "red";
+};
+
+const ragToLetter = (rag) => (rag === "green" ? "G" : rag === "amber" ? "A" : rag === "red" ? "R" : "—");
+
+const ragStyle = (rag) => {
+  // Print-safe, high-contrast.
+  if (rag === "green") return { bg: "#0F7B3A", fg: "#FFFFFF", border: "#0F7B3A" };
+  if (rag === "amber") return { bg: "#B88900", fg: "#FFFFFF", border: "#B88900" };
+  if (rag === "red") return { bg: "#B3261E", fg: "#FFFFFF", border: "#B3261E" };
+  return { bg: "#EEF1F4", fg: "#111827", border: "#D1D5DB" };
+};
+
+const RagPill = ({ score, className = "" }) => {
+  const s = clampScore100(score);
+  const rag = scoreToRag(s);
+  const st = ragStyle(rag);
+
   return (
-    <span className={`inline-flex items-center gap-2 px-3 py-1 text-xs font-bold ${cls}`}>
-      <span className="inline-block w-5 text-center">{rag.label}</span>
-      <span>{rag.text}</span>
-      {typeof score === "number" && !Number.isNaN(score) && (
-        <span className="ml-1 font-mono text-[11px] opacity-90">{Math.round(score * 100)}%</span>
-      )}
+    <span
+      className={`inline-flex items-center gap-2 px-3 py-1 rounded-md text-xs font-semibold ${className}`}
+      style={{ background: st.bg, color: st.fg, border: `1px solid ${st.border}` }}
+      aria-label={s === null ? `Status ${ragToLetter(rag)}` : `Status ${ragToLetter(rag)} score ${s} out of 100`}
+    >
+      <span className="inline-flex items-center justify-center w-5 h-5 rounded-sm bg-white/15">
+        {ragToLetter(rag)}
+      </span>
+      <span className="tabular-nums">{s === null ? "" : s}</span>
     </span>
   );
 };
+
 
 const StaticMapPreview = () => {
   // Simple, non-emotional landmark preview (static)
@@ -731,70 +751,37 @@ const StaticMapPreview = () => {
    - Static, non-emotional "face/cluster" preview
    - Uses top signals + normalized scores (0..100) and RAG
 --------------------------------------- */
-const SignalRingCluster = ({ signals = [] }) => {
-  const items = (signals || []).slice(0, 3);
+const SignalRingCluster = ({ rag = "amber", size = 56, stroke = 4 }) => {
+  const r = rag === "green" || rag === "amber" || rag === "red" ? rag : "amber";
+  const st = ragStyle(r);
 
-  const ragStroke = (rag) => {
-    if (rag === "R") return "#DC2626"; // red-600
-    if (rag === "A") return "#D97706"; // amber-600
-    return "#16A34A"; // green-600
-  };
+  const cx = size / 2;
+  const cy = size / 2;
+  const ringR = (size - stroke) / 2 - 1;
 
-  // SVG arc helpers
-  const arc = ({ r, pct, stroke }) => {
-    const circ = 2 * Math.PI * r;
-    const dash = Math.max(0, Math.min(circ, (pct / 100) * circ));
-    const gap = circ - dash;
-    return { r, stroke, dasharray: `${dash} ${gap}` };
-  };
-
-  // Outer → inner rings
-  const rings = items.map((s, i) =>
-    arc({
-      r: 26 - (i * 6),          // 26, 20, 14
-      pct: Number(s?.score) || 0,
-      stroke: ragStroke(s?.rag)
-    })
-  );
+  // A small, static “cluster” preview: 3 rings + 6 nodes.
+  const nodes = [
+    { x: cx, y: cy - ringR + 6 },
+    { x: cx + ringR - 8, y: cy - 2 },
+    { x: cx + ringR - 14, y: cy + ringR - 14 },
+    { x: cx - 2, y: cy + ringR - 8 },
+    { x: cx - ringR + 12, y: cy + ringR - 14 },
+    { x: cx - ringR + 8, y: cy - 4 }
+  ];
 
   return (
-    <div className="flex items-start justify-end">
-      <div className="w-[110px]">
-        <div className="flex justify-end">
-          <svg width="90" height="90" viewBox="0 0 90 90" aria-label="static map preview">
-            {/* base ring */}
-            <circle cx="45" cy="45" r="30" fill="none" stroke="#E5E7EB" strokeWidth="2" />
-            <circle cx="45" cy="45" r="24" fill="none" stroke="#F3F4F6" strokeWidth="2" />
-            <circle cx="45" cy="45" r="18" fill="none" stroke="#F3F4F6" strokeWidth="2" />
-
-            {/* value rings */}
-            {rings.map((r, idx) => (
-              <circle
-                key={idx}
-                cx="45"
-                cy="45"
-                r={r.r}
-                fill="none"
-                stroke={r.stroke}
-                strokeWidth="3"
-                strokeLinecap="round"
-                strokeDasharray={r.dasharray}
-                transform="rotate(-90 45 45)"
-              />
-            ))}
-
-            {/* center "face landmark" glyph (neutral) */}
-            <rect x="41" y="30" width="8" height="30" rx="4" fill="none" stroke="#111827" strokeWidth="2" />
-            <circle cx="45" cy="26" r="2" fill="#111827" />
-            <circle cx="45" cy="64" r="2" fill="#111827" />
-          </svg>
-        </div>
-
-        <div className="text-[11px] text-gray-500 text-right mt-1">signal rings preview</div>
-      </div>
-    </div>
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
+      <circle cx={cx} cy={cy} r={ringR} fill="none" stroke="rgba(0,0,0,0.10)" strokeWidth={stroke} />
+      <circle cx={cx} cy={cy} r={ringR - 8} fill="none" stroke="rgba(0,0,0,0.08)" strokeWidth={stroke} />
+      <circle cx={cx} cy={cy} r={ringR - 16} fill="none" stroke="rgba(0,0,0,0.06)" strokeWidth={stroke} />
+      <circle cx={cx} cy={cy} r={4} fill={st.border} opacity="0.35" />
+      {nodes.map((p, i) => (
+        <circle key={i} cx={p.x} cy={p.y} r={2.5} fill={st.border} opacity="0.55" />
+      ))}
+    </svg>
   );
 };
+
 
 
 
