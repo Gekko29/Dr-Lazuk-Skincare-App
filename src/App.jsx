@@ -67,134 +67,133 @@ const LOCKED_CLUSTERS = [
     { metric_id:"environmental_damage", display_name:"Environmental Damage (UV / Pollution)", keywords:["uv","pollution","environmental"] }
   ]}
 ];
+function buildVisualPayload({ serverPayload }) {
+  // Server is authoritative, but API payloads may expose cluster info under different keys.
+  // We accept:
+  // - { clusters: [...] }
+  // - { visual_payload: { clusters: [...] } }
+  // - { visualAnalysisV2: { clusters: [...] } }
+  // - { areasOfFocus: [...] }   (cluster-level scores + rag; no per-metric scores)
+  if (!serverPayload) return null;
 
-function normalizeReportResponse(data) {
-  // Normalizes API /api/generate-report responses across versions.
-  // Returns an object that contains both snake_case keys used by the UI and camelCase mirrors for backwards compatibility.
-  if (!data || typeof data !== "object") return null;
-
-  const canonical_payload =
-    data.canonical_payload ??
-    data.canonicalPayload ??
+  const resolved =
+    (serverPayload && Array.isArray(serverPayload.clusters) && serverPayload) ||
+    (serverPayload.visual_payload && Array.isArray(serverPayload.visual_payload.clusters) && serverPayload.visual_payload) ||
+    (serverPayload.visualAnalysisV2 && Array.isArray(serverPayload.visualAnalysisV2.clusters) && serverPayload.visualAnalysisV2) ||
     null;
 
-  const visual_payload_v2 =
-    data.visual_payload_v2 ??
-    data.visualPayloadV2 ??
-    null;
+  // Preferred: full cluster payload
+  if (resolved && Array.isArray(resolved.clusters)) {
+    const clusters = resolved.clusters
+      .filter(Boolean)
+      .map((c) => {
+        const metrics = Array.isArray(c.metrics) ? c.metrics : [];
+        const clusterScore = clampScore(c.score);
+        const clusterRag = String(c.rag || (clusterScore != null ? ragFromScore(clusterScore) : "unknown"));
 
-  const visual_payload_legacy =
-    data.visual_payload ??
-    data.visualPayload ??
-    null;
+        return {
+          cluster_id: String(c.cluster_id || c.id || c.key || c.title || "").trim(),
+          display_name: String(c.display_name || c.title || "").trim(),
+          rag: clusterRag,
+          score: clusterScore,
+          confidence: typeof c.confidence === "number" ? c.confidence : null,
+          basis: c.basis ? String(c.basis) : null,
+          keywords: Array.isArray(c.keywords) ? c.keywords.map(String) : [],
+          metrics: metrics
+            .filter(Boolean)
+            .map((m) => {
+              const metricScore = clampScore(m.score);
+              return {
+                metric_id: String(m.metric_id || m.id || m.key || m.name || "").trim(),
+                display_name: String(m.display_name || m.name || "").trim(),
+                score: metricScore,
+                rag: String(m.rag || (metricScore != null ? ragFromScore(metricScore) : "unknown"))
+              };
+            })
+        };
+      });
 
-  // Prefer v2 payload if present; fallback to legacy.
-  const chosenVisualPayload = visual_payload_v2 ?? visual_payload_legacy ?? null;
+    const overallScore = clampScore(
+      resolved?.overall_score?.score ??
+        resolved?.overall_score ??
+        resolved?.score ??
+        serverPayload?.overall_score?.score ??
+        serverPayload?.overall_score ??
+        serverPayload?.score
+    );
 
-  // If the chosen payload is "v2-like" (has areasOfFocus but no clusters), adapt it to the legacy shape expected by buildVisualPayload().
-  let adaptedVisualPayload = chosenVisualPayload;
-  if (chosenVisualPayload && !chosenVisualPayload.clusters && Array.isArray(chosenVisualPayload.areasOfFocus)) {
-    adaptedVisualPayload = {
-      ...chosenVisualPayload,
-      clusters: chosenVisualPayload.areasOfFocus.map((a) => ({
-        cluster_id: a.cluster_id ?? a.id ?? a.key ?? a.slug ?? a.title ?? "cluster",
-        display_name: a.display_name ?? a.title ?? a.name ?? "Cluster",
-        score: typeof a.score === "number" ? a.score : null,
-        rag: a.rag ?? a.rag_status ?? null,
-        confidence: typeof a.confidence === "number" ? a.confidence : null,
-        basis: a.basis ?? null,
-        keywords: Array.isArray(a.keywords) ? a.keywords : [],
-        metrics: Array.isArray(a.metrics) ? a.metrics : []
-      }))
+    return {
+      overall_score: {
+        score: overallScore,
+        rag: String(
+          resolved?.overall_score?.rag ||
+            serverPayload?.overall_score?.rag ||
+            (overallScore != null ? ragFromScore(overallScore) : "unknown")
+        )
+      },
+      clusters
     };
   }
 
-  const areasOfFocus =
-    data.areasOfFocus ??
-    data.focusAreas ??
-    chosenVisualPayload?.areasOfFocus ??
-    adaptedVisualPayload?.areasOfFocus ??
+  // Fallback: areasOfFocus (cluster-only)
+  const aof =
+    (Array.isArray(serverPayload.areasOfFocus) && serverPayload.areasOfFocus) ||
+    (Array.isArray(serverPayload.visual_payload?.areasOfFocus) && serverPayload.visual_payload.areasOfFocus) ||
     null;
 
-  const overall_score =
-    data.overall_score ??
-    data.overallScore ??
-    chosenVisualPayload?.overall_score ??
-    adaptedVisualPayload?.overall_score ??
-    null;
+  if (aof) {
+    const lockedById = new Map(LOCKED_CLUSTERS.map((c) => [c.cluster_id, c]));
+    const clusters = aof
+      .filter(Boolean)
+      .map((c) => {
+        const id = String(c.cluster_id || c.id || c.key || "").trim();
+        const locked = lockedById.get(id);
+        const clusterScore = clampScore(c.score);
+        const clusterRag = String(c.rag || (clusterScore != null ? ragFromScore(clusterScore) : "unknown"));
 
-  const out = {
-    ok: data.ok ?? true,
-    report: data.report ?? data.letter ?? "",
-    agingPreviewImages: data.agingPreviewImages ?? data.aging_preview_images ?? null,
-    selfieUrlForEmail: data.selfieUrlForEmail ?? data.selfie_url_for_email ?? null,
-    fitzpatrickType: data.fitzpatrickType ?? data.fitzpatrick_type ?? null,
-    fitzpatrickSummary: data.fitzpatrickSummary ?? data.fitzpatrick_summary ?? null,
-    areasOfFocus,
-    overall_score,
+        // No per-metric scores in this payload; we still show the metric list (names) for transparency.
+        const metrics = (locked?.metrics || []).map((m) => ({
+          metric_id: m.metric_id,
+          display_name: m.display_name,
+          score: null,
+          rag: "unknown"
+        }));
 
-    // Critical: snake_case keys referenced elsewhere in this file
-    canonical_payload,
-    visual_payload: adaptedVisualPayload,
-    visual_payload_v2,
+        return {
+          cluster_id: id,
+          display_name: String(c.title || locked?.display_name || id || "").trim(),
+          rag: clusterRag,
+          score: clusterScore,
+          confidence: typeof c.confidence === "number" ? c.confidence : null,
+          basis: c.basis ? String(c.basis) : "cluster_only",
+          keywords: Array.isArray(c.keywords) ? c.keywords.map(String) : [],
+          metrics
+        };
+      })
+      .filter((c) => c.cluster_id);
 
-    // Back-compat mirrors
-    canonicalPayload: canonical_payload,
-    visualPayload: adaptedVisualPayload,
-    visualPayloadV2: visual_payload_v2,
-    overallScore: overall_score
-  };
+    const overallScore = clampScore(
+      serverPayload?.overall_score?.score ??
+        serverPayload?.overall_score ??
+        serverPayload?.score ??
+        serverPayload?.visual_payload?.overall_score?.score ??
+        serverPayload?.visual_payload?.overall_score
+    );
 
-  return out;
-}
+    return {
+      overall_score: {
+        score: overallScore,
+        rag: String(
+          serverPayload?.overall_score?.rag ||
+            serverPayload?.visual_payload?.overall_score?.rag ||
+            (overallScore != null ? ragFromScore(overallScore) : "unknown")
+        )
+      },
+      clusters
+    };
+  }
 
-function buildVisualPayload({ serverPayload }) {
-  // PRODUCTION: Visual clusters are server-authoritative.
-  // If the server did not provide clusters/scores, do not "invent" them client-side.
-  if (!serverPayload || !Array.isArray(serverPayload.clusters)) return null;
-
-  const clusters = serverPayload.clusters
-    .filter(Boolean)
-    .map((c) => {
-      const metrics = Array.isArray(c.metrics) ? c.metrics : [];
-      const clusterScore = clampScore(c.score);
-      const clusterRag = String(c.rag || (clusterScore != null ? ragFromScore(clusterScore) : "unknown"));
-
-      return {
-        cluster_id: String(c.cluster_id || c.id || c.key || c.title || "").trim(),
-        display_name: String(c.display_name || c.title || "").trim(),
-        rag: clusterRag,
-        score: clusterScore,
-        metrics: metrics
-          .filter(Boolean)
-          .map((m) => {
-            const metricScore = clampScore(m.score);
-            return {
-              metric_id: String(m.metric_id || m.id || m.key || m.name || "").trim(),
-              display_name: String(m.display_name || m.name || "").trim(),
-              score: metricScore,
-              rag: String(m.rag || (metricScore != null ? ragFromScore(metricScore) : "unknown"))
-            };
-          })
-      };
-    });
-
-  const overallScore = clampScore(
-    serverPayload?.overall_score?.score ??
-      serverPayload?.overall_score ??
-      serverPayload?.score
-  );
-
-  return {
-    overall_score: {
-      score: overallScore,
-      rag: String(
-        serverPayload?.overall_score?.rag ||
-          (overallScore != null ? ragFromScore(overallScore) : "unknown")
-      )
-    },
-    clusters
-  };
+  return null;
 }
 function ragColor(rag){
   if(rag==="green") return "#16a34a";
@@ -863,27 +862,44 @@ const AreasOfFocusCard = ({ areas }) => {
 /* ---------------------------------------
    Default Summary View (ON-SCREEN)
 --------------------------------------- */
+const normalizeScore01 = (score) => {
+  if (typeof score !== "number" || Number.isNaN(score)) return null;
+
+  // Accept either 0..1 or 0..100 inputs
+  if (score > 1.5) {
+    const c = clampScore(score);
+    if (c === null) return null;
+    return c / 100;
+  }
+
+  return Math.max(0, Math.min(1, score));
+};
+
 const scoreToRag = (score) => {
-  if (typeof score !== "number" || Number.isNaN(score)) return { label: "A", text: "Attention", level: "amber" };
-  if (score >= 0.66) return { label: "R", text: "High Priority", level: "red" };
-  if (score >= 0.33) return { label: "A", text: "Moderate Priority", level: "amber" };
+  const s = normalizeScore01(score);
+  if (s === null) return { label: "A", text: "Attention", level: "amber" };
+  if (s >= 0.66) return { label: "R", text: "High Priority", level: "red" };
+  if (s >= 0.33) return { label: "A", text: "Moderate Priority", level: "amber" };
   return { label: "G", text: "Stable", level: "green" };
 };
 
 const RagPill = ({ score }) => {
   const rag = scoreToRag(score);
+  const s01 = normalizeScore01(score);
+
   const cls =
     rag.level === "red"
       ? "bg-red-600 text-white"
       : rag.level === "green"
       ? "bg-green-600 text-white"
       : "bg-yellow-500 text-white";
+
   return (
     <span className={`inline-flex items-center gap-2 px-3 py-1 text-xs font-bold ${cls}`}>
       <span className="inline-block w-5 text-center">{rag.label}</span>
       <span>{rag.text}</span>
-      {typeof score === "number" && !Number.isNaN(score) && (
-        <span className="ml-1 font-mono text-[11px] opacity-90">{Math.round(score * 100)}%</span>
+      {s01 !== null && (
+        <span className="ml-1 font-mono text-[11px] opacity-90">{Math.round(s01 * 100)}%</span>
       )}
     </span>
   );
@@ -898,7 +914,8 @@ const StaticMapPreview = ({ clusters = [] }) => {
       <svg width="92" height="92" viewBox="0 0 92 92" role="img" aria-label="static map preview">
         <g transform="translate(46 46)">
           {safeClusters.map((c, i) => {
-            const avg = typeof c?.avg === "number" ? c.avg : 70;
+            const avgRaw = (typeof c?.score === "number" ? c.score : (typeof c?.avg === "number" ? c.avg : 70));
+            const avg = clampScore(avgRaw) ?? 70;
             const rag = ragFromScore(avg);
             const r = rBase + (i * rStep);
             return (
@@ -981,23 +998,44 @@ const SummaryCard = ({ ageRange, primaryConcern, analysisReport }) => {
               <div style={{ display:"grid", gridTemplateColumns:"1fr", gap:14, marginTop:14 }}>
                 {(visualPayload?.clusters || []).map((c) => (
                   <div key={c.cluster_id} style={{ border:"1px solid #e5e7eb", borderRadius:10, padding:12, background:"#fff" }}>
-                    <div style={{ fontSize:14, fontWeight:700, marginBottom:8 }}>{c.display_name}</div>
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, marginBottom:8 }}>
+                      <div style={{ fontSize:14, fontWeight:700 }}>{c.display_name}</div>
+                      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                        <span style={{ width:8, height:8, borderRadius:999, background: ragColor(c.rag) }} />
+                        <span style={{ fontSize:12, fontWeight:700, color:"#111827" }}>{Math.round(c.score)}/100</span>
+                      </div>
+                    </div>
                     <div style={{ display:"flex", gap:12, alignItems:"flex-start" }}>
                       <div style={{ flex:"0 0 auto" }}>
-                        <svg width="140" height="140" viewBox="0 0 140 140" role="img" aria-label={`${c.display_name} radial cluster`}>
-                          <g transform="translate(70 70)">
-                            {(c.metrics || []).map((m, i) => {
-                              const r = 18 + (i * 8);
-                              return (
-                                <g key={m.metric_id || i}>
-                                  <circle cx="0" cy="0" r={r} fill="none" stroke="#e5e7eb" strokeWidth="4" />
-                                  <circle cx={r} cy="0" r="4.5" fill={ragColor(m.rag)} />
-                                </g>
-                              );
-                            })}
-                            <circle cx="0" cy="0" r="10" fill="none" stroke="#cbd5e1" strokeWidth="3" />
+                    {/* radial cluster */}
+                    <svg width="140" height="140" viewBox="0 0 140 140" style={{ display:"block", margin:"0 auto" }}>
+                      {c.metrics.map((m, i) => {
+                        const r = ringRadius - i * ringGap;
+                        const circ = 2 * Math.PI * r;
+                        const pct = Math.max(0, Math.min(1, (Number.isFinite(m.score) ? m.score : 0) / 100));
+                        const offset = circ * (1 - pct);
+                        const stroke = ragColor(m.rag);
+                        return (
+                          <g key={m.id}>
+                            <circle cx="70" cy="70" r={r} fill="none" stroke="#E5E7EB" strokeWidth={ringStroke} />
+                            <circle
+                              cx="70"
+                              cy="70"
+                              r={r}
+                              fill="none"
+                              stroke={stroke}
+                              strokeWidth={ringStroke}
+                              strokeDasharray={circ}
+                              strokeDashoffset={offset}
+                              strokeLinecap="round"
+                              transform="rotate(-90 70 70)"
+                            />
                           </g>
-                        </svg>
+                        );
+                      })}
+                      <text x="70" y="74" textAnchor="middle" fontSize="22" fontWeight="800" fill="#111827">{Math.round(c.score)}</text>
+                      <text x="70" y="94" textAnchor="middle" fontSize="12" fontWeight="600" fill="#6B7280">/100</text>
+                    </svg>
                       </div>
 
                       <div style={{ flex:1, display:"flex", flexDirection:"column", gap:8 }}>
@@ -1798,12 +1836,25 @@ ${SUPPORTIVE_FOOTER_LINE}`);
       setReflectionSeen(false);
       setAgencyChoice(null);
 
-      const normalized = normalizeReportResponse(data) || {};
       setAnalysisReport({
-        ...normalized,
-        report: normalized.report || data.report,
+        report: data.report,
         recommendedProducts: getRecommendedProducts(primaryConcern),
-        recommendedServices: getRecommendedServices(primaryConcern)
+        recommendedServices: getRecommendedServices(primaryConcern),
+        fitzpatrickType: data.fitzpatrickType || null,
+        fitzpatrickSummary: data.fitzpatrickSummary || null,
+        agingPreviewImages: data.agingPreviewImages || null,
+        areasOfFocus: data.areasOfFocus || data.focusAreas || null,
+
+        // ✅ Server-authoritative visualization payload (clusters + scores)
+        canonical_payload:
+          data.canonical_payload ||
+          data.visual_payload ||
+          data.visualPayload ||
+          data.dermatologyEngine?.visual_payload ||
+          null,
+
+        // ✅ Optional meta for debugging / future UI (additive)
+        engine_meta: data.engine_meta || data.dermatologyEngine?.meta || null
       });
 
       gaEvent('analysis_success', {
