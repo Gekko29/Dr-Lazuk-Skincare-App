@@ -141,53 +141,6 @@ function safeGet(obj, path, fallback = null) {
   }
 }
 
-function sanitizeSeverityCeiling(text) {
-  if (!text) return text;
-  let t = String(text);
-
-  // Remove/soften high-severity or diagnostic language. Keep calm, non-alarming tone.
-  const replacements = [
-    [/(severe|extreme|urgent|alarming|dangerous|critical)/gi, "moderate"],
-    [/(cancer|melanoma|carcinoma|autoimmune|infection|infected|psoriasis|eczema)/gi, "skin condition"],
-    [/(must|need to|requires)/gi, "may benefit from"],
-    [/diagnos(e|is|ed|ing)/gi, "evaluate"]
-  ];
-  for (const [re, rep] of replacements) t = t.replace(re, rep);
-
-  return t;
-}
-
-function sanitizeDermEngineOutput(engine) {
-  if (!engine || typeof engine !== "object") return engine;
-
-  const scrub = (v) => (typeof v === "string" ? sanitizeSeverityCeiling(v) : v);
-
-  // Common fields
-  if (engine.short_excerpt) engine.short_excerpt = scrub(engine.short_excerpt);
-  if (engine.shortExcerpt) engine.shortExcerpt = scrub(engine.shortExcerpt);
-
-  // Sections (array of {title, body})
-  const secs = engine.report_sections || engine.reportSections || engine.sections;
-  if (Array.isArray(secs)) {
-    for (const s of secs) {
-      if (s && typeof s === "object") {
-        if (s.title) s.title = scrub(s.title);
-        if (s.body) s.body = scrub(s.body);
-      }
-    }
-  }
-
-  // Lists with text
-  for (const k of ["top_signals", "topSignals", "recommendations", "next_steps", "nextSteps", "limitations", "image_context", "imageContext"]) {
-    const v = engine[k];
-    if (Array.isArray(v)) engine[k] = v.map(scrub);
-    else if (typeof v === "string") engine[k] = scrub(v);
-  }
-
-  return engine;
-}
-
-
 function metric(id, title, score, extra = {}) {
   const s = clampScore(score);
   return {
@@ -293,6 +246,104 @@ function buildCanonicalPayloadFromSignalsV2(visualSignalsV2 = {}, { nowIso } = {
     clusters
   };
 }
+
+// --- Fallback: build canonical payload when visualSignalsV2 is missing/invalid ---
+// Model B philosophy: prefer real signal scores; otherwise infer conservative, non-alarmist scores
+// from the report narrative so the UI can still render rings, numbers, and RAG consistently.
+function buildCanonicalPayloadFallback(
+  { reportText = "", ageRange = "", primaryConcern = "" } = {},
+  { nowIso } = {}
+) {
+  const t = String(reportText || "").toLowerCase();
+  const has = (re) => re.test(t);
+
+  // Conservative scoring: avoid extremes; keep within amber/green unless strong negative language exists.
+  const scoreFor = (negRe, posRe, base = 72) => {
+    const neg = has(negRe);
+    const pos = has(posRe);
+    if (neg && !pos) return 58;
+    if (pos && !neg) return 82;
+    return base;
+  };
+
+  const barrier = scoreFor(
+    /(dry|dehydrat|irritat|sensitiv|flak|redness|barrier|tight)/i,
+    /(balanced|resilient|calm|comfortable|intact|well\-managed)/i,
+    70
+  );
+  const sebum = scoreFor(
+    /(oily|oiliness|shine|congest|clog|blackhead|whitehead|breakout|acne|pore)/i,
+    /(clear|refined pores|well\-managed pores|minimal congestion|balanced oil)/i,
+    72
+  );
+  const pigment = scoreFor(
+    /(pigment|hyperpig|dark spot|uneven tone|melasma|discolor)/i,
+    /(even tone|bright|uniform|minimal discolor)/i,
+    74
+  );
+  const aging = scoreFor(
+    /(wrinkl|fine line|sagg|loss of firmness|crepey|elastic)/i,
+    /(smooth|firm|plump|supported|youthful)/i,
+    70
+  );
+  const eye = scoreFor(
+    /(under\-eye|dark circle|puff|bags|crow\'s feet)/i,
+    /(bright|rested|minimal puff|minimal dark circle)/i,
+    74
+  );
+
+  const scores = [barrier, sebum, pigment, aging, eye].filter((x) => typeof x === "number" && !Number.isNaN(x));
+  const overall = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 70;
+
+  const make = (id, title, score, keywords = []) => ({
+    id,
+    title,
+    score,
+    rag: ragFromScore(score),
+    confidence: 0.35,
+    basis: "narrative_fallback",
+    keywords,
+  });
+
+  const clusters = [
+    make("barrier_stability", "Barrier Stability", barrier, ["barrier", "dry", "irritation", "sensitivity"]),
+    make("sebum_congestion", "Sebum & Congestion", sebum, ["oil", "pores", "congestion", "breakouts"]),
+    make("pigment_tone", "Pigment & Tone", pigment, ["tone", "pigment", "discoloration"]),
+    make("aging_structure", "Aging & Structure", aging, ["fine lines", "firmness", "elasticity"]),
+    make("eye_area", "Eye Area", eye, ["under-eye", "dark circles", "puffiness"]),
+  ];
+
+  return {
+    version: "v2",
+    generated_at: nowIso || new Date().toISOString(),
+    model: "fallback:model-b",
+    context: {
+      age_range: ageRange || null,
+      primary_concern: primaryConcern || null,
+    },
+    overall_score: {
+      score: overall,
+      rag: ragFromScore(overall),
+      confidence: 0.35,
+      basis: "narrative_fallback",
+    },
+    clusters,
+  };
+}
+
+function isValidVisualSignalsV2(v = {}) {
+  if (!v || typeof v !== "object") return false;
+  // Accept if it contains at least one numeric score field we expect.
+  const candidates = [
+    v?.overallSkinHealthScore,
+    v?.skinHealth?.textureScore,
+    v?.aging?.fineLinesScore,
+    v?.eyeArea?.underEyeDarknessScore,
+    v?.pigmentTone?.unevenToneScore,
+    v?.stressDamage?.sensitivityScore,
+  ];
+  return candidates.some((x) => typeof x === "number" && !Number.isNaN(x));
+}
 // -------------------------
 // Dynamic imports (CJS-safe)
 // -------------------------
@@ -383,26 +434,6 @@ New dermatologist cognition elements (must be included in JSON):
 - Two-Signal Evidence Map (each interpretation must list 2+ cues)
 - Risk Amplifiers (e.g., Fitzpatrick + inflammation + UV cues)
 - Trajectory Forecast (90 days + 6–12 months if unchanged)
-
-
-Rules (production governance — must follow):
-- Insight suppression: Do NOT mention or recommend anything if confidence is low. Only include items with confidence >= 0.60 as "Observed Skin Patterns" and in any recommendations.
-- Severity ceiling: Never use alarming language. Do not escalate beyond "mild" or "moderate". Avoid words like severe, extreme, urgent, alarming, dangerous, cancer, autoimmune, infection, etc. No diagnosing.
-- Confidence vs interpretation vs limitation: Keep observations (what you see), interpretations (what it may suggest), and limitations (what you cannot conclude) in separate sections. Do not blur them.
-- Image quality transparency: Briefly note image quality factors (lighting, focus, angle, makeup, glasses) and how they affected confidence.
-- Causal visual acknowledgment: If a visual factor (lighting/glare/shadow/makeup/glasses) influenced a decision, state that explicitly in the Image Context section.
-- Dermatologic reasoning breadcrumbs: Occasionally explain a clinician-style "because" link (e.g., "Because X is present, it suggests Y"), but keep it calm and non-absolute.
-- Insight echo consistency: Do not introduce new concerns late in the report. Any protocol recommendation or product/treatment guidance must be tied to the Observed Skin Patterns / Interpretive Insights already stated.
-- Cognitive load pacing: Use a simple flow in each section: Observation → meaning → action. Do not stack multiple actions without first stating the observation and meaning.
-- Report structure (always present, in this exact order):
-  1) User Intent Framing
-  2) Image Context & Integrity
-  3) Observed Skin Patterns (high-confidence only)
-  4) Interpretive Insights (probabilistic)
-  5) Known Limitations
-  6) Condition Weighting Summary (primary vs secondary drivers with relative influence)
-  7) Protocol Recommendation (primary; optional secondary only if justified)
-  8) Expectation Setting (time-based, non-promissory)
 
 Return JSON only using this top-level shape (use these EXACT keys):
 
@@ -587,9 +618,7 @@ async function runDermatologyEngine({
 
     if (!parsed) return { ok: false, parse_error: true, raw: text };
 
-    const normalized = normalizeDermEngineKeys(parsed);
-    sanitizeDermEngineOutput(normalized);
-    return { ok: true, data: normalized };
+    return { ok: true, data: normalizeDermEngineKeys(parsed) };
   } catch (err) {
     console.error("Dermatology Engine error:", err);
     return { ok: false, error: true, message: err?.message || "Dermatology Engine failed" };
@@ -2766,16 +2795,46 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
     ]);
 
     // Response to frontend (VISUAL REPORT)
-        const canonical_payload = buildCanonicalPayloadFromSignalsV2(visualSignalsV2, { nowIso: new Date().toISOString() });
+    // Prefer V2 signal scores (Model B). If signals are missing/invalid, fall back to
+    // conservative narrative inference so rings/scores/RAG still render.
+    const nowIso = new Date().toISOString();
 
-return res.status(200).json({
+    const isValidVisualSignalsV2 = (v) => {
+      if (!v || typeof v !== "object") return false;
+      // Consider valid if we can find at least one numeric score field in the expected shape.
+      const candidates = [
+        v?.barrier?.hydrationScore,
+        v?.barrier?.integrityScore,
+        v?.sebum?.oilinessScore,
+        v?.sebum?.congestionScore,
+        v?.pigment?.unevenToneScore,
+        v?.pigment?.spottingScore,
+        v?.aging?.fineLinesScore,
+        v?.aging?.elasticityScore,
+        v?.periorbital?.fineLinesScore,
+        v?.periorbital?.puffinessScore,
+      ];
+      return candidates.some((x) => typeof x === "number" && Number.isFinite(x));
+    };
+
+    const canonical_payload = isValidVisualSignalsV2(visualSignalsV2)
+      ? buildCanonicalPayloadFromSignalsV2(visualSignalsV2, { nowIso })
+      : buildCanonicalPayloadFallback(
+          {
+            reportText,
+            ageRange: ageRange || null,
+            primaryConcern: primaryConcern || null,
+          },
+          { nowIso }
+        );
+
+    return res.status(200).json({
       ok: true,
 
       // ✅ Canonical payload for client-side visual report (scores + RAG)
       canonical_payload,
 
-
-            visual_payload: canonical_payload,
+      visual_payload: canonical_payload,
 // Original narrative letter (UI can keep rendering this as-is)
       report: reportText,
 
