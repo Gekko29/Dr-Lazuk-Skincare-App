@@ -2954,7 +2954,36 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
           { nowIso }
         );
 
-    return res.status(200).json({
+    return 
+  // -------------------------------------------------------------------
+  // UI payload compatibility:
+  // - "areasOfFocus" is consumed by the React UI rings.
+  // - Older flows used narrative-only items; the UI requires score + rag.
+  // - We therefore expose:
+  //     areasOfFocus: scored cluster objects (preferred)
+  //     areasOfFocusLegacy: narrative items (for email/body rendering)
+  //     areasOfFocusV2: alias of scored clusters (future-proof)
+  // -------------------------------------------------------------------
+  const areasOfFocusV2 =
+    canonical_payload && Array.isArray(canonical_payload.clusters)
+      ? canonical_payload.clusters
+      : [];
+
+  const areasOfFocusForUI =
+    areasOfFocusV2.length
+      ? areasOfFocusV2
+      : (Array.isArray(areasOfFocus) ? areasOfFocus : []).map((it) => ({
+          id: it?.id || it?.key || "unknown",
+          title: it?.title || "Area of Focus",
+          score: 70,
+          rag: "amber",
+          confidence: 0.5,
+          basis: "ui_fallback",
+          keywords: Array.isArray(it?.keywords) ? it.keywords : [],
+          // keep any narrative copy if present
+          body: it?.body || it?.text || ""
+        }));
+res.status(200).json({
       ok: true,
 
       // ✅ Canonical payload for client-side visual report (scores + RAG)
@@ -2965,7 +2994,9 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
       report: reportText,
 
       // ✅ LOCKED: dynamic card data for visual report rendering
-      areasOfFocus,
+      areasOfFocus: areasOfFocusForUI,
+      areasOfFocusLegacy: areasOfFocus || [],
+      areasOfFocusV2,
       areasOfFocusText,
 
       fitzpatrickType: fitzpatrickType || null,
