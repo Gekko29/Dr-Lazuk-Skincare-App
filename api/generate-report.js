@@ -2706,7 +2706,8 @@ return res.status(200).json({
       canonical_payload,
 
 
-      // Original narrative letter (UI can keep rendering this as-is)
+            visual_payload: canonical_payload,
+// Original narrative letter (UI can keep rendering this as-is)
       report: reportText,
 
       // ✅ LOCKED: dynamic card data for visual report rendering
