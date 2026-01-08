@@ -400,10 +400,23 @@ function deriveLevel({ primaryConcern, ageRange, key }) {
 
 function deriveConfidence(imageContext) {
   // Uses available imageContext signals if present.
+  // IMPORTANT: some upstream providers send 0 as a placeholder for "unknown".
+  // Treat 0/NaN/empty as missing and fall back to a neutral default (0.75) to avoid over-suppressing.
   const q = imageContext && typeof imageContext === "object" ? imageContext : {};
-  const lighting = clamp01(q.lighting_confidence ?? q.lightingConfidence ?? 0.75);
-  const focus = clamp01(q.focus_confidence ?? q.focusConfidence ?? 0.75);
-  const occlusion = clamp01(q.occlusion_confidence ?? q.occlusionConfidence ?? 0.75);
+
+  const pick01 = (v, fallback = 0.75) => {
+    if (v === null || v === undefined || v === "") return fallback;
+    const n = Number(v);
+    if (Number.isNaN(n)) return fallback;
+    // Treat exact 0 as "unknown" (common placeholder) unless caller explicitly provides richer context.
+    if (n === 0) return fallback;
+    return clamp01(n);
+  };
+
+  const lighting = pick01(q.lighting_confidence ?? q.lightingConfidence);
+  const focus = pick01(q.focus_confidence ?? q.focusConfidence);
+  const occlusion = pick01(q.occlusion_confidence ?? q.occlusionConfidence);
+
   // Conservative aggregate
   return clamp01(0.4 * lighting + 0.4 * focus + 0.2 * occlusion);
 }
