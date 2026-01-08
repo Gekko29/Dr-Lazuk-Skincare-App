@@ -12,13 +12,6 @@ import {
   Loader
 } from 'lucide-react';
 
-function ragColor(rag){
-  if(rag==="green") return "#16a34a";
-  if(rag==="red") return "#dc2626";
-  if(rag==="amber") return "#f59e0b";
-  return "#9ca3af"; // unknown
-}
-
 // ✅ Google Analytics helpers
 import { gaEvent, gaPageView, getGaClientId } from "./lib/ga";
 
@@ -87,20 +80,19 @@ const LOCKED_CLUSTERS = [
   ]}
 ];
 function buildVisualPayload({ narrative, serverPayload }) {
-  if (serverPayload && typeof serverPayload === "object" && Array.isArray(serverPayload.clusters)) return serverPayload;
-  const clusters = LOCKED_CLUSTERS.map((c) => {
-    const metrics = c.metrics.map((m) => {
-      const inferred = inferScoreFromNarrative(narrative, m.keywords);
-      const score = inferred === null ? null : clampScore(inferred);
-      return { metric_id:m.metric_id, display_name:m.display_name, score, rag:ragFromScore(score) };
-    });
-    const nums = metrics.map((x) => x.score).filter((v) => typeof v === "number" && !Number.isNaN(v));
-    const avg = nums.length ? clampScore(nums.reduce((s, v) => s + v, 0) / nums.length) : null;
-    return { cluster_id:c.cluster_id, display_name:c.display_name, weight:c.weight, order:c.order, metrics, avg };
-  });
-  const hasAllAverages = clusters.every((c) => typeof c.avg === "number" && !Number.isNaN(c.avg));
-  const overallScore = hasAllAverages ? clampScore(clusters.reduce((sum, c) => sum + (c.avg * c.weight), 0)) : null;
-  return { version:1, generated_at:new Date().toISOString(), overall_score:{ score:overallScore, rag:ragFromScore(overallScore) }, clusters };
+  // PRODUCTION RULE:
+  // The visual renderer must be driven only by the server-provided canonical payload.
+  // If it is missing, we do NOT fabricate scores from narrative keywords (that is the source of the “everything is 70” issue).
+  if (serverPayload && typeof serverPayload === "object" && Array.isArray(serverPayload.clusters)) {
+    return serverPayload;
+  }
+  return null;
+}
+function ragColor(rag){
+  if(rag==="green") return "#16a34a";
+  if(rag==="red") return "#dc2626";
+  if(rag==="amber") return "#f59e0b";
+  return "#9ca3af"; // unknown
 }
 
 /* ---------------------------------------
@@ -827,8 +819,10 @@ const deriveTopSignals = (areas) => {
 const SummaryCard = ({ ageRange, primaryConcern, analysisReport }) => {
 
   const visualPayload = useMemo(() => {
-    const narrative = typeof analysisReport === "string" ? analysisReport : (analysisReport?.report || "");
-    const serverPayload = analysisReport?.canonical_payload || analysisReport?.short_report || null;
+    const narrative = analysisReport?.report || "";
+    const serverPayload = (analysisReport?.canonical_payload && typeof analysisReport.canonical_payload === "object")
+      ? analysisReport.canonical_payload
+      : null;
     return buildVisualPayload({ narrative, serverPayload });
   }, [analysisReport]);
   const top = useMemo(() => deriveTopSignals(analysisReport?.areasOfFocus), [analysisReport]);
@@ -1696,16 +1690,37 @@ ${SUPPORTIVE_FOOTER_LINE}`);
       setAgencyChoice(null);
 
       setAnalysisReport({
-        report: data.report,
+        // Text report (email + on-screen)
+        report: data.report || data.html || data.text || "",
+
+        // Optional: concise variants
+        recap: data.recap || data.short_report || null,
+        short_report: data.short_report || null,
+
+        // Canonical payload used by the UI renderer (scores, clusters, RAG, etc.)
+        canonical_payload:
+          data.canonical_payload ||
+          data.canonicalPayload ||
+          data.visual_payload ||
+          data.visualPayload ||
+          data.dermatology_engine_json?.canonical_payload ||
+          data.dermatologyEngineJson?.canonical_payload ||
+          data.dermatology_engine?.canonical_payload ||
+          data.dermatologyEngine?.canonical_payload ||
+          null,
+
+        // Aging imagery (already handled in API)
+        agingImageUrls: data.agingImageUrls || data.aging_images || null,
+
+        // Back-compat / debugging
+        raw: data,
+
+        // Existing UI helpers
         recommendedProducts: getRecommendedProducts(primaryConcern),
         recommendedServices: getRecommendedServices(primaryConcern),
-        fitzpatrickType: data.fitzpatrickType || null,
-        fitzpatrickSummary: data.fitzpatrickSummary || null,
-        agingPreviewImages: data.agingPreviewImages || null,
-        areasOfFocus: data.areasOfFocus || data.focusAreas || null
+        fitzpatrick: data.fitzpatrick || null,
       });
-
-      gaEvent('analysis_success', {
+gaEvent('analysis_success', {
         primaryConcern,
         ageRange,
         hasFitz: !!(data.fitzpatrickType || data.fitzpatrickSummary),
