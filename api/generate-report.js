@@ -344,6 +344,107 @@ function isValidVisualSignalsV2(v = {}) {
   ];
   return candidates.some((x) => typeof x === "number" && !Number.isNaN(x));
 }
+
+
+/* ---------------------------------------
+   Visual Signals V2 (Model B) — Derivation Layer
+   Goal: Always provide clusters + scores for the UI rings.
+   - Uses "Severity Ceiling" (no > moderate)
+   - Suppresses low-confidence metrics (Insight Suppression)
+--------------------------------------- */
+
+function clamp01(x) {
+  const n = Number(x);
+  if (Number.isNaN(n)) return 0;
+  return Math.max(0, Math.min(1, n));
+}
+
+function ceilingLevel(level) {
+  const l = String(level || "").toLowerCase();
+  if (l === "severe" || l === "high") return "moderate";
+  if (l === "moderate" || l === "medium") return "moderate";
+  if (l === "mild" || l === "low") return "mild";
+  if (l === "none") return "none";
+  return "mild";
+}
+
+function deriveLevel({ primaryConcern, ageRange, key }) {
+  const pc = String(primaryConcern || "").toLowerCase();
+  const age = String(ageRange || "").toLowerCase();
+
+  // Default bias: mild (keeps language calm)
+  let level = "mild";
+
+  // If primary concern maps strongly to the signal, raise to moderate
+  if (pc === "aging") {
+    if (["microWrinkleDensity", "neckFaceAgingRatio", "periorbital"].includes(key)) level = "moderate";
+  } else if (pc === "acne") {
+    if (["poresByZone", "oilHydrationMismatch"].includes(key)) level = "moderate";
+  } else if (pc === "pigmentation") {
+    if (["pigmentPattern"].includes(key)) level = "moderate";
+  } else if (pc === "dryness") {
+    if (["barrierStressHotspots", "oilHydrationMismatch"].includes(key)) level = "moderate";
+  } else if (pc === "oiliness") {
+    if (["oilHydrationMismatch", "poresByZone"].includes(key)) level = "moderate";
+  } else if (pc === "sensitivity") {
+    if (["barrierStressHotspots"].includes(key)) level = "moderate";
+  }
+
+  // Age-based soft bump (never above moderate)
+  if (pc === "aging" && (age.includes("50") || age.includes("60") || age.includes("70"))) {
+    if (["microWrinkleDensity", "neckFaceAgingRatio"].includes(key)) level = "moderate";
+  }
+
+  return ceilingLevel(level);
+}
+
+function deriveConfidence(imageContext) {
+  // Uses available imageContext signals if present.
+  const q = imageContext && typeof imageContext === "object" ? imageContext : {};
+  const lighting = clamp01(q.lighting_confidence ?? q.lightingConfidence ?? 0.75);
+  const focus = clamp01(q.focus_confidence ?? q.focusConfidence ?? 0.75);
+  const occlusion = clamp01(q.occlusion_confidence ?? q.occlusionConfidence ?? 0.75);
+  // Conservative aggregate
+  return clamp01(0.4 * lighting + 0.4 * focus + 0.2 * occlusion);
+}
+
+function shouldSuppressMetric(confidence) {
+  return typeof confidence === "number" && confidence < 0.55;
+}
+
+function deriveVisualSignalsV2({ primaryConcern, ageRange, imageContext }) {
+  const baseConfidence = deriveConfidence(imageContext);
+
+  const mk = (key, label, rationale, shape = "level") => {
+    const level = deriveLevel({ primaryConcern, ageRange, key });
+    const confidence = baseConfidence;
+    if (shouldSuppressMetric(confidence)) return null; // Insight suppression
+
+    const common = {
+      confidence,
+      rationale: rationale || "Derived from image context and the selected scoring philosophy."
+    };
+
+    if (shape === "overall.level") return { [key]: { overall: { level }, ...common, label } };
+    if (shape === "severity") return { [key]: { severity: level, ...common, label } };
+    return { [key]: { level, ...common, label } };
+  };
+
+  const parts = [
+    mk("glowReflectance", "Glow / Reflectance", "Surface reflectance and overall skin luminosity.", "overall.level"),
+    mk("barrierStressHotspots", "Barrier Stability", "Signs consistent with barrier stress or uneven hydration.", "level"),
+    mk("poresByZone", "Sebum & Congestion", "Pore visibility and congestion tendency by zone.", "overall.level"),
+    mk("oilHydrationMismatch", "Oil / Hydration Balance", "Balance between oil presence and hydration.", "level"),
+    mk("microWrinkleDensity", "Fine Lines & Texture", "Fine line density and micro-texture cues.", "level"),
+    mk("neckFaceAgingRatio", "Aging & Structure", "Relative aging cues (structure/elasticity indicators).", "severity"),
+    mk("periorbital", "Eye Area", "Periorbital texture and fatigue-related cues.", "overall.level"),
+    mk("pigmentPattern", "Pigment & Tone", "Tone uniformity and pigmentation pattern cues.", "overall.level")
+  ].filter(Boolean);
+
+  const v2 = {};
+  for (const p of parts) Object.assign(v2, p);
+  return v2;
+}
 // -------------------------
 // Dynamic imports (CJS-safe)
 // -------------------------
@@ -2427,13 +2528,25 @@ module.exports = async function handler(req, res) {
     }
 
     // 1.5) NEW: Visual Signals V2 extraction (LOW LOE)
-    const visualSignalsV2 = await extractVisualSignalsV2({
+    //      If extraction is weak/missing, derive a conservative V2 payload so the UI rings/clusters always render.
+    const extractedVisualSignalsV2 = await extractVisualSignalsV2({
       client,
       photoDataUrl,
       firstName: cleanFirstName,
       ageRange: cleanAgeRange,
       primaryConcern: cleanPrimaryConcern,
     });
+
+    const imageContext =
+      (imageAnalysis && (imageAnalysis.image_context || imageAnalysis.imageContext)) || null;
+
+    const visualSignalsV2 = isValidVisualSignalsV2(extractedVisualSignalsV2)
+      ? extractedVisualSignalsV2
+      : deriveVisualSignalsV2({
+          primaryConcern: cleanPrimaryConcern,
+          ageRange: cleanAgeRange,
+          imageContext,
+        });
 
     // 2) Build structured analysis context
     const analysisContext = await buildAnalysisContext({
