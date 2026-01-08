@@ -141,6 +141,53 @@ function safeGet(obj, path, fallback = null) {
   }
 }
 
+function sanitizeSeverityCeiling(text) {
+  if (!text) return text;
+  let t = String(text);
+
+  // Remove/soften high-severity or diagnostic language. Keep calm, non-alarming tone.
+  const replacements = [
+    [/(severe|extreme|urgent|alarming|dangerous|critical)/gi, "moderate"],
+    [/(cancer|melanoma|carcinoma|autoimmune|infection|infected|psoriasis|eczema)/gi, "skin condition"],
+    [/(must|need to|requires)/gi, "may benefit from"],
+    [/diagnos(e|is|ed|ing)/gi, "evaluate"]
+  ];
+  for (const [re, rep] of replacements) t = t.replace(re, rep);
+
+  return t;
+}
+
+function sanitizeDermEngineOutput(engine) {
+  if (!engine || typeof engine !== "object") return engine;
+
+  const scrub = (v) => (typeof v === "string" ? sanitizeSeverityCeiling(v) : v);
+
+  // Common fields
+  if (engine.short_excerpt) engine.short_excerpt = scrub(engine.short_excerpt);
+  if (engine.shortExcerpt) engine.shortExcerpt = scrub(engine.shortExcerpt);
+
+  // Sections (array of {title, body})
+  const secs = engine.report_sections || engine.reportSections || engine.sections;
+  if (Array.isArray(secs)) {
+    for (const s of secs) {
+      if (s && typeof s === "object") {
+        if (s.title) s.title = scrub(s.title);
+        if (s.body) s.body = scrub(s.body);
+      }
+    }
+  }
+
+  // Lists with text
+  for (const k of ["top_signals", "topSignals", "recommendations", "next_steps", "nextSteps", "limitations", "image_context", "imageContext"]) {
+    const v = engine[k];
+    if (Array.isArray(v)) engine[k] = v.map(scrub);
+    else if (typeof v === "string") engine[k] = scrub(v);
+  }
+
+  return engine;
+}
+
+
 function metric(id, title, score, extra = {}) {
   const s = clampScore(score);
   return {
@@ -337,6 +384,26 @@ New dermatologist cognition elements (must be included in JSON):
 - Risk Amplifiers (e.g., Fitzpatrick + inflammation + UV cues)
 - Trajectory Forecast (90 days + 6–12 months if unchanged)
 
+
+Rules (production governance — must follow):
+- Insight suppression: Do NOT mention or recommend anything if confidence is low. Only include items with confidence >= 0.60 as "Observed Skin Patterns" and in any recommendations.
+- Severity ceiling: Never use alarming language. Do not escalate beyond "mild" or "moderate". Avoid words like severe, extreme, urgent, alarming, dangerous, cancer, autoimmune, infection, etc. No diagnosing.
+- Confidence vs interpretation vs limitation: Keep observations (what you see), interpretations (what it may suggest), and limitations (what you cannot conclude) in separate sections. Do not blur them.
+- Image quality transparency: Briefly note image quality factors (lighting, focus, angle, makeup, glasses) and how they affected confidence.
+- Causal visual acknowledgment: If a visual factor (lighting/glare/shadow/makeup/glasses) influenced a decision, state that explicitly in the Image Context section.
+- Dermatologic reasoning breadcrumbs: Occasionally explain a clinician-style "because" link (e.g., "Because X is present, it suggests Y"), but keep it calm and non-absolute.
+- Insight echo consistency: Do not introduce new concerns late in the report. Any protocol recommendation or product/treatment guidance must be tied to the Observed Skin Patterns / Interpretive Insights already stated.
+- Cognitive load pacing: Use a simple flow in each section: Observation → meaning → action. Do not stack multiple actions without first stating the observation and meaning.
+- Report structure (always present, in this exact order):
+  1) User Intent Framing
+  2) Image Context & Integrity
+  3) Observed Skin Patterns (high-confidence only)
+  4) Interpretive Insights (probabilistic)
+  5) Known Limitations
+  6) Condition Weighting Summary (primary vs secondary drivers with relative influence)
+  7) Protocol Recommendation (primary; optional secondary only if justified)
+  8) Expectation Setting (time-based, non-promissory)
+
 Return JSON only using this top-level shape (use these EXACT keys):
 
 {
@@ -520,7 +587,9 @@ async function runDermatologyEngine({
 
     if (!parsed) return { ok: false, parse_error: true, raw: text };
 
-    return { ok: true, data: normalizeDermEngineKeys(parsed) };
+    const normalized = normalizeDermEngineKeys(parsed);
+    sanitizeDermEngineOutput(normalized);
+    return { ok: true, data: normalized };
   } catch (err) {
     console.error("Dermatology Engine error:", err);
     return { ok: false, error: true, message: err?.message || "Dermatology Engine failed" };
