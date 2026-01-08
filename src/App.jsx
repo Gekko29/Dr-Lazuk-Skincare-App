@@ -782,44 +782,27 @@ const AreasOfFocusCard = ({ areas }) => {
 /* ---------------------------------------
    Default Summary View (ON-SCREEN)
 --------------------------------------- */
-const normalizeScore01 = (score) => {
-  if (typeof score !== "number" || Number.isNaN(score)) return null;
-
-  // Accept either 0..1 or 0..100 inputs
-  if (score > 1.5) {
-    const c = clampScore(score);
-    if (c === null) return null;
-    return c / 100;
-  }
-
-  return Math.max(0, Math.min(1, score));
-};
-
 const scoreToRag = (score) => {
-  const s = normalizeScore01(score);
-  if (s === null) return { label: "A", text: "Attention", level: "amber" };
-  if (s >= 0.66) return { label: "R", text: "High Priority", level: "red" };
-  if (s >= 0.33) return { label: "A", text: "Moderate Priority", level: "amber" };
+  if (typeof score !== "number" || Number.isNaN(score)) return { label: "A", text: "Attention", level: "amber" };
+  if (score >= 0.66) return { label: "R", text: "High Priority", level: "red" };
+  if (score >= 0.33) return { label: "A", text: "Moderate Priority", level: "amber" };
   return { label: "G", text: "Stable", level: "green" };
 };
 
 const RagPill = ({ score }) => {
   const rag = scoreToRag(score);
-  const s01 = normalizeScore01(score);
-
   const cls =
     rag.level === "red"
       ? "bg-red-600 text-white"
       : rag.level === "green"
       ? "bg-green-600 text-white"
       : "bg-yellow-500 text-white";
-
   return (
     <span className={`inline-flex items-center gap-2 px-3 py-1 text-xs font-bold ${cls}`}>
       <span className="inline-block w-5 text-center">{rag.label}</span>
       <span>{rag.text}</span>
-      {s01 !== null && (
-        <span className="ml-1 font-mono text-[11px] opacity-90">{Math.round(s01 * 100)}%</span>
+      {typeof score === "number" && !Number.isNaN(score) && (
+        <span className="ml-1 font-mono text-[11px] opacity-90">{Math.round(score * 100)}%</span>
       )}
     </span>
   );
@@ -834,8 +817,7 @@ const StaticMapPreview = ({ clusters = [] }) => {
       <svg width="92" height="92" viewBox="0 0 92 92" role="img" aria-label="static map preview">
         <g transform="translate(46 46)">
           {safeClusters.map((c, i) => {
-            const avgRaw = (typeof c?.score === "number" ? c.score : (typeof c?.avg === "number" ? c.avg : 70));
-            const avg = clampScore(avgRaw) ?? 70;
+            const avg = typeof c?.avg === "number" ? c.avg : 70;
             const rag = ragFromScore(avg);
             const r = rBase + (i * rStep);
             return (
@@ -864,12 +846,86 @@ const deriveTopSignals = (areas) => {
 const SummaryCard = ({ ageRange, primaryConcern, analysisReport }) => {
 
   const visualPayload = useMemo(() => {
-    const serverPayload =
-      (analysisReport && typeof analysisReport === "object"
-        ? (analysisReport.canonical_payload || analysisReport.visual_payload || null)
-        : null);
+    const root = (analysisReport && typeof analysisReport === "object") ? analysisReport : null;
+    if (!root) return null;
 
-    return buildVisualPayload({ serverPayload });
+    // Prefer the explicit visual payload if present; canonical_payload is mainly provenance/meta.
+    const serverPayload =
+      root.visual_payload ||
+      root.visualPayload ||
+      root.canonical_payload?.visual_payload ||
+      root.canonical_payload?.visualPayload ||
+      root.visualAnalysisV2 ||
+      root.visual_analysis_v2 ||
+      root.canonical_payload?.visualAnalysisV2 ||
+      root.canonical_payload?.visual_analysis_v2 ||
+      null;
+
+    const built = buildVisualPayload({ serverPayload });
+    if (built) return built;
+
+    // Fallback: map areasOfFocus into the cluster shape expected by the UI.
+    const aof = Array.isArray(root.areasOfFocus) ? root.areasOfFocus : null;
+    if (!aof || aof.length === 0) return null;
+
+    const numericScores = aof
+      .map(a => Number(a?.score))
+      .filter(n => Number.isFinite(n));
+
+    const overall = numericScores.length
+      ? Math.round(numericScores.reduce((s, n) => s + n, 0) / numericScores.length)
+      : null;
+
+    const overallRag =
+      (overall === null) ? "amber" : (overall >= 80 ? "green" : (overall >= 65 ? "amber" : "red"));
+
+    const clusters = aof.map((a, idx) => {
+      const clusterId = String(a?.cluster_id || a?.clusterId || a?.id || a?.key || `cluster_${idx}`);
+      const displayName = String(a?.display_name || a?.displayName || a?.title || clusterId);
+      const score = Number.isFinite(Number(a?.score)) ? Number(a.score) : null;
+      const rag = String(a?.rag || a?.RAG || overallRag);
+      const confidence = (typeof a?.confidence === "number") ? a.confidence : null;
+      const basis = a?.basis || "areas_of_focus_fallback";
+
+      // Ensure the ring has at least one dot even when no metric breakdown exists yet.
+      const metrics = Array.isArray(a?.metrics) && a.metrics.length
+        ? a.metrics.map((m, mi) => ({
+            metric_id: String(m?.metric_id || m?.metricId || m?.id || `metric_${mi}`),
+            display_name: String(m?.display_name || m?.displayName || m?.title || `Metric ${mi + 1}`),
+            score: Number.isFinite(Number(m?.score)) ? Number(m.score) : null,
+            rag: String(m?.rag || rag),
+            confidence: (typeof m?.confidence === "number") ? m.confidence : confidence,
+            basis: m?.basis || basis
+          }))
+        : [{
+            metric_id: `${clusterId}__overall`,
+            display_name: "Overall",
+            score,
+            rag,
+            confidence,
+            basis
+          }];
+
+      return {
+        cluster_id: clusterId,
+        display_name: displayName,
+        score,
+        rag,
+        confidence,
+        basis,
+        metrics
+      };
+    });
+
+    return {
+      overall_score: {
+        score: overall,
+        rag: overallRag,
+        confidence: null,
+        basis: "areas_of_focus_fallback"
+      },
+      clusters
+    };
   }, [analysisReport]);
   const top = useMemo(() => deriveTopSignals(analysisReport?.areasOfFocus), [analysisReport]);
   const excerpt = useMemo(() => {
@@ -1736,27 +1792,28 @@ ${SUPPORTIVE_FOOTER_LINE}`);
       setAgencyChoice(null);
 
       setAnalysisReport({
+        // keep the narrative report used for the on-screen letter
         report: data.report,
+
+        // keep full response payloads so the UI can render clusters, scores, and future debug panels
+        canonical_payload: data.canonical_payload || data.canonicalPayload || null,
+        visual_payload: data.visual_payload || data.visualPayload || null,
+        visualAnalysisV2: data.visualAnalysisV2 || data.visual_analysis_v2 || null,
+        overall_score: data.overall_score || data.overallScore || null,
+        dermEngine: data.dermEngine || data.dermengine || null,
+        _debug: data._debug || null,
+
         recommendedProducts: getRecommendedProducts(primaryConcern),
         recommendedServices: getRecommendedServices(primaryConcern),
+
         fitzpatrickType: data.fitzpatrickType || null,
         fitzpatrickSummary: data.fitzpatrickSummary || null,
+
         agingPreviewImages: data.agingPreviewImages || null,
-        areasOfFocus: data.areasOfFocus || data.focusAreas || null,
-
-        // ✅ Server-authoritative visualization payload (clusters + scores)
-        canonical_payload:
-          data.canonical_payload ||
-          data.visual_payload ||
-          data.visualPayload ||
-          data.dermatologyEngine?.visual_payload ||
-          null,
-
-        // ✅ Optional meta for debugging / future UI (additive)
-        engine_meta: data.engine_meta || data.dermatologyEngine?.meta || null
+        areasOfFocus: data.areasOfFocus || data.focusAreas || null
       });
 
-      gaEvent('analysis_success', {
+gaEvent('analysis_success', {
         primaryConcern,
         ageRange,
         hasFitz: !!(data.fitzpatrickType || data.fitzpatrickSummary),
