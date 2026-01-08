@@ -70,6 +70,182 @@ const path = require("path");
 const crypto = require("crypto");
 const { pathToFileURL } = require("url");
 
+
+/* ---------------------------------------
+   Production Scoring + RAG (Server-side canonical payload)
+   Purpose: Ensure the client receives real per-metric scores (0–100) and RAG,
+   so the UI never falls back to narrative inference defaults (e.g., 70 everywhere).
+--------------------------------------- */
+const RAG_THRESHOLDS = { green: 75, amber: 55 };
+
+function ragFromScore(score) {
+  if (typeof score !== "number" || Number.isNaN(score)) return "unknown";
+  if (score >= RAG_THRESHOLDS.green) return "green";
+  if (score >= RAG_THRESHOLDS.amber) return "amber";
+  return "red";
+}
+
+function clampScore(n) {
+  if (n === null || n === undefined || n === "") return null;
+  const x = Number(n);
+  if (Number.isNaN(x)) return null;
+  return Math.max(0, Math.min(100, Math.round(x)));
+}
+
+// Many V2 fields encode "severity" or "level" text. We normalize to a 0–100 "health score".
+function scoreFromLevel(level, { invert = true } = {}) {
+  const t = String(level || "").toLowerCase().trim();
+  if (!t) return null;
+
+  // Common label sets (support both "none/mild/moderate/severe" and "low/medium/high")
+  const severityMap = {
+    none: 5,
+    minimal: 10,
+    very_low: 10,
+    low: 20,
+    mild: 25,
+    slight: 25,
+    medium: 45,
+    moderate: 55,
+    elevated: 65,
+    high: 80,
+    severe: 90,
+    very_high: 95
+  };
+
+  const key = t.replace(/\s+/g, "_").replace(/-+/g, "_");
+  const sev = severityMap[key];
+  if (typeof sev !== "number") return null;
+
+  const raw = invert ? (100 - sev) : sev;
+  return clampScore(raw);
+}
+
+function scoreFromNumber(value, { invert = false, unit = "auto" } = {}) {
+  if (value === null || value === undefined || value === "") return null;
+  const x = Number(value);
+  if (Number.isNaN(x)) return null;
+
+  let n = x;
+  // If value looks like 0–1 confidence/ratio, scale to 0–100.
+  if (unit === "auto" && n >= 0 && n <= 1) n = n * 100;
+  if (invert) n = 100 - n;
+  return clampScore(n);
+}
+
+function safeGet(obj, path, fallback = null) {
+  try {
+    return path.split(".").reduce((acc, k) => (acc && acc[k] !== undefined ? acc[k] : undefined), obj) ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function metric(id, title, score, extra = {}) {
+  const s = clampScore(score);
+  return {
+    id,
+    title,
+    score: s,
+    rag: ragFromScore(s),
+    ...extra
+  };
+}
+
+function averageScore(items = []) {
+  const nums = items.map((x) => (typeof x?.score === "number" ? x.score : null)).filter((n) => typeof n === "number");
+  if (!nums.length) return null;
+  const avg = nums.reduce((a, b) => a + b, 0) / nums.length;
+  return clampScore(avg);
+}
+
+function buildCanonicalPayloadFromSignalsV2(visualSignalsV2 = {}, { nowIso } = {}) {
+  const generated_at = nowIso || new Date().toISOString();
+
+  // Pull common V2 nodes (robust to missing keys)
+  const periorbital = safeGet(visualSignalsV2, "periorbital", {});
+  const pigment = safeGet(visualSignalsV2, "pigmentPattern", {});
+  const barrier = safeGet(visualSignalsV2, "barrierStressHotspots", {});
+  const pores = safeGet(visualSignalsV2, "poresByZone", {});
+  const glow = safeGet(visualSignalsV2, "glowReflectance", {});
+  const mismatch = safeGet(visualSignalsV2, "oilHydrationMismatch", {});
+  const micro = safeGet(visualSignalsV2, "microWrinkleDensity", {});
+  const neckFace = safeGet(visualSignalsV2, "neckFaceAgingRatio", {});
+
+  // --- Skin Health cluster ---
+  const skinMetrics = [
+    metric("glow", "Glow / Radiance", scoreFromLevel(safeGet(glow, "level"), { invert: false }) ?? scoreFromNumber(safeGet(glow, "score"), { invert: false })),
+    metric("pores", "Pores", scoreFromLevel(safeGet(pores, "overall.level")) ?? scoreFromLevel(safeGet(pores, "level"))),
+    metric("oil_hydration_balance", "Oil–Hydration Balance", scoreFromLevel(safeGet(mismatch, "severity")) ?? scoreFromLevel(safeGet(mismatch, "level"))),
+    metric("barrier", "Barrier Resilience", scoreFromLevel(safeGet(barrier, "severity")) ?? scoreFromLevel(safeGet(barrier, "level"))),
+  ].filter((m) => m.score !== null);
+
+  // --- Aging & Structure cluster ---
+  const agingMetrics = [
+    metric("micro_wrinkles", "Micro-Wrinkle Density", scoreFromLevel(safeGet(micro, "level")) ?? scoreFromNumber(safeGet(micro, "score"))),
+    metric("neck_face_ratio", "Neck vs Face Aging Balance", scoreFromNumber(safeGet(neckFace, "ratio"), { invert: false }) ),
+  ].filter((m) => m.score !== null);
+
+  // --- Eye Area cluster ---
+  const eyeMetrics = [
+    metric("dark_circles", "Under-Eye Darkness", scoreFromLevel(safeGet(periorbital, "darkCircles.level")) ?? scoreFromLevel(safeGet(periorbital, "darkCircle.level"))),
+    metric("puffiness", "Under-Eye Puffiness", scoreFromLevel(safeGet(periorbital, "puffiness.level"))),
+    metric("fine_lines", "Fine Lines", scoreFromLevel(safeGet(periorbital, "fineLines.level"))),
+  ].filter((m) => m.score !== null);
+
+  // --- Pigmentation & Tone cluster ---
+  const pigmentMetrics = [
+    metric("pigment_uniformity", "Tone Uniformity", scoreFromLevel(safeGet(pigment, "uniformity")) ?? scoreFromLevel(safeGet(pigment, "uniformity.level"), { invert: false })),
+    metric("dark_spots", "Dark Spots / Hyperpigmentation", scoreFromLevel(safeGet(pigment, "darkSpots.level")) ?? scoreFromLevel(safeGet(pigment, "spotting.level"))),
+    metric("overall_pigment", "Pigment Pattern", scoreFromLevel(safeGet(pigment, "level")) ?? scoreFromLevel(safeGet(pigment, "severity"))),
+  ].filter((m) => m.score !== null);
+
+  // --- Stress & Damage cluster ---
+  const stressMetrics = [
+    metric("barrier_stress", "Barrier Stress", scoreFromLevel(safeGet(barrier, "severity")) ?? scoreFromLevel(safeGet(barrier, "level"))),
+    metric("oil_hydration_mismatch", "Oil/Hydration Mismatch", scoreFromLevel(safeGet(mismatch, "severity")) ?? scoreFromLevel(safeGet(mismatch, "level"))),
+  ].filter((m) => m.score !== null);
+
+  const clusters = [
+    {
+      id: "skin_health",
+      title: "Skin Health",
+      metrics: skinMetrics
+    },
+    {
+      id: "aging_structure",
+      title: "Aging & Structure",
+      metrics: agingMetrics
+    },
+    {
+      id: "eye_area",
+      title: "Eye Area",
+      metrics: eyeMetrics
+    },
+    {
+      id: "pigmentation_tone",
+      title: "Pigmentation & Tone",
+      metrics: pigmentMetrics
+    },
+    {
+      id: "stress_damage",
+      title: "Stress & Damage",
+      metrics: stressMetrics
+    }
+  ].map((c) => {
+    const score = averageScore(c.metrics);
+    return { ...c, score, rag: ragFromScore(score) };
+  });
+
+  const overall = averageScore(clusters.map((c) => ({ score: c.score })));
+
+  return {
+    version: "1.0",
+    generated_at,
+    overall_score: { score: overall, rag: ragFromScore(overall) },
+    clusters
+  };
+}
 // -------------------------
 // Dynamic imports (CJS-safe)
 // -------------------------
@@ -2521,8 +2697,14 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
     ]);
 
     // Response to frontend (VISUAL REPORT)
-    return res.status(200).json({
+        const canonical_payload = buildCanonicalPayloadFromSignalsV2(visualSignalsV2, { nowIso: new Date().toISOString() });
+
+return res.status(200).json({
       ok: true,
+
+      // ✅ Canonical payload for client-side visual report (scores + RAG)
+      canonical_payload,
+
 
       // Original narrative letter (UI can keep rendering this as-is)
       report: reportText,
@@ -2585,14 +2767,3 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
     });
   }
 };
-
-
-
-
-
-
-
-
-
-
-
