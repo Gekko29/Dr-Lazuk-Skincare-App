@@ -2912,7 +2912,7 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
     // conservative narrative inference so rings/scores/RAG still render.
     const nowIso = new Date().toISOString();
 
-    const isValidVisualSignalsV2 = (v) => {
+    const validateVisualSignalsV2 = (v) => {
       if (!v || typeof v !== "object") return false;
       // Consider valid if we can find at least one numeric score field in the expected shape.
       const candidates = [
@@ -2930,7 +2930,7 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
       return candidates.some((x) => typeof x === "number" && Number.isFinite(x));
     };
 
-    const canonical_payload = isValidVisualSignalsV2(visualSignalsV2)
+    const canonical_payload = validateVisualSignalsV2(visualSignalsV2)
       ? buildCanonicalPayloadFromSignalsV2(visualSignalsV2, { nowIso })
       : buildCanonicalPayloadFallback(
           {
