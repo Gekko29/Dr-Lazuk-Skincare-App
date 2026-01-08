@@ -34,18 +34,6 @@ function clampScore(n) {
   if (Number.isNaN(x)) return null;
   return Math.max(0, Math.min(100, Math.round(x)));
 }
-function inferScoreFromNarrative(narrative = "", keywords = []) {
-  const t = String(narrative || "").toLowerCase();
-  const hits = Array.isArray(keywords) && keywords.some((k) => t.includes(String(k).toLowerCase()));
-  if (!hits) return null;
-
-  const neg = /(concern|reduce|improve|needs|attention|issue|irritat|inflam|breakout|pigment|dark spot|wrinkl|sagg|dehydrat|dry|oil|congest|pore)/i.test(t);
-  const pos = /(healthy|balanced|resilient|strong|smooth|even tone|minimal|well-managed|intact)/i.test(t);
-
-  if (neg && !pos) return 58;
-  if (pos && !neg) return 82;
-  return 70;
-}
 const LOCKED_CLUSTERS = [
   { cluster_id:"core_skin", display_name:"Core Skin Health", weight:0.35, order:1, metrics:[
     { metric_id:"barrier_stability", display_name:"Barrier Stability", keywords:["barrier","skin barrier"] },
@@ -79,14 +67,53 @@ const LOCKED_CLUSTERS = [
     { metric_id:"environmental_damage", display_name:"Environmental Damage (UV / Pollution)", keywords:["uv","pollution","environmental"] }
   ]}
 ];
-function buildVisualPayload({ narrative, serverPayload }) {
-  // PRODUCTION RULE:
-  // The visual renderer must be driven only by the server-provided canonical payload.
-  // If it is missing, we do NOT fabricate scores from narrative keywords (that is the source of the “everything is 70” issue).
-  if (serverPayload && typeof serverPayload === "object" && Array.isArray(serverPayload.clusters)) {
-    return serverPayload;
-  }
-  return null;
+function buildVisualPayload({ serverPayload }) {
+  // PRODUCTION: Visual clusters are server-authoritative.
+  // If the server did not provide clusters/scores, do not "invent" them client-side.
+  if (!serverPayload || !Array.isArray(serverPayload.clusters)) return null;
+
+  const clusters = serverPayload.clusters
+    .filter(Boolean)
+    .map((c) => {
+      const metrics = Array.isArray(c.metrics) ? c.metrics : [];
+      const clusterScore = clampScore(c.score);
+      const clusterRag = String(c.rag || (clusterScore != null ? ragFromScore(clusterScore) : "unknown"));
+
+      return {
+        cluster_id: String(c.cluster_id || c.id || c.key || c.title || "").trim(),
+        display_name: String(c.display_name || c.title || "").trim(),
+        rag: clusterRag,
+        score: clusterScore,
+        metrics: metrics
+          .filter(Boolean)
+          .map((m) => {
+            const metricScore = clampScore(m.score);
+            return {
+              metric_id: String(m.metric_id || m.id || m.key || m.name || "").trim(),
+              display_name: String(m.display_name || m.name || "").trim(),
+              score: metricScore,
+              rag: String(m.rag || (metricScore != null ? ragFromScore(metricScore) : "unknown"))
+            };
+          })
+      };
+    });
+
+  const overallScore = clampScore(
+    serverPayload?.overall_score?.score ??
+      serverPayload?.overall_score ??
+      serverPayload?.score
+  );
+
+  return {
+    overall_score: {
+      score: overallScore,
+      rag: String(
+        serverPayload?.overall_score?.rag ||
+          (overallScore != null ? ragFromScore(overallScore) : "unknown")
+      )
+    },
+    clusters
+  };
 }
 function ragColor(rag){
   if(rag==="green") return "#16a34a";
@@ -819,11 +846,12 @@ const deriveTopSignals = (areas) => {
 const SummaryCard = ({ ageRange, primaryConcern, analysisReport }) => {
 
   const visualPayload = useMemo(() => {
-    const narrative = analysisReport?.report || "";
-    const serverPayload = (analysisReport?.canonical_payload && typeof analysisReport.canonical_payload === "object")
-      ? analysisReport.canonical_payload
-      : null;
-    return buildVisualPayload({ narrative, serverPayload });
+    const serverPayload =
+      (analysisReport && typeof analysisReport === "object"
+        ? (analysisReport.canonical_payload || analysisReport.visual_payload || null)
+        : null);
+
+    return buildVisualPayload({ serverPayload });
   }, [analysisReport]);
   const top = useMemo(() => deriveTopSignals(analysisReport?.areasOfFocus), [analysisReport]);
   const excerpt = useMemo(() => {
@@ -859,7 +887,7 @@ const SummaryCard = ({ ageRange, primaryConcern, analysisReport }) => {
                   <div style={{ display:"flex", justifyContent:"flex-end", alignItems:"baseline", gap:8, marginTop:6 }}>
                     <span style={{ fontSize:56, fontWeight:800, lineHeight:1 }}>{visualPayload?.overall_score?.score ?? "—"}</span>
                     <span style={{ fontSize:18, color:"#64748b" }}>/100</span>
-                    <span style={{ width:14, height:14, borderRadius:999, display:"inline-block", backgroundColor: ragColor(visualPayload?.overall_score?.rag || "amber") }} />
+                    <span style={{ width:14, height:14, borderRadius:999, display:"inline-block", backgroundColor: ragColor(visualPayload?.overall_score?.rag || "unknown") }} />
                   </div>
                   <div style={{ display:"flex", flexDirection:"column", gap:6, marginTop:10, fontSize:11, color:"#475569", alignItems:"flex-end" }}>
                     <span><span style={{ width:10, height:10, borderRadius:999, display:"inline-block", marginRight:6, backgroundColor: ragColor("green") }} /> Green = Strong</span>
@@ -1690,37 +1718,16 @@ ${SUPPORTIVE_FOOTER_LINE}`);
       setAgencyChoice(null);
 
       setAnalysisReport({
-        // Text report (email + on-screen)
-        report: data.report || data.html || data.text || "",
-
-        // Optional: concise variants
-        recap: data.recap || data.short_report || null,
-        short_report: data.short_report || null,
-
-        // Canonical payload used by the UI renderer (scores, clusters, RAG, etc.)
-        canonical_payload:
-          data.canonical_payload ||
-          data.canonicalPayload ||
-          data.visual_payload ||
-          data.visualPayload ||
-          data.dermatology_engine_json?.canonical_payload ||
-          data.dermatologyEngineJson?.canonical_payload ||
-          data.dermatology_engine?.canonical_payload ||
-          data.dermatologyEngine?.canonical_payload ||
-          null,
-
-        // Aging imagery (already handled in API)
-        agingImageUrls: data.agingImageUrls || data.aging_images || null,
-
-        // Back-compat / debugging
-        raw: data,
-
-        // Existing UI helpers
+        report: data.report,
         recommendedProducts: getRecommendedProducts(primaryConcern),
         recommendedServices: getRecommendedServices(primaryConcern),
-        fitzpatrick: data.fitzpatrick || null,
+        fitzpatrickType: data.fitzpatrickType || null,
+        fitzpatrickSummary: data.fitzpatrickSummary || null,
+        agingPreviewImages: data.agingPreviewImages || null,
+        areasOfFocus: data.areasOfFocus || data.focusAreas || null
       });
-gaEvent('analysis_success', {
+
+      gaEvent('analysis_success', {
         primaryConcern,
         ageRange,
         hasFitz: !!(data.fitzpatrickType || data.fitzpatrickSummary),
