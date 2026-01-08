@@ -782,27 +782,44 @@ const AreasOfFocusCard = ({ areas }) => {
 /* ---------------------------------------
    Default Summary View (ON-SCREEN)
 --------------------------------------- */
+const normalizeScore01 = (score) => {
+  if (typeof score !== "number" || Number.isNaN(score)) return null;
+
+  // Accept either 0..1 or 0..100 inputs
+  if (score > 1.5) {
+    const c = clampScore(score);
+    if (c === null) return null;
+    return c / 100;
+  }
+
+  return Math.max(0, Math.min(1, score));
+};
+
 const scoreToRag = (score) => {
-  if (typeof score !== "number" || Number.isNaN(score)) return { label: "A", text: "Attention", level: "amber" };
-  if (score >= 0.66) return { label: "R", text: "High Priority", level: "red" };
-  if (score >= 0.33) return { label: "A", text: "Moderate Priority", level: "amber" };
+  const s = normalizeScore01(score);
+  if (s === null) return { label: "A", text: "Attention", level: "amber" };
+  if (s >= 0.66) return { label: "R", text: "High Priority", level: "red" };
+  if (s >= 0.33) return { label: "A", text: "Moderate Priority", level: "amber" };
   return { label: "G", text: "Stable", level: "green" };
 };
 
 const RagPill = ({ score }) => {
   const rag = scoreToRag(score);
+  const s01 = normalizeScore01(score);
+
   const cls =
     rag.level === "red"
       ? "bg-red-600 text-white"
       : rag.level === "green"
       ? "bg-green-600 text-white"
       : "bg-yellow-500 text-white";
+
   return (
     <span className={`inline-flex items-center gap-2 px-3 py-1 text-xs font-bold ${cls}`}>
       <span className="inline-block w-5 text-center">{rag.label}</span>
       <span>{rag.text}</span>
-      {typeof score === "number" && !Number.isNaN(score) && (
-        <span className="ml-1 font-mono text-[11px] opacity-90">{Math.round(score * 100)}%</span>
+      {s01 !== null && (
+        <span className="ml-1 font-mono text-[11px] opacity-90">{Math.round(s01 * 100)}%</span>
       )}
     </span>
   );
@@ -817,7 +834,8 @@ const StaticMapPreview = ({ clusters = [] }) => {
       <svg width="92" height="92" viewBox="0 0 92 92" role="img" aria-label="static map preview">
         <g transform="translate(46 46)">
           {safeClusters.map((c, i) => {
-            const avg = typeof c?.avg === "number" ? c.avg : 70;
+            const avgRaw = (typeof c?.score === "number" ? c.score : (typeof c?.avg === "number" ? c.avg : 70));
+            const avg = clampScore(avgRaw) ?? 70;
             const rag = ragFromScore(avg);
             const r = rBase + (i * rStep);
             return (
@@ -1724,7 +1742,18 @@ ${SUPPORTIVE_FOOTER_LINE}`);
         fitzpatrickType: data.fitzpatrickType || null,
         fitzpatrickSummary: data.fitzpatrickSummary || null,
         agingPreviewImages: data.agingPreviewImages || null,
-        areasOfFocus: data.areasOfFocus || data.focusAreas || null
+        areasOfFocus: data.areasOfFocus || data.focusAreas || null,
+
+        // ✅ Server-authoritative visualization payload (clusters + scores)
+        canonical_payload:
+          data.canonical_payload ||
+          data.visual_payload ||
+          data.visualPayload ||
+          data.dermatologyEngine?.visual_payload ||
+          null,
+
+        // ✅ Optional meta for debugging / future UI (additive)
+        engine_meta: data.engine_meta || data.dermatologyEngine?.meta || null
       });
 
       gaEvent('analysis_success', {
