@@ -67,6 +67,87 @@ const LOCKED_CLUSTERS = [
     { metric_id:"environmental_damage", display_name:"Environmental Damage (UV / Pollution)", keywords:["uv","pollution","environmental"] }
   ]}
 ];
+
+function normalizeReportResponse(data) {
+  // Normalizes API /api/generate-report responses across versions.
+  // Returns an object that contains both snake_case keys used by the UI and camelCase mirrors for backwards compatibility.
+  if (!data || typeof data !== "object") return null;
+
+  const canonical_payload =
+    data.canonical_payload ??
+    data.canonicalPayload ??
+    null;
+
+  const visual_payload_v2 =
+    data.visual_payload_v2 ??
+    data.visualPayloadV2 ??
+    null;
+
+  const visual_payload_legacy =
+    data.visual_payload ??
+    data.visualPayload ??
+    null;
+
+  // Prefer v2 payload if present; fallback to legacy.
+  const chosenVisualPayload = visual_payload_v2 ?? visual_payload_legacy ?? null;
+
+  // If the chosen payload is "v2-like" (has areasOfFocus but no clusters), adapt it to the legacy shape expected by buildVisualPayload().
+  let adaptedVisualPayload = chosenVisualPayload;
+  if (chosenVisualPayload && !chosenVisualPayload.clusters && Array.isArray(chosenVisualPayload.areasOfFocus)) {
+    adaptedVisualPayload = {
+      ...chosenVisualPayload,
+      clusters: chosenVisualPayload.areasOfFocus.map((a) => ({
+        cluster_id: a.cluster_id ?? a.id ?? a.key ?? a.slug ?? a.title ?? "cluster",
+        display_name: a.display_name ?? a.title ?? a.name ?? "Cluster",
+        score: typeof a.score === "number" ? a.score : null,
+        rag: a.rag ?? a.rag_status ?? null,
+        confidence: typeof a.confidence === "number" ? a.confidence : null,
+        basis: a.basis ?? null,
+        keywords: Array.isArray(a.keywords) ? a.keywords : [],
+        metrics: Array.isArray(a.metrics) ? a.metrics : []
+      }))
+    };
+  }
+
+  const areasOfFocus =
+    data.areasOfFocus ??
+    data.focusAreas ??
+    chosenVisualPayload?.areasOfFocus ??
+    adaptedVisualPayload?.areasOfFocus ??
+    null;
+
+  const overall_score =
+    data.overall_score ??
+    data.overallScore ??
+    chosenVisualPayload?.overall_score ??
+    adaptedVisualPayload?.overall_score ??
+    null;
+
+  const out = {
+    ok: data.ok ?? true,
+    report: data.report ?? data.letter ?? "",
+    agingPreviewImages: data.agingPreviewImages ?? data.aging_preview_images ?? null,
+    selfieUrlForEmail: data.selfieUrlForEmail ?? data.selfie_url_for_email ?? null,
+    fitzpatrickType: data.fitzpatrickType ?? data.fitzpatrick_type ?? null,
+    fitzpatrickSummary: data.fitzpatrickSummary ?? data.fitzpatrick_summary ?? null,
+    areasOfFocus,
+    overall_score,
+
+    // Critical: snake_case keys referenced elsewhere in this file
+    canonical_payload,
+    visual_payload: adaptedVisualPayload,
+    visual_payload_v2,
+
+    // Back-compat mirrors
+    canonicalPayload: canonical_payload,
+    visualPayload: adaptedVisualPayload,
+    visualPayloadV2: visual_payload_v2,
+    overallScore: overall_score
+  };
+
+  return out;
+}
+
 function buildVisualPayload({ serverPayload }) {
   // PRODUCTION: Visual clusters are server-authoritative.
   // If the server did not provide clusters/scores, do not "invent" them client-side.
@@ -846,86 +927,12 @@ const deriveTopSignals = (areas) => {
 const SummaryCard = ({ ageRange, primaryConcern, analysisReport }) => {
 
   const visualPayload = useMemo(() => {
-    const root = (analysisReport && typeof analysisReport === "object") ? analysisReport : null;
-    if (!root) return null;
-
-    // Prefer the explicit visual payload if present; canonical_payload is mainly provenance/meta.
     const serverPayload =
-      root.visual_payload ||
-      root.visualPayload ||
-      root.canonical_payload?.visual_payload ||
-      root.canonical_payload?.visualPayload ||
-      root.visualAnalysisV2 ||
-      root.visual_analysis_v2 ||
-      root.canonical_payload?.visualAnalysisV2 ||
-      root.canonical_payload?.visual_analysis_v2 ||
-      null;
+      (analysisReport && typeof analysisReport === "object"
+        ? (analysisReport.canonical_payload || analysisReport.visual_payload || null)
+        : null);
 
-    const built = buildVisualPayload({ serverPayload });
-    if (built) return built;
-
-    // Fallback: map areasOfFocus into the cluster shape expected by the UI.
-    const aof = Array.isArray(root.areasOfFocus) ? root.areasOfFocus : null;
-    if (!aof || aof.length === 0) return null;
-
-    const numericScores = aof
-      .map(a => Number(a?.score))
-      .filter(n => Number.isFinite(n));
-
-    const overall = numericScores.length
-      ? Math.round(numericScores.reduce((s, n) => s + n, 0) / numericScores.length)
-      : null;
-
-    const overallRag =
-      (overall === null) ? "amber" : (overall >= 80 ? "green" : (overall >= 65 ? "amber" : "red"));
-
-    const clusters = aof.map((a, idx) => {
-      const clusterId = String(a?.cluster_id || a?.clusterId || a?.id || a?.key || `cluster_${idx}`);
-      const displayName = String(a?.display_name || a?.displayName || a?.title || clusterId);
-      const score = Number.isFinite(Number(a?.score)) ? Number(a.score) : null;
-      const rag = String(a?.rag || a?.RAG || overallRag);
-      const confidence = (typeof a?.confidence === "number") ? a.confidence : null;
-      const basis = a?.basis || "areas_of_focus_fallback";
-
-      // Ensure the ring has at least one dot even when no metric breakdown exists yet.
-      const metrics = Array.isArray(a?.metrics) && a.metrics.length
-        ? a.metrics.map((m, mi) => ({
-            metric_id: String(m?.metric_id || m?.metricId || m?.id || `metric_${mi}`),
-            display_name: String(m?.display_name || m?.displayName || m?.title || `Metric ${mi + 1}`),
-            score: Number.isFinite(Number(m?.score)) ? Number(m.score) : null,
-            rag: String(m?.rag || rag),
-            confidence: (typeof m?.confidence === "number") ? m.confidence : confidence,
-            basis: m?.basis || basis
-          }))
-        : [{
-            metric_id: `${clusterId}__overall`,
-            display_name: "Overall",
-            score,
-            rag,
-            confidence,
-            basis
-          }];
-
-      return {
-        cluster_id: clusterId,
-        display_name: displayName,
-        score,
-        rag,
-        confidence,
-        basis,
-        metrics
-      };
-    });
-
-    return {
-      overall_score: {
-        score: overall,
-        rag: overallRag,
-        confidence: null,
-        basis: "areas_of_focus_fallback"
-      },
-      clusters
-    };
+    return buildVisualPayload({ serverPayload });
   }, [analysisReport]);
   const top = useMemo(() => deriveTopSignals(analysisReport?.areasOfFocus), [analysisReport]);
   const excerpt = useMemo(() => {
@@ -1791,29 +1798,15 @@ ${SUPPORTIVE_FOOTER_LINE}`);
       setReflectionSeen(false);
       setAgencyChoice(null);
 
+      const normalized = normalizeReportResponse(data) || {};
       setAnalysisReport({
-        // keep the narrative report used for the on-screen letter
-        report: data.report,
-
-        // keep full response payloads so the UI can render clusters, scores, and future debug panels
-        canonical_payload: data.canonical_payload || data.canonicalPayload || null,
-        visual_payload: data.visual_payload || data.visualPayload || null,
-        visualAnalysisV2: data.visualAnalysisV2 || data.visual_analysis_v2 || null,
-        overall_score: data.overall_score || data.overallScore || null,
-        dermEngine: data.dermEngine || data.dermengine || null,
-        _debug: data._debug || null,
-
+        ...normalized,
+        report: normalized.report || data.report,
         recommendedProducts: getRecommendedProducts(primaryConcern),
-        recommendedServices: getRecommendedServices(primaryConcern),
-
-        fitzpatrickType: data.fitzpatrickType || null,
-        fitzpatrickSummary: data.fitzpatrickSummary || null,
-
-        agingPreviewImages: data.agingPreviewImages || null,
-        areasOfFocus: data.areasOfFocus || data.focusAreas || null
+        recommendedServices: getRecommendedServices(primaryConcern)
       });
 
-gaEvent('analysis_success', {
+      gaEvent('analysis_success', {
         primaryConcern,
         ageRange,
         hasFitz: !!(data.fitzpatrickType || data.fitzpatrickSummary),
