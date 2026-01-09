@@ -1,4 +1,4 @@
-// src/App.jsx
+// src/App.jsx// src/App.jsx
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Camera,
@@ -963,8 +963,9 @@ const SummaryCard = ({ ageRange, primaryConcern, analysisReport }) => {
 
   return (
     <div className="bg-white border-2 border-gray-900 p-6">
-      <div className="flex items-start justify-between gap-6">
-        <div className="flex-1">
+      <div className="flex flex-col lg:flex-row items-start justify-between gap-6">
+        {/* Left rail: keep readable in narrow layouts */}
+        <div className="w-full lg:w-[260px] lg:shrink-0">
           <p className="text-[11px] tracking-wider text-gray-500 font-bold">DEFAULT SUMMARY VIEW</p>
           <h4 className="text-2xl font-bold text-gray-900 mt-1">
             What This Analysis Flagged — At a Glance
@@ -973,7 +974,10 @@ const SummaryCard = ({ ageRange, primaryConcern, analysisReport }) => {
             Everything below is optional. Expand only what you want to read.
           </p>
         </div>
-              <div style={{ display:"flex", justifyContent:"space-between", gap:16, alignItems:"flex-start", marginTop:14, paddingTop:12, borderTop:"1px solid #e5e7eb" }}>
+
+        {/* Main summary + cluster breakdown */}
+        <div className="w-full lg:flex-1">
+          <div style={{ display:"flex", justifyContent:"space-between", gap:16, alignItems:"flex-start", marginTop:14, paddingTop:12, borderTop:"1px solid #e5e7eb" }}>
                 <div>
                   <div style={{ fontSize:24, fontWeight:700, lineHeight:1.15 }}>Your AI Facial Skin Analysis, by Dr. Lazuk</div>
                   <div style={{ fontSize:15, marginTop:4, color:"#334155" }}>Your Personal Roadmap To Skin Health</div>
@@ -993,9 +997,9 @@ const SummaryCard = ({ ageRange, primaryConcern, analysisReport }) => {
                     <span><span style={{ width:10, height:10, borderRadius:999, display:"inline-block", marginRight:6, backgroundColor: ragColor("red") }} /> Red = Priority focus</span>
                   </div>
                 </div>
-              </div>
+          </div>
 
-              <div style={{ display:"grid", gridTemplateColumns:"1fr", gap:14, marginTop:14 }}>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr", gap:14, marginTop:14 }}>
                 {(visualPayload?.clusters || []).map((c) => (
                   <div key={c.cluster_id} style={{ border:"1px solid #e5e7eb", borderRadius:10, padding:12, background:"#fff" }}>
                     <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, marginBottom:8 }}>
@@ -1052,10 +1056,11 @@ const SummaryCard = ({ ageRange, primaryConcern, analysisReport }) => {
                     </div>
                   </div>
                 ))}
-              </div>
+          </div>
 
-        <div className="text-gray-700">
-          <StaticMapPreview clusters={visualPayload?.clusters || []} />
+          <div className="text-gray-700">
+            <StaticMapPreview clusters={visualPayload?.clusters || []} />
+          </div>
         </div>
       </div>
 
@@ -2659,7 +2664,27 @@ try {
             ) : (
               <div className="bg-gray-50 border border-gray-200 p-6">
                 <p className="text-sm text-gray-700">
-                  {analysisReport?.agingJob ? 'Your Future Story images are being generated now and will arrive in a separate email shortly.' : 'Your Future Story images are not available for this result.'}
+                  {analysisReport?.agingJob ? (
+                    <>
+                      Your Future Story images are being generated now and will arrive by email shortly. Please check
+                      {analysisReport?.email ? (
+                        <> <span className="font-semibold">{analysisReport.email}</span></>
+                      ) : (
+                        <> your inbox</>
+                      )}
+                      {' '} (and spam/promotions).
+                    </>
+                  ) : (
+                    <>
+                      Your Future Story images are delivered by email for privacy and performance. Please check
+                      {analysisReport?.email ? (
+                        <> <span className="font-semibold">{analysisReport.email}</span></>
+                      ) : (
+                        <> your inbox</>
+                      )}
+                      {' '} (and spam/promotions).
+                    </>
+                  )}
                 </p>
               </div>
             )}
@@ -2840,7 +2865,13 @@ try {
         ) : (
           <div className="bg-gray-50 border border-gray-200 p-6">
             <p className="text-sm text-gray-700">
-              Your Future Story images are not available for this result.
+              Your Future Story images are delivered by email for privacy and performance. Please check
+              {analysisReport?.email ? (
+                <span className="font-semibold"> {analysisReport.email}</span>
+              ) : (
+                <span className="font-semibold"> your inbox</span>
+              )}
+              {" "}(and spam/promotions) for your Dr. Lazuk Virtual Skin Analysis email.
             </p>
           </div>
         )}
