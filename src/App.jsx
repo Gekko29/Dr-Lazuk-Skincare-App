@@ -1013,14 +1013,14 @@ const SummaryCard = ({ ageRange, primaryConcern, analysisReport }) => {
                       <div style={{ flex:"0 0 auto" }}>
                     {/* radial cluster */}
                     <svg width="140" height="140" viewBox="0 0 140 140" style={{ display:"block", margin:"0 auto" }}>
-                      {(c.metrics || []).map((m, i) => {
+                      {c.metrics.map((m, i) => {
                         const r = ringRadius - i * ringGap;
                         const circ = 2 * Math.PI * r;
                         const pct = Math.max(0, Math.min(1, (Number.isFinite(m.score) ? m.score : 0) / 100));
                         const offset = circ * (1 - pct);
                         const stroke = ragColor(m.rag);
                         return (
-                          <g key={m.metric_id || m.id || i}>
+                          <g key={m.id}>
                             <circle cx="70" cy="70" r={r} fill="none" stroke="#E5E7EB" strokeWidth={ringStroke} />
                             <circle
                               cx="70"
@@ -2217,9 +2217,20 @@ try {
           <div className="bg-white border border-gray-200 shadow-sm p-8">
             {step === 'photo' && (
               <>
-                <div className="flex items-center gap-3 mb-6">
-                  <Sparkles className="text-gray-900" size={28} />
-                  <h2 className="text-2xl font-bold text-gray-900">Virtual Skin Analysis</h2>
+                <div className="flex items-center justify-between gap-3 mb-6">
+                  <div className="flex items-center gap-3">
+                    <Sparkles className="text-gray-900" size={28} />
+                    <h2 className="text-2xl font-bold text-gray-900">Virtual Skin Analysis</h2>
+                  </div>
+                  {analysisReport ? (
+                    <button
+                      type="button"
+                      className="border border-gray-300 px-3 py-2 text-sm font-semibold hover:bg-gray-50"
+                      onClick={() => { try { window.print(); } catch(e) {} }}
+                    >
+                      Print / Save
+                    </button>
+                  ) : null}
                 </div>
 
                 <div className="bg-gray-100 border border-gray-300 p-4 mb-4 flex items-start gap-3">
@@ -2694,34 +2705,63 @@ try {
         {agencyChoice === 'guidance' && (
           <div className="mt-6 bg-white border-2 border-gray-900 p-8">
             <h4 className="font-bold text-gray-900 mb-4 text-2xl">Recommended Products</h4>
-            <div className="grid md:grid-cols-3 gap-4 mb-8">
-              {analysisReport.recommendedProducts.map((p, i) => (
-                <div key={i} className="bg-gray-50 border p-4">
-                  <h5 className="font-bold text-gray-900 mb-1">{p.name}</h5>
-                  <p className="text-gray-900 font-bold mb-2">${p.price}</p>
-                  <ul className="text-sm text-gray-700 mb-3">
-                    {p.benefits.map((b, j) => (
-                      <li key={j}>✓ {b}</li>
+              {(() => {
+                const p =
+                  analysisReport?.protocol_recommendation ||
+                  analysisReport?.canonical_payload?.protocol_recommendation;
+                if (p) {
+                  return (
+                    <div className="bg-purple-50 border-2 border-purple-200 p-5">
+                      <div className="flex items-start justify-between gap-3">
+                        <h5 className="font-bold text-purple-900 text-lg">{p.name}</h5>
+                        <span className="text-xs font-bold px-2 py-1 bg-purple-200 text-purple-900">
+                          {p.tier}
+                        </span>
+                      </div>
+                      <p className="text-sm text-purple-800 mt-2 mb-4">
+                        We recommend a single protocol set so your full routine stays cohesive. This
+                        protocol is designed to address all findings together, rather than assigning a
+                        separate product for each item.
+                      </p>
+                      {p.url ? (
+                        <a
+                          href={p.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-block text-center bg-purple-700 text-white py-3 px-4 font-bold hover:bg-purple-800"
+                          onClick={() => gaEvent("protocol_view_click", { protocol: p.id || p.name, primaryConcern })}
+                        >
+                          View {p.name}
+                        </a>
+                      ) : null}
+                    </div>
+                  );
+                }
+                return (
+                  <div className="grid md:grid-cols-2 gap-4">
+                    {analysisReport.recommendedProducts.map((p, i) => (
+                      <div key={i} className="bg-green-50 border-2 border-green-200 p-5">
+                        <h5 className="font-bold text-green-900 mb-2 text-lg">{p.name}</h5>
+                        <p className="text-sm text-green-800 mb-3">{p.description}</p>
+                        <a
+                          href={p.link}
+                          className="block text-center bg-green-600 text-white py-3 font-bold hover:bg-green-700"
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={() =>
+                            gaEvent('product_click', {
+                              productName: p.name,
+                              primaryConcern
+                            })
+                          }
+                        >
+                          View Product
+                        </a>
+                      </div>
                     ))}
-                  </ul>
-                  <a
-                    href={p.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() =>
-                      gaEvent('product_click', {
-                        productName: p.name,
-                        category: p.category,
-                        price: p.price,
-                        primaryConcern
-                      })
-                    }
-                    className="block text-center bg-gray-900 text-white py-2 font-bold hover:bg-gray-800"
-                  >
-                    View
-                  </a>
-                </div>
-              ))}
+                  </div>
+                );
+              })()}
             </div>
 
             <h4 className="font-bold text-gray-900 mb-4 text-2xl">
