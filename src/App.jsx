@@ -2762,7 +2762,6 @@ try {
                   </div>
                 );
               })()}
-            </div>
 
             <h4 className="font-bold text-gray-900 mb-4 text-2xl">
               Recommended Treatments
