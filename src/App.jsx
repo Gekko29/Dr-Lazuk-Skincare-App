@@ -1,4 +1,4 @@
-// src/App.jsx// src/App.jsx
+// src/App.jsx
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Camera,
@@ -1013,14 +1013,14 @@ const SummaryCard = ({ ageRange, primaryConcern, analysisReport }) => {
                       <div style={{ flex:"0 0 auto" }}>
                     {/* radial cluster */}
                     <svg width="140" height="140" viewBox="0 0 140 140" style={{ display:"block", margin:"0 auto" }}>
-                      {c.metrics.map((m, i) => {
+                      {(c.metrics || []).map((m, i) => {
                         const r = ringRadius - i * ringGap;
                         const circ = 2 * Math.PI * r;
                         const pct = Math.max(0, Math.min(1, (Number.isFinite(m.score) ? m.score : 0) / 100));
                         const offset = circ * (1 - pct);
                         const stroke = ragColor(m.rag);
                         return (
-                          <g key={m.id}>
+                          <g key={m.metric_id || m.id || i}>
                             <circle cx="70" cy="70" r={r} fill="none" stroke="#E5E7EB" strokeWidth={ringStroke} />
                             <circle
                               cx="70"
