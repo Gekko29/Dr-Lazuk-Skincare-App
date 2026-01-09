@@ -584,7 +584,7 @@ const validateCapturedImage = async ({ dataUrl, faces }) => {
   if (faces && Array.isArray(faces)) {
     // If multiple faces are detected, reject (prevents group photos / background faces)
     if (faces.length > 1) {
-      return { ok: false, code: 'obstructed', message: RETAKE_MESSAGES.obstructed, debug };
+      return { ok: true, warning: true, code: 'obstructed', message: RETAKE_MESSAGES.obstructed, debug };
     }
 
     const bb = faces?.[0]?.boundingBox;
@@ -606,12 +606,12 @@ const validateCapturedImage = async ({ dataUrl, faces }) => {
       // Require a reasonably large, not-too-close face in frame
       // (Partial faces often show small boxes; extreme close-ups show huge boxes.)
       if (ratio < 0.18 || ratio > 0.60) {
-        return { ok: false, code: 'framing', message: RETAKE_MESSAGES.framing, debug };
+        return { ok: true, warning: true, code: 'framing', message: RETAKE_MESSAGES.framing, debug };
       }
 
       // Require face center to be near image center (partial faces are often off-center)
       if (cx < 0.35 || cx > 0.65 || cy < 0.28 || cy > 0.72) {
-        return { ok: false, code: 'framing', message: RETAKE_MESSAGES.framing, debug };
+        return { ok: true, warning: true, code: 'framing', message: RETAKE_MESSAGES.framing, debug };
       }
 
       // Reject if face box is too close to edges (common when only part of face is visible)
@@ -624,7 +624,7 @@ const validateCapturedImage = async ({ dataUrl, faces }) => {
       const bottom = bb.y + bb.height;
 
       if (left < padX || top < padY || right > (imgW - padX) || bottom > (imgH - padY)) {
-        return { ok: false, code: 'framing', message: RETAKE_MESSAGES.framing, debug };
+        return { ok: true, warning: true, code: 'framing', message: RETAKE_MESSAGES.framing, debug };
       }
     }
   }
@@ -1661,6 +1661,15 @@ ${SUPPORTIVE_FOOTER_LINE}`);
           showSupportiveRetake(q.message, q.code, q.debug || null);
           return;
         }
+        if (q.warning) {
+          gaEvent('quality_warning', { source: 'camera', reason: q.code });
+          setCaptureSupportReason(q.code);
+          setCaptureSupportMessage(q.message);
+        } else {
+          setCaptureSupportReason('');
+          setCaptureSupportMessage('');
+        }
+
       } catch {
         gaEvent('quality_check_soft_pass', { source: 'camera' });
       }
@@ -1730,6 +1739,15 @@ ${SUPPORTIVE_FOOTER_LINE}`);
           try { e.target.value = ""; } catch {}
           return;
         }
+        if (q.warning) {
+          gaEvent('quality_warning', { source: 'upload', reason: q.code });
+          setCaptureSupportReason(q.code);
+          setCaptureSupportMessage(q.message);
+        } else {
+          setCaptureSupportReason('');
+          setCaptureSupportMessage('');
+        }
+
       } catch {
         gaEvent('quality_check_soft_pass', { source: 'upload' });
       }
@@ -1843,6 +1861,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
         fitzpatrickType: data.fitzpatrickType || null,
         fitzpatrickSummary: data.fitzpatrickSummary || null,
         agingPreviewImages: data.agingPreviewImages || null,
+        agingJob: data.agingJob || null,
         areasOfFocus: data.areasOfFocus || data.focusAreas || null,
 
         // ✅ Server-authoritative visualization payload (clusters + scores)
@@ -1857,16 +1876,24 @@ ${SUPPORTIVE_FOOTER_LINE}`);
         engine_meta: data.engine_meta || data.dermatologyEngine?.meta || null
       });
 
+// Fire-and-forget: generate aging preview images in a separate request to avoid report timeouts.
+try {
+  if (data?.agingJob?.endpoint && data?.agingJob?.payload) {
+    fetch(data.agingJob.endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data.agingJob.payload),
+      keepalive: true
+    }).catch(() => {});
+  }
+} catch (_) {}
+
+
       gaEvent('analysis_success', {
         primaryConcern,
         ageRange,
         hasFitz: !!(data.fitzpatrickType || data.fitzpatrickSummary),
-        hasAgingPreviews: !!(
-          data?.agingPreviewImages?.noChange10 ||
-          data?.agingPreviewImages?.noChange20 ||
-          data?.agingPreviewImages?.withCare10 ||
-          data?.agingPreviewImages?.withCare20
-        ),
+        hasAgingPreviews: (!!data?.agingJob) || (Array.isArray(data?.agingPreviewImages) && data.agingPreviewImages.length > 0),
         hasAreasOfFocus: !!(data?.areasOfFocus || data?.focusAreas)
       });
 
@@ -2632,7 +2659,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
             ) : (
               <div className="bg-gray-50 border border-gray-200 p-6">
                 <p className="text-sm text-gray-700">
-                  Your Future Story images are not available for this result.
+                  {analysisReport?.agingJob ? 'Your Future Story images are being generated now and will arrive in a separate email shortly.' : 'Your Future Story images are not available for this result.'}
                 </p>
               </div>
             )}
