@@ -247,6 +247,82 @@ function buildCanonicalPayloadFromSignalsV2(visualSignalsV2 = {}, { nowIso } = {
   };
 }
 
+
+/* ---------------------------------------
+   Visual Payload Builder (UI compatibility)
+--------------------------------------- */
+function buildVisualPayloadFromCanonical(canonical) {
+  const clusters = Array.isArray(canonical?.clusters) ? canonical.clusters : [];
+  // Flatten metrics to compute top signals (lowest scores = most attention)
+  const allMetrics = [];
+  clusters.forEach((c) => {
+    (c.metrics || []).forEach((m) => {
+      allMetrics.push({
+        cluster_id: c.cluster_id,
+        cluster_name: c.display_name,
+        metric_id: m.metric_id,
+        label: m.label,
+        score: m.score,
+        rag: m.rag,
+      });
+    });
+  });
+
+  allMetrics.sort((a, b) => (a.score ?? 999) - (b.score ?? 999));
+  const topSignals = allMetrics.slice(0, 8);
+
+  return {
+    version: "v2-ui",
+    overall: canonical?.overall || null,
+    // Shape expected by App.jsx radial cluster UI
+    clusters: clusters.map((c) => ({
+      id: c.cluster_id,
+      title: c.display_name,
+      score: c.score,
+      rag: c.rag,
+      metrics: (c.metrics || []).map((m) => ({
+        id: m.metric_id,
+        label: m.label,
+        score: m.score,
+        rag: m.rag,
+      })),
+    })),
+    topSignals,
+  };
+}
+
+function recommendProtocol({ primaryConcern, clusters }) {
+  // Locked logic:
+  // Hydration/Barrier: Radiant (Basic) -> Luxe (Advanced)
+  // Sensitivity/Calming: Clarite (Basic) -> Serein (Advanced)
+  // If sensitivity is mentioned/primary -> Clarite track (upgrade to Serein if any additional/moderate finding)
+  // Otherwise default Radiant if one primary concern and nothing moderate; upgrade to Luxe if aging is primary and hydration is moderate/secondary or any additional/moderate finding.
+  const pc = (primaryConcern || "").toLowerCase();
+  const hasSensitivity = pc.includes("sens") || pc.includes("red") || pc.includes("ros") || pc.includes("irrit");
+  // Determine if there is any moderate finding: any cluster score < 70 treated as moderate/attention threshold
+  const scores = (clusters || []).map((c) => Number(c.score)).filter((n) => Number.isFinite(n));
+  const hasModerate = scores.some((s) => s < 70);
+
+  if (hasSensitivity) {
+    return hasModerate
+      ? { id: "serein", name: "Serein Balance", tier: "Advanced", url: "https://www.skindoctor.ai/product-page/serein-balance-advanced-skincare-deep-hydration-restored-calm-resilient-skin" }
+      : { id: "clarite", name: "Clarite Protocol", tier: "Basic", url: "https://www.skindoctor.ai/product-page/clarite-protocol" };
+  }
+
+  const hasAging = pc.includes("aging") || pc.includes("wrinkle") || pc.includes("firm") || pc.includes("lift");
+  const hydrationCluster = (clusters || []).find((c) => (c.id || c.cluster_id || "").toLowerCase().includes("hydr"));
+  const hydrationScore = hydrationCluster ? Number(hydrationCluster.score) : NaN;
+  const hydrationModerate = Number.isFinite(hydrationScore) ? hydrationScore < 75 : false;
+
+  if (hasAging && (hydrationModerate || hasModerate)) {
+    return { id: "luxe", name: "Luxe Renewal", tier: "Advanced", url: "https://www.skindoctor.ai/product-page/luxe-renewal-complete-skincare-solution-advanced-firming-elevated-renewal" };
+  }
+
+  return hasModerate
+    ? { id: "luxe", name: "Luxe Renewal", tier: "Advanced", url: "https://www.skindoctor.ai/product-page/luxe-renewal-complete-skincare-solution-advanced-firming-elevated-renewal" }
+    : { id: "radiant", name: "Radiant Protocol", tier: "Basic", url: "https://www.skindoctor.ai/product-page/radiant-protocol-skincare-solution-natural-hydration-luminosity" };
+}
+
 // --- Fallback: build canonical payload when visualSignalsV2 is missing/invalid ---
 // Model B philosophy: prefer real signal scores; otherwise infer conservative, non-alarmist scores
 // from the report narrative so the UI can still render rings, numbers, and RAG consistently.
@@ -2766,7 +2842,15 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
 // 5) Queue SELFIE-based aging preview images in a separate (non-blocking) request.
 // IMPORTANT: generating 4 image edits can exceed Vercel runtime limits when bundled with report generation.
 // We return and email the report immediately, then the client can call /api/generate-aging to deliver the images.
-const agingPreviewImages = null;
+let agingPreviewImages = null;
+    try {
+      // Generate aging preview images inline so the emailed report contains them (single email).
+      // This can take ~1–2 minutes but should remain within Vercel's max duration.
+      agingPreviewImages = await generateAgingPreviewImages(photoDataUrl);
+    } catch (e) {
+      console.error("Aging preview generation failed:", e?.message || e);
+      agingPreviewImages = null;
+    }
 const agingPreviewHtml = buildAgingPreviewHtml(agingPreviewImages);
 
 const agingJob = {
@@ -2964,7 +3048,15 @@ const agingJob = {
             primaryConcern: primaryConcern || null,
           },
           { nowIso }
-        );
+        )
+    const visual_payload = buildVisualPayloadFromCanonical(canonical_payload);
+    const protocol_recommendation = recommendProtocol({
+      primaryConcern,
+      clusters: visual_payload.clusters,
+    });
+    canonical_payload.protocol_recommendation = protocol_recommendation;
+
+;
 
     return res.status(200).json({
       ok: true,
@@ -2972,7 +3064,8 @@ const agingJob = {
       // ✅ Canonical payload for client-side visual report (scores + RAG)
       canonical_payload,
 
-      visual_payload: canonical_payload,
+      visual_payload,
+      protocol_recommendation,
 // Original narrative letter (UI can keep rendering this as-is)
       report: reportText,
 
