@@ -34,6 +34,18 @@ function clampScore(n) {
   if (Number.isNaN(x)) return null;
   return Math.max(0, Math.min(100, Math.round(x)));
 }
+function inferScoreFromNarrative(narrative = "", keywords = []) {
+  const t = String(narrative || "").toLowerCase();
+  const hits = Array.isArray(keywords) && keywords.some((k) => t.includes(String(k).toLowerCase()));
+  if (!hits) return null;
+
+  const neg = /(concern|reduce|improve|needs|attention|issue|irritat|inflam|breakout|pigment|dark spot|wrinkl|sagg|dehydrat|dry|oil|congest|pore)/i.test(t);
+  const pos = /(healthy|balanced|resilient|strong|smooth|even tone|minimal|well-managed|intact)/i.test(t);
+
+  if (neg && !pos) return 58;
+  if (pos && !neg) return 82;
+  return 70;
+}
 const LOCKED_CLUSTERS = [
   { cluster_id:"core_skin", display_name:"Core Skin Health", weight:0.35, order:1, metrics:[
     { metric_id:"barrier_stability", display_name:"Barrier Stability", keywords:["barrier","skin barrier"] },
@@ -67,133 +79,21 @@ const LOCKED_CLUSTERS = [
     { metric_id:"environmental_damage", display_name:"Environmental Damage (UV / Pollution)", keywords:["uv","pollution","environmental"] }
   ]}
 ];
-function buildVisualPayload({ serverPayload }) {
-  // Server is authoritative, but API payloads may expose cluster info under different keys.
-  // We accept:
-  // - { clusters: [...] }
-  // - { visual_payload: { clusters: [...] } }
-  // - { visualAnalysisV2: { clusters: [...] } }
-  // - { areasOfFocus: [...] }   (cluster-level scores + rag; no per-metric scores)
-  if (!serverPayload) return null;
-
-  const resolved =
-    (serverPayload && Array.isArray(serverPayload.clusters) && serverPayload) ||
-    (serverPayload.visual_payload && Array.isArray(serverPayload.visual_payload.clusters) && serverPayload.visual_payload) ||
-    (serverPayload.visualAnalysisV2 && Array.isArray(serverPayload.visualAnalysisV2.clusters) && serverPayload.visualAnalysisV2) ||
-    null;
-
-  // Preferred: full cluster payload
-  if (resolved && Array.isArray(resolved.clusters)) {
-    const clusters = resolved.clusters
-      .filter(Boolean)
-      .map((c) => {
-        const metrics = Array.isArray(c.metrics) ? c.metrics : [];
-        const clusterScore = clampScore(c.score);
-        const clusterRag = String(c.rag || (clusterScore != null ? ragFromScore(clusterScore) : "unknown"));
-
-        return {
-          cluster_id: String(c.cluster_id || c.id || c.key || c.title || "").trim(),
-          display_name: String(c.display_name || c.title || "").trim(),
-          rag: clusterRag,
-          score: clusterScore,
-          confidence: typeof c.confidence === "number" ? c.confidence : null,
-          basis: c.basis ? String(c.basis) : null,
-          keywords: Array.isArray(c.keywords) ? c.keywords.map(String) : [],
-          metrics: metrics
-            .filter(Boolean)
-            .map((m) => {
-              const metricScore = clampScore(m.score);
-              return {
-                metric_id: String(m.metric_id || m.id || m.key || m.name || "").trim(),
-                display_name: String(m.display_name || m.name || "").trim(),
-                score: metricScore,
-                rag: String(m.rag || (metricScore != null ? ragFromScore(metricScore) : "unknown"))
-              };
-            })
-        };
-      });
-
-    const overallScore = clampScore(
-      resolved?.overall_score?.score ??
-        resolved?.overall_score ??
-        resolved?.score ??
-        serverPayload?.overall_score?.score ??
-        serverPayload?.overall_score ??
-        serverPayload?.score
-    );
-
-    return {
-      overall_score: {
-        score: overallScore,
-        rag: String(
-          resolved?.overall_score?.rag ||
-            serverPayload?.overall_score?.rag ||
-            (overallScore != null ? ragFromScore(overallScore) : "unknown")
-        )
-      },
-      clusters
-    };
-  }
-
-  // Fallback: areasOfFocus (cluster-only)
-  const aof =
-    (Array.isArray(serverPayload.areasOfFocus) && serverPayload.areasOfFocus) ||
-    (Array.isArray(serverPayload.visual_payload?.areasOfFocus) && serverPayload.visual_payload.areasOfFocus) ||
-    null;
-
-  if (aof) {
-    const lockedById = new Map(LOCKED_CLUSTERS.map((c) => [c.cluster_id, c]));
-    const clusters = aof
-      .filter(Boolean)
-      .map((c) => {
-        const id = String(c.cluster_id || c.id || c.key || "").trim();
-        const locked = lockedById.get(id);
-        const clusterScore = clampScore(c.score);
-        const clusterRag = String(c.rag || (clusterScore != null ? ragFromScore(clusterScore) : "unknown"));
-
-        // No per-metric scores in this payload; we still show the metric list (names) for transparency.
-        const metrics = (locked?.metrics || []).map((m) => ({
-          metric_id: m.metric_id,
-          display_name: m.display_name,
-          score: null,
-          rag: "unknown"
-        }));
-
-        return {
-          cluster_id: id,
-          display_name: String(c.title || locked?.display_name || id || "").trim(),
-          rag: clusterRag,
-          score: clusterScore,
-          confidence: typeof c.confidence === "number" ? c.confidence : null,
-          basis: c.basis ? String(c.basis) : "cluster_only",
-          keywords: Array.isArray(c.keywords) ? c.keywords.map(String) : [],
-          metrics
-        };
-      })
-      .filter((c) => c.cluster_id);
-
-    const overallScore = clampScore(
-      serverPayload?.overall_score?.score ??
-        serverPayload?.overall_score ??
-        serverPayload?.score ??
-        serverPayload?.visual_payload?.overall_score?.score ??
-        serverPayload?.visual_payload?.overall_score
-    );
-
-    return {
-      overall_score: {
-        score: overallScore,
-        rag: String(
-          serverPayload?.overall_score?.rag ||
-            serverPayload?.visual_payload?.overall_score?.rag ||
-            (overallScore != null ? ragFromScore(overallScore) : "unknown")
-        )
-      },
-      clusters
-    };
-  }
-
-  return null;
+function buildVisualPayload({ narrative, serverPayload }) {
+  if (serverPayload && typeof serverPayload === "object" && Array.isArray(serverPayload.clusters)) return serverPayload;
+  const clusters = LOCKED_CLUSTERS.map((c) => {
+    const metrics = c.metrics.map((m) => {
+      const inferred = inferScoreFromNarrative(narrative, m.keywords);
+      const score = inferred === null ? null : clampScore(inferred);
+      return { metric_id:m.metric_id, display_name:m.display_name, score, rag:ragFromScore(score) };
+    });
+    const nums = metrics.map((x) => x.score).filter((v) => typeof v === "number" && !Number.isNaN(v));
+    const avg = nums.length ? clampScore(nums.reduce((s, v) => s + v, 0) / nums.length) : null;
+    return { cluster_id:c.cluster_id, display_name:c.display_name, weight:c.weight, order:c.order, metrics, avg };
+  });
+  const hasAllAverages = clusters.every((c) => typeof c.avg === "number" && !Number.isNaN(c.avg));
+  const overallScore = hasAllAverages ? clampScore(clusters.reduce((sum, c) => sum + (c.avg * c.weight), 0)) : null;
+  return { version:1, generated_at:new Date().toISOString(), overall_score:{ score:overallScore, rag:ragFromScore(overallScore) }, clusters };
 }
 function ragColor(rag){
   if(rag==="green") return "#16a34a";
@@ -584,7 +484,7 @@ const validateCapturedImage = async ({ dataUrl, faces }) => {
   if (faces && Array.isArray(faces)) {
     // If multiple faces are detected, reject (prevents group photos / background faces)
     if (faces.length > 1) {
-      return { ok: true, warning: true, code: 'obstructed', message: RETAKE_MESSAGES.obstructed, debug };
+      return { ok: false, code: 'obstructed', message: RETAKE_MESSAGES.obstructed, debug };
     }
 
     const bb = faces?.[0]?.boundingBox;
@@ -606,12 +506,12 @@ const validateCapturedImage = async ({ dataUrl, faces }) => {
       // Require a reasonably large, not-too-close face in frame
       // (Partial faces often show small boxes; extreme close-ups show huge boxes.)
       if (ratio < 0.18 || ratio > 0.60) {
-        return { ok: true, warning: true, code: 'framing', message: RETAKE_MESSAGES.framing, debug };
+        return { ok: false, code: 'framing', message: RETAKE_MESSAGES.framing, debug };
       }
 
       // Require face center to be near image center (partial faces are often off-center)
       if (cx < 0.35 || cx > 0.65 || cy < 0.28 || cy > 0.72) {
-        return { ok: true, warning: true, code: 'framing', message: RETAKE_MESSAGES.framing, debug };
+        return { ok: false, code: 'framing', message: RETAKE_MESSAGES.framing, debug };
       }
 
       // Reject if face box is too close to edges (common when only part of face is visible)
@@ -624,7 +524,7 @@ const validateCapturedImage = async ({ dataUrl, faces }) => {
       const bottom = bb.y + bb.height;
 
       if (left < padX || top < padY || right > (imgW - padX) || bottom > (imgH - padY)) {
-        return { ok: true, warning: true, code: 'framing', message: RETAKE_MESSAGES.framing, debug };
+        return { ok: false, code: 'framing', message: RETAKE_MESSAGES.framing, debug };
       }
     }
   }
@@ -862,44 +762,27 @@ const AreasOfFocusCard = ({ areas }) => {
 /* ---------------------------------------
    Default Summary View (ON-SCREEN)
 --------------------------------------- */
-const normalizeScore01 = (score) => {
-  if (typeof score !== "number" || Number.isNaN(score)) return null;
-
-  // Accept either 0..1 or 0..100 inputs
-  if (score > 1.5) {
-    const c = clampScore(score);
-    if (c === null) return null;
-    return c / 100;
-  }
-
-  return Math.max(0, Math.min(1, score));
-};
-
 const scoreToRag = (score) => {
-  const s = normalizeScore01(score);
-  if (s === null) return { label: "A", text: "Attention", level: "amber" };
-  if (s >= 0.66) return { label: "R", text: "High Priority", level: "red" };
-  if (s >= 0.33) return { label: "A", text: "Moderate Priority", level: "amber" };
+  if (typeof score !== "number" || Number.isNaN(score)) return { label: "A", text: "Attention", level: "amber" };
+  if (score >= 0.66) return { label: "R", text: "High Priority", level: "red" };
+  if (score >= 0.33) return { label: "A", text: "Moderate Priority", level: "amber" };
   return { label: "G", text: "Stable", level: "green" };
 };
 
 const RagPill = ({ score }) => {
   const rag = scoreToRag(score);
-  const s01 = normalizeScore01(score);
-
   const cls =
     rag.level === "red"
       ? "bg-red-600 text-white"
       : rag.level === "green"
       ? "bg-green-600 text-white"
       : "bg-yellow-500 text-white";
-
   return (
     <span className={`inline-flex items-center gap-2 px-3 py-1 text-xs font-bold ${cls}`}>
       <span className="inline-block w-5 text-center">{rag.label}</span>
       <span>{rag.text}</span>
-      {s01 !== null && (
-        <span className="ml-1 font-mono text-[11px] opacity-90">{Math.round(s01 * 100)}%</span>
+      {typeof score === "number" && !Number.isNaN(score) && (
+        <span className="ml-1 font-mono text-[11px] opacity-90">{Math.round(score * 100)}%</span>
       )}
     </span>
   );
@@ -914,8 +797,7 @@ const StaticMapPreview = ({ clusters = [] }) => {
       <svg width="92" height="92" viewBox="0 0 92 92" role="img" aria-label="static map preview">
         <g transform="translate(46 46)">
           {safeClusters.map((c, i) => {
-            const avgRaw = (typeof c?.score === "number" ? c.score : (typeof c?.avg === "number" ? c.avg : 70));
-            const avg = clampScore(avgRaw) ?? 70;
+            const avg = typeof c?.avg === "number" ? c.avg : 70;
             const rag = ragFromScore(avg);
             const r = rBase + (i * rStep);
             return (
@@ -944,12 +826,9 @@ const deriveTopSignals = (areas) => {
 const SummaryCard = ({ ageRange, primaryConcern, analysisReport }) => {
 
   const visualPayload = useMemo(() => {
-    const serverPayload =
-      (analysisReport && typeof analysisReport === "object"
-        ? (analysisReport.canonical_payload || analysisReport.visual_payload || null)
-        : null);
-
-    return buildVisualPayload({ serverPayload });
+    const narrative = typeof analysisReport === "string" ? analysisReport : (analysisReport?.report || "");
+    const serverPayload = analysisReport?.canonical_payload || analysisReport?.short_report || null;
+    return buildVisualPayload({ narrative, serverPayload });
   }, [analysisReport]);
   const top = useMemo(() => deriveTopSignals(analysisReport?.areasOfFocus), [analysisReport]);
   const excerpt = useMemo(() => {
@@ -963,9 +842,8 @@ const SummaryCard = ({ ageRange, primaryConcern, analysisReport }) => {
 
   return (
     <div className="bg-white border-2 border-gray-900 p-6">
-      <div className="flex flex-col lg:flex-row items-start justify-between gap-6">
-        {/* Left rail: keep readable in narrow layouts */}
-        <div className="w-full lg:w-[260px] lg:shrink-0">
+      <div className="flex items-start justify-between gap-6">
+        <div className="flex-1">
           <p className="text-[11px] tracking-wider text-gray-500 font-bold">DEFAULT SUMMARY VIEW</p>
           <h4 className="text-2xl font-bold text-gray-900 mt-1">
             What This Analysis Flagged — At a Glance
@@ -974,72 +852,69 @@ const SummaryCard = ({ ageRange, primaryConcern, analysisReport }) => {
             Everything below is optional. Expand only what you want to read.
           </p>
         </div>
+	              <div style={{ display:"flex", justifyContent:"space-between", gap:16, alignItems:"flex-start", marginTop:14, paddingTop:12, borderTop:"1px solid #e5e7eb" }}>
+	                <div>
+	                  <div style={{ fontSize:28, fontWeight:800, lineHeight:1.1 }}>
+	                    {firstName?.trim() ? `${firstName.trim()} — Your Curated Skin Protocol` : "Your Curated Skin Protocol"}
+	                  </div>
+	                  <div style={{ fontSize:14, marginTop:6, color:"#334155" }}>Your Personal Roadmap To Skin Health</div>
+	                  <div style={{ fontSize:12, marginTop:2, color:"#475569" }}>skindoctor.ai</div>
+	                </div>
 
-        {/* Main summary + cluster breakdown */}
-        <div className="w-full lg:flex-1">
-          <div style={{ display:"flex", justifyContent:"space-between", gap:16, alignItems:"flex-start", marginTop:14, paddingTop:12, borderTop:"1px solid #e5e7eb" }}>
-                <div>
-                  <div style={{ fontSize:24, fontWeight:700, lineHeight:1.15 }}>Your AI Facial Skin Analysis, by Dr. Lazuk</div>
-                  <div style={{ fontSize:15, marginTop:4, color:"#334155" }}>Your Personal Roadmap To Skin Health</div>
-                  <div style={{ fontSize:11, marginTop:2, color:"#64748b" }}>skindoctor.ai</div>
-                </div>
-
-                <div style={{ minWidth:280, textAlign:"right" }}>
-                  <div style={{ fontSize:12, color:"#64748b" }}>Overall Skin Health</div>
+	                <div style={{ minWidth:300, textAlign:"right" }}>
+	                  <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:10 }}>
+	                    <button
+	                      type="button"
+	                      onClick={() => window.print()}
+	                      style={{
+	                        fontSize:12,
+	                        fontWeight:700,
+	                        padding:"8px 10px",
+	                        borderRadius:10,
+	                        border:"1px solid #e5e7eb",
+	                        background:"#ffffff",
+	                        color:"#0f172a",
+	                        cursor:"pointer"
+	                      }}
+	                      aria-label="Print or save this report"
+	                    >
+	                      Print / Save
+	                    </button>
+	                  </div>
+	                  <div style={{ fontSize:14, fontWeight:700, color:"#0f172a" }}>Overall Skin Health</div>
                   <div style={{ display:"flex", justifyContent:"flex-end", alignItems:"baseline", gap:8, marginTop:6 }}>
                     <span style={{ fontSize:56, fontWeight:800, lineHeight:1 }}>{visualPayload?.overall_score?.score ?? "—"}</span>
-                    <span style={{ fontSize:18, color:"#64748b" }}>/100</span>
-                    <span style={{ width:14, height:14, borderRadius:999, display:"inline-block", backgroundColor: ragColor(visualPayload?.overall_score?.rag || "unknown") }} />
+	                    <span style={{ fontSize:18, color:"#334155" }}>/100</span>
+                    <span style={{ width:14, height:14, borderRadius:999, display:"inline-block", backgroundColor: ragColor(visualPayload?.overall_score?.rag || "amber") }} />
                   </div>
-                  <div style={{ display:"flex", flexDirection:"column", gap:6, marginTop:10, fontSize:11, color:"#475569", alignItems:"flex-end" }}>
+	                  <div style={{ display:"flex", flexDirection:"column", gap:6, marginTop:10, fontSize:12, color:"#334155", alignItems:"flex-end" }}>
                     <span><span style={{ width:10, height:10, borderRadius:999, display:"inline-block", marginRight:6, backgroundColor: ragColor("green") }} /> Green = Strong</span>
                     <span><span style={{ width:10, height:10, borderRadius:999, display:"inline-block", marginRight:6, backgroundColor: ragColor("amber") }} /> Amber = Moderate opportunity</span>
                     <span><span style={{ width:10, height:10, borderRadius:999, display:"inline-block", marginRight:6, backgroundColor: ragColor("red") }} /> Red = Priority focus</span>
                   </div>
                 </div>
-          </div>
+              </div>
 
-          <div style={{ display:"grid", gridTemplateColumns:"1fr", gap:14, marginTop:14 }}>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr", gap:14, marginTop:14 }}>
                 {(visualPayload?.clusters || []).map((c) => (
                   <div key={c.cluster_id} style={{ border:"1px solid #e5e7eb", borderRadius:10, padding:12, background:"#fff" }}>
-                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, marginBottom:8 }}>
-                      <div style={{ fontSize:14, fontWeight:700 }}>{c.display_name}</div>
-                      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                        <span style={{ width:8, height:8, borderRadius:999, background: ragColor(c.rag) }} />
-                        <span style={{ fontSize:12, fontWeight:700, color:"#111827" }}>{Math.round(c.score)}/100</span>
-                      </div>
-                    </div>
+                    <div style={{ fontSize:14, fontWeight:700, marginBottom:8 }}>{c.display_name}</div>
                     <div style={{ display:"flex", gap:12, alignItems:"flex-start" }}>
                       <div style={{ flex:"0 0 auto" }}>
-                    {/* radial cluster */}
-                    <svg width="140" height="140" viewBox="0 0 140 140" style={{ display:"block", margin:"0 auto" }}>
-                      {c.metrics.map((m, i) => {
-                        const r = ringRadius - i * ringGap;
-                        const circ = 2 * Math.PI * r;
-                        const pct = Math.max(0, Math.min(1, (Number.isFinite(m.score) ? m.score : 0) / 100));
-                        const offset = circ * (1 - pct);
-                        const stroke = ragColor(m.rag);
-                        return (
-                          <g key={m.id}>
-                            <circle cx="70" cy="70" r={r} fill="none" stroke="#E5E7EB" strokeWidth={ringStroke} />
-                            <circle
-                              cx="70"
-                              cy="70"
-                              r={r}
-                              fill="none"
-                              stroke={stroke}
-                              strokeWidth={ringStroke}
-                              strokeDasharray={circ}
-                              strokeDashoffset={offset}
-                              strokeLinecap="round"
-                              transform="rotate(-90 70 70)"
-                            />
+                        <svg width="140" height="140" viewBox="0 0 140 140" role="img" aria-label={`${c.display_name} radial cluster`}>
+                          <g transform="translate(70 70)">
+                            {(c.metrics || []).map((m, i) => {
+                              const r = 18 + (i * 8);
+                              return (
+                                <g key={m.metric_id || i}>
+                                  <circle cx="0" cy="0" r={r} fill="none" stroke="#e5e7eb" strokeWidth="4" />
+                                  <circle cx={r} cy="0" r="4.5" fill={ragColor(m.rag)} />
+                                </g>
+                              );
+                            })}
+                            <circle cx="0" cy="0" r="10" fill="none" stroke="#cbd5e1" strokeWidth="3" />
                           </g>
-                        );
-                      })}
-                      <text x="70" y="74" textAnchor="middle" fontSize="22" fontWeight="800" fill="#111827">{Math.round(c.score)}</text>
-                      <text x="70" y="94" textAnchor="middle" fontSize="12" fontWeight="600" fill="#6B7280">/100</text>
-                    </svg>
+                        </svg>
                       </div>
 
                       <div style={{ flex:1, display:"flex", flexDirection:"column", gap:8 }}>
@@ -1056,11 +931,10 @@ const SummaryCard = ({ ageRange, primaryConcern, analysisReport }) => {
                     </div>
                   </div>
                 ))}
-          </div>
+              </div>
 
-          <div className="text-gray-700">
-            <StaticMapPreview clusters={visualPayload?.clusters || []} />
-          </div>
+        <div className="text-gray-700">
+          <StaticMapPreview clusters={visualPayload?.clusters || []} />
         </div>
       </div>
 
@@ -1666,15 +1540,6 @@ ${SUPPORTIVE_FOOTER_LINE}`);
           showSupportiveRetake(q.message, q.code, q.debug || null);
           return;
         }
-        if (q.warning) {
-          gaEvent('quality_warning', { source: 'camera', reason: q.code });
-          setCaptureSupportReason(q.code);
-          setCaptureSupportMessage(q.message);
-        } else {
-          setCaptureSupportReason('');
-          setCaptureSupportMessage('');
-        }
-
       } catch {
         gaEvent('quality_check_soft_pass', { source: 'camera' });
       }
@@ -1744,15 +1609,6 @@ ${SUPPORTIVE_FOOTER_LINE}`);
           try { e.target.value = ""; } catch {}
           return;
         }
-        if (q.warning) {
-          gaEvent('quality_warning', { source: 'upload', reason: q.code });
-          setCaptureSupportReason(q.code);
-          setCaptureSupportMessage(q.message);
-        } else {
-          setCaptureSupportReason('');
-          setCaptureSupportMessage('');
-        }
-
       } catch {
         gaEvent('quality_check_soft_pass', { source: 'upload' });
       }
@@ -1859,46 +1715,37 @@ ${SUPPORTIVE_FOOTER_LINE}`);
       setReflectionSeen(false);
       setAgencyChoice(null);
 
+      // api/generate-report returns narrative + recommendations under `data.report`,
+      // but the visual scoring payloads (rings/clusters/RAG) are returned at the top level
+      // as `canonical_payload` and/or `short_report`.
+      // Merge them so the visual report can render correctly.
+      const mergedReport = {
+        ...(data.report || {}),
+        canonical_payload: data.canonical_payload || data?.report?.canonical_payload || null,
+        short_report: data.short_report || data?.report?.short_report || null
+      };
+
       setAnalysisReport({
-        report: data.report,
+        ...mergedReport,
+        report: data.report, // keep raw narrative in its prior location for compatibility
         recommendedProducts: getRecommendedProducts(primaryConcern),
         recommendedServices: getRecommendedServices(primaryConcern),
         fitzpatrickType: data.fitzpatrickType || null,
         fitzpatrickSummary: data.fitzpatrickSummary || null,
         agingPreviewImages: data.agingPreviewImages || null,
-        agingJob: data.agingJob || null,
-        areasOfFocus: data.areasOfFocus || data.focusAreas || null,
-
-        // ✅ Server-authoritative visualization payload (clusters + scores)
-        canonical_payload:
-          data.canonical_payload ||
-          data.visual_payload ||
-          data.visualPayload ||
-          data.dermatologyEngine?.visual_payload ||
-          null,
-
-        // ✅ Optional meta for debugging / future UI (additive)
-        engine_meta: data.engine_meta || data.dermatologyEngine?.meta || null
+        areasOfFocus: data.areasOfFocus || data.focusAreas || null
       });
-
-// Fire-and-forget: generate aging preview images in a separate request to avoid report timeouts.
-try {
-  if (data?.agingJob?.endpoint && data?.agingJob?.payload) {
-    fetch(data.agingJob.endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data.agingJob.payload),
-      keepalive: true
-    }).catch(() => {});
-  }
-} catch (_) {}
-
 
       gaEvent('analysis_success', {
         primaryConcern,
         ageRange,
         hasFitz: !!(data.fitzpatrickType || data.fitzpatrickSummary),
-        hasAgingPreviews: (!!data?.agingJob) || (Array.isArray(data?.agingPreviewImages) && data.agingPreviewImages.length > 0),
+        hasAgingPreviews: !!(
+          data?.agingPreviewImages?.noChange10 ||
+          data?.agingPreviewImages?.noChange20 ||
+          data?.agingPreviewImages?.withCare10 ||
+          data?.agingPreviewImages?.withCare20
+        ),
         hasAreasOfFocus: !!(data?.areasOfFocus || data?.focusAreas)
       });
 
@@ -2217,20 +2064,9 @@ try {
           <div className="bg-white border border-gray-200 shadow-sm p-8">
             {step === 'photo' && (
               <>
-                <div className="flex items-center justify-between gap-3 mb-6">
-                  <div className="flex items-center gap-3">
-                    <Sparkles className="text-gray-900" size={28} />
-                    <h2 className="text-2xl font-bold text-gray-900">Virtual Skin Analysis</h2>
-                  </div>
-                  {analysisReport ? (
-                    <button
-                      type="button"
-                      className="border border-gray-300 px-3 py-2 text-sm font-semibold hover:bg-gray-50"
-                      onClick={() => { try { window.print(); } catch(e) {} }}
-                    >
-                      Print / Save
-                    </button>
-                  ) : null}
+                <div className="flex items-center gap-3 mb-6">
+                  <Sparkles className="text-gray-900" size={28} />
+                  <h2 className="text-2xl font-bold text-gray-900">Virtual Skin Analysis</h2>
                 </div>
 
                 <div className="bg-gray-100 border border-gray-300 p-4 mb-4 flex items-start gap-3">
@@ -2675,27 +2511,7 @@ try {
             ) : (
               <div className="bg-gray-50 border border-gray-200 p-6">
                 <p className="text-sm text-gray-700">
-                  {analysisReport?.agingJob ? (
-                    <>
-                      Your Future Story images are being generated now and will arrive by email shortly. Please check
-                      {analysisReport?.email ? (
-                        <> <span className="font-semibold">{analysisReport.email}</span></>
-                      ) : (
-                        <> your inbox</>
-                      )}
-                      {' '} (and spam/promotions).
-                    </>
-                  ) : (
-                    <>
-                      Your Future Story images are delivered by email for privacy and performance. Please check
-                      {analysisReport?.email ? (
-                        <> <span className="font-semibold">{analysisReport.email}</span></>
-                      ) : (
-                        <> your inbox</>
-                      )}
-                      {' '} (and spam/promotions).
-                    </>
-                  )}
+                  Your Future Story images are not available for this result.
                 </p>
               </div>
             )}
@@ -2705,63 +2521,35 @@ try {
         {agencyChoice === 'guidance' && (
           <div className="mt-6 bg-white border-2 border-gray-900 p-8">
             <h4 className="font-bold text-gray-900 mb-4 text-2xl">Recommended Products</h4>
-              {(() => {
-                const p =
-                  analysisReport?.protocol_recommendation ||
-                  analysisReport?.canonical_payload?.protocol_recommendation;
-                if (p) {
-                  return (
-                    <div className="bg-purple-50 border-2 border-purple-200 p-5">
-                      <div className="flex items-start justify-between gap-3">
-                        <h5 className="font-bold text-purple-900 text-lg">{p.name}</h5>
-                        <span className="text-xs font-bold px-2 py-1 bg-purple-200 text-purple-900">
-                          {p.tier}
-                        </span>
-                      </div>
-                      <p className="text-sm text-purple-800 mt-2 mb-4">
-                        We recommend a single protocol set so your full routine stays cohesive. This
-                        protocol is designed to address all findings together, rather than assigning a
-                        separate product for each item.
-                      </p>
-                      {p.url ? (
-                        <a
-                          href={p.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-block text-center bg-purple-700 text-white py-3 px-4 font-bold hover:bg-purple-800"
-                          onClick={() => gaEvent("protocol_view_click", { protocol: p.id || p.name, primaryConcern })}
-                        >
-                          View {p.name}
-                        </a>
-                      ) : null}
-                    </div>
-                  );
-                }
-                return (
-                  <div className="grid md:grid-cols-2 gap-4">
-                    {analysisReport.recommendedProducts.map((p, i) => (
-                      <div key={i} className="bg-green-50 border-2 border-green-200 p-5">
-                        <h5 className="font-bold text-green-900 mb-2 text-lg">{p.name}</h5>
-                        <p className="text-sm text-green-800 mb-3">{p.description}</p>
-                        <a
-                          href={p.link}
-                          className="block text-center bg-green-600 text-white py-3 font-bold hover:bg-green-700"
-                          target="_blank"
-                          rel="noreferrer"
-                          onClick={() =>
-                            gaEvent('product_click', {
-                              productName: p.name,
-                              primaryConcern
-                            })
-                          }
-                        >
-                          View Product
-                        </a>
-                      </div>
+            <div className="grid md:grid-cols-3 gap-4 mb-8">
+              {analysisReport.recommendedProducts.map((p, i) => (
+                <div key={i} className="bg-gray-50 border p-4">
+                  <h5 className="font-bold text-gray-900 mb-1">{p.name}</h5>
+                  <p className="text-gray-900 font-bold mb-2">${p.price}</p>
+                  <ul className="text-sm text-gray-700 mb-3">
+                    {p.benefits.map((b, j) => (
+                      <li key={j}>✓ {b}</li>
                     ))}
-                  </div>
-                );
-              })()}
+                  </ul>
+                  <a
+                    href={p.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() =>
+                      gaEvent('product_click', {
+                        productName: p.name,
+                        category: p.category,
+                        price: p.price,
+                        primaryConcern
+                      })
+                    }
+                    className="block text-center bg-gray-900 text-white py-2 font-bold hover:bg-gray-800"
+                  >
+                    View
+                  </a>
+                </div>
+              ))}
+            </div>
 
             <h4 className="font-bold text-gray-900 mb-4 text-2xl">
               Recommended Treatments
@@ -2904,13 +2692,7 @@ try {
         ) : (
           <div className="bg-gray-50 border border-gray-200 p-6">
             <p className="text-sm text-gray-700">
-              Your Future Story images are delivered by email for privacy and performance. Please check
-              {analysisReport?.email ? (
-                <span className="font-semibold"> {analysisReport.email}</span>
-              ) : (
-                <span className="font-semibold"> your inbox</span>
-              )}
-              {" "}(and spam/promotions) for your Dr. Lazuk Virtual Skin Analysis email.
+              Your Future Story images are not available for this result.
             </p>
           </div>
         )}
