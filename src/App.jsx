@@ -2709,7 +2709,7 @@ try {
 
         {agencyChoice === 'guidance' && (
           <div className="mt-6 bg-white border-2 border-gray-900 p-8">
-            <h4 className="font-bold text-gray-900 mb-4 text-2xl">Recommended Products</h4>
+            <h4 className="font-bold text-gray-900 mb-4 text-2xl">Protocol Products</h4>
               {(() => {
                 const p =
                   analysisReport?.protocol_recommendation ||
@@ -2718,12 +2718,12 @@ try {
                   return (
                     <div className="bg-purple-50 border-2 border-purple-200 p-5">
                       <div className="flex items-start justify-between gap-3">
-                        <h5 className="font-bold text-purple-900 text-lg">{p.name}</h5>
-                        <span className="text-xs font-bold px-2 py-1 bg-purple-200 text-purple-900">
+                        <h5 className="font-bold text-gray-700 text-lg">{p.name}</h5>
+                        <span className="text-xs font-bold px-2 py-1 bg-purple-200 text-gray-700">
                           {p.tier}
                         </span>
                       </div>
-                      <p className="text-sm text-purple-800 mt-2 mb-4">
+                      <p className="text-sm text-gray-700 mt-2 mb-4">
                         We recommend a single protocol set so your full routine stays cohesive. This
                         protocol is designed to address all findings together, rather than assigning a
                         separate product for each item.
@@ -2923,13 +2923,13 @@ try {
 
       <AccordionSection
         id="guidance"
-        title="Recommended Products and Treatments"
+        title="Protocol Products and Treatments"
         subtitle="Personalized guidance mapped to your primary concern."
         open={!!openSections.guidance}
         onToggle={toggleSection}
       >
         <div className="bg-white border-2 border-gray-900 p-8">
-          <h4 className="font-bold text-gray-900 mb-4 text-2xl">Recommended Products</h4>
+          <h4 className="font-bold text-gray-900 mb-4 text-2xl">Protocol Products</h4>
           <div className="grid md:grid-cols-3 gap-4 mb-8">
             {analysisReport.recommendedProducts.map((p, i) => (
               <div key={i} className="bg-gray-50 border p-4">
