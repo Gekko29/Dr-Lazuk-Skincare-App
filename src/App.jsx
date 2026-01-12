@@ -1058,9 +1058,13 @@ const SummaryCard = ({ analysisReport, firstName }) => {
             {metrics.length > 30 && (
               <div className="mt-2 text-[11px] text-gray-500">
                 Showing 30 of {metrics.length} metrics.
-              </div>
-            )}
-          </div>
+	  </div>
+	)}
+
+	      </AccordionSection>
+	    </div>
+	  </div>
+	)}
         )}
 
         {/* Top signals */}
@@ -2876,7 +2880,10 @@ try {
     ) : null}
   </div>
 )}
-      </div>
+      </AccordionSection>
+    </div>
+  </div>
+)}
 
       <div className="bg-gray-900 text-white py-8 mt-12">
         <div className="max-w-6xl mx-auto px-4 text-center">
