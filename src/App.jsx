@@ -692,7 +692,6 @@ const IdentityLockOverlay = ({ onComplete }) => {
         </p>
       </div>
     </div>
-    </>
   );
 };
 
