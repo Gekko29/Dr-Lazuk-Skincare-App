@@ -692,7 +692,7 @@ const IdentityLockOverlay = ({ onComplete }) => {
         </p>
       </div>
     </div>
-    );
+  );
 };
 
 /* ---------------------------------------
@@ -2465,7 +2465,6 @@ try {
                     </div>
                   </div>
                 )}
-              </>
             )}
 
             {step === 'questions' && capturedImage && (
@@ -2592,7 +2591,6 @@ try {
                         <>
                           <Loader className="animate-spin" size={20} />
                           <span>Analyzing...</span>
-                        </>
                       ) : (
                         'View Results'
                       )}
@@ -2770,7 +2768,6 @@ try {
                         <> your inbox</>
                       )}
                       {' '} (and spam/promotions).
-                    </>
                   ) : (
                     <>
                       Your Future Story images are delivered by email for privacy and performance. Please check
@@ -2780,7 +2777,6 @@ try {
                         <> your inbox</>
                       )}
                       {' '} (and spam/promotions).
-                    </>
                   )}
                 </p>
               </div>
@@ -2874,10 +2870,10 @@ try {
         </div>
       </div>
     ) : null}
+      </AccordionSection>
+    </div>
   </div>
 )}
-      </AccordionSection>
-      </div>
 
       <div className="bg-gray-900 text-white py-8 mt-12">
         <div className="max-w-6xl mx-auto px-4 text-center">
