@@ -68,133 +68,99 @@ const LOCKED_CLUSTERS = [
   ]}
 ];
 function buildVisualPayload({ serverPayload }) {
-  // Server is authoritative, but API payloads may expose cluster info under different keys.
-  // We accept:
-  // - { clusters: [...] }
-  // - { visual_payload: { clusters: [...] } }
-  // - { visualAnalysisV2: { clusters: [...] } }
-  // - { areasOfFocus: [...] }   (cluster-level scores + rag; no per-metric scores)
-  if (!serverPayload) return null;
+  if (!serverPayload || typeof serverPayload !== "object") return null;
 
-  const resolved =
-    (serverPayload && Array.isArray(serverPayload.clusters) && serverPayload) ||
-    (serverPayload.visual_payload && Array.isArray(serverPayload.visual_payload.clusters) && serverPayload.visual_payload) ||
-    (serverPayload.visualAnalysisV2 && Array.isArray(serverPayload.visualAnalysisV2.clusters) && serverPayload.visualAnalysisV2) ||
+  // Prefer the engine output (it contains full cluster + metric breakdowns)
+  const engine =
+    serverPayload?.dermEngine ||
+    serverPayload?.canonical_payload?.dermEngine ||
+    serverPayload?.visual_payload?.dermEngine ||
     null;
 
-  // Preferred: full cluster payload
-  if (resolved && Array.isArray(resolved.clusters)) {
-    const clusters = resolved.clusters
-      .filter(Boolean)
-      .map((c) => {
-        const metrics = Array.isArray(c.metrics) ? c.metrics : [];
-        const clusterScore = clampScore(c.score);
-        const clusterRag = String(c.rag || (clusterScore != null ? ragFromScore(clusterScore) : "unknown"));
+  const overallFromServer = serverPayload?.overall_score || null;
+  const overallFromEngine = engine?.overall_score || null;
 
-        return {
-          cluster_id: String(c.cluster_id || c.id || c.key || c.title || "").trim(),
-          display_name: String(c.display_name || c.title || "").trim(),
-          rag: clusterRag,
-          score: clusterScore,
-          confidence: typeof c.confidence === "number" ? c.confidence : null,
-          basis: c.basis ? String(c.basis) : null,
-          keywords: Array.isArray(c.keywords) ? c.keywords.map(String) : [],
-          metrics: metrics
-            .filter(Boolean)
-            .map((m) => {
-              const metricScore = clampScore(m.score);
-              return {
-                metric_id: String(m.metric_id || m.id || m.key || m.name || "").trim(),
-                display_name: String(m.display_name || m.name || "").trim(),
-                score: metricScore,
-                rag: String(m.rag || (metricScore != null ? ragFromScore(metricScore) : "unknown"))
-              };
-            })
-        };
-      });
+  const scoreToRag = (s) => (s >= 75 ? "green" : s >= 50 ? "amber" : "red");
 
+  const normalizeMetric = (m, idx = 0, clusterId = null) => {
+    const score = clampScore(m?.score);
+    const rag = m?.rag || scoreToRag(score);
+    return {
+      metric_id: m?.metric_id || `metric_${idx}`,
+      display_name: m?.display_name || m?.metric_id || `Metric ${idx + 1}`,
+      score,
+      rag,
+      cluster_id: m?.cluster_id || clusterId,
+      order: typeof m?.order === "number" ? m.order : idx + 1
+    };
+  };
+
+  const normalizeCluster = (c, idx = 0) => {
+    const score = clampScore(c?.score);
+    const rag = c?.rag || scoreToRag(score);
+    const clusterId = c?.cluster_id || `cluster_${idx}`;
+    const metricsRaw = Array.isArray(c?.metrics) ? c.metrics : [];
+    const metrics = metricsRaw.map((m, i) => normalizeMetric(m, i, clusterId));
+
+    return {
+      cluster_id: clusterId,
+      display_name: c?.display_name || c?.name || clusterId,
+      weight: typeof c?.weight === "number" ? c.weight : null,
+      order: typeof c?.order === "number" ? c.order : idx + 1,
+      score,
+      rag,
+      metrics
+    };
+  };
+
+  // Path A: dermEngine present (ideal)
+  if (engine && Array.isArray(engine?.clusters) && engine.clusters.length > 0) {
+    const clusters = engine.clusters.map((c, i) => normalizeCluster(c, i));
     const overallScore = clampScore(
-      resolved?.overall_score?.score ??
-        resolved?.overall_score ??
-        resolved?.score ??
-        serverPayload?.overall_score?.score ??
-        serverPayload?.overall_score ??
-        serverPayload?.score
+      overallFromServer?.score ??
+        overallFromEngine?.score ??
+        Math.round(clusters.reduce((acc, c) => acc + c.score, 0) / clusters.length)
     );
 
     return {
+      report_id: serverPayload?.report_id || null,
+      generated_at: serverPayload?.generated_at || null,
       overall_score: {
         score: overallScore,
-        rag: String(
-          resolved?.overall_score?.rag ||
-            serverPayload?.overall_score?.rag ||
-            (overallScore != null ? ragFromScore(overallScore) : "unknown")
-        )
+        rag: overallFromServer?.rag || overallFromEngine?.rag || scoreToRag(overallScore)
       },
       clusters
     };
   }
 
-  // Fallback: areasOfFocus (cluster-only)
-  const aof =
-    (Array.isArray(serverPayload.areasOfFocus) && serverPayload.areasOfFocus) ||
-    (Array.isArray(serverPayload.visual_payload?.areasOfFocus) && serverPayload.visual_payload.areasOfFocus) ||
-    null;
+  // Path B: fallback to visual_payload/canonical_payload clusters if they already contain metrics
+  const fallback =
+    serverPayload?.visual_payload ||
+    serverPayload?.canonical_payload ||
+    serverPayload;
 
-  if (aof) {
-    const lockedById = new Map(LOCKED_CLUSTERS.map((c) => [c.cluster_id, c]));
-    const clusters = aof
-      .filter(Boolean)
-      .map((c) => {
-        const id = String(c.cluster_id || c.id || c.key || "").trim();
-        const locked = lockedById.get(id);
-        const clusterScore = clampScore(c.score);
-        const clusterRag = String(c.rag || (clusterScore != null ? ragFromScore(clusterScore) : "unknown"));
-
-        // No per-metric scores in this payload; we still show the metric list (names) for transparency.
-        const metrics = (locked?.metrics || []).map((m) => ({
-          metric_id: m.metric_id,
-          display_name: m.display_name,
-          score: null,
-          rag: "unknown"
-        }));
-
-        return {
-          cluster_id: id,
-          display_name: String(c.title || locked?.display_name || id || "").trim(),
-          rag: clusterRag,
-          score: clusterScore,
-          confidence: typeof c.confidence === "number" ? c.confidence : null,
-          basis: c.basis ? String(c.basis) : "cluster_only",
-          keywords: Array.isArray(c.keywords) ? c.keywords.map(String) : [],
-          metrics
-        };
-      })
-      .filter((c) => c.cluster_id);
-
+  if (fallback && Array.isArray(fallback?.clusters) && fallback.clusters.length > 0) {
+    const clusters = fallback.clusters.map((c, i) => normalizeCluster(c, i));
     const overallScore = clampScore(
-      serverPayload?.overall_score?.score ??
-        serverPayload?.overall_score ??
-        serverPayload?.score ??
-        serverPayload?.visual_payload?.overall_score?.score ??
-        serverPayload?.visual_payload?.overall_score
+      overallFromServer?.score ??
+        Math.round(clusters.reduce((acc, c) => acc + c.score, 0) / clusters.length)
     );
 
     return {
+      report_id: serverPayload?.report_id || fallback?.report_id || null,
+      generated_at: serverPayload?.generated_at || fallback?.generated_at || null,
       overall_score: {
         score: overallScore,
-        rag: String(
-          serverPayload?.overall_score?.rag ||
-            serverPayload?.visual_payload?.overall_score?.rag ||
-            (overallScore != null ? ragFromScore(overallScore) : "unknown")
-        )
+        rag: overallFromServer?.rag || scoreToRag(overallScore)
       },
       clusters
     };
   }
 
+  // Last resort
   return null;
 }
+
 function ragColor(rag){
   if(rag==="green") return "#16a34a";
   if(rag==="red") return "#dc2626";
@@ -668,12 +634,22 @@ const callAnalyzeImage = async ({ imageBase64, notes }) => {
   const data = await res.json().catch(() => ({}));
 
   if (!res.ok || !data?.ok) {
-    const msg = data?.message || data?.error || 'Error analyzing image';
-    const err = new Error(String(msg));
-    err.status = res.status;
-    err.payload = data;
-    throw err;
+  // Modifier path: allow analysis to proceed with reduced confidence if we can still extract something.
+  if (
+    data?.error === 'photo_not_usable' &&
+    data?.captureQuality?.ok === true &&
+    data?.captureQuality?.isUsable === false
+  ) {
+    return { ...data, ok: true, _modifier: { type: 'photo_quality', captureQuality: data.captureQuality } };
   }
+
+  const msg = data?.message || data?.error || 'Error analyzing image';
+  const err = new Error(String(msg));
+  err.status = res.status;
+  err.payload = data;
+  throw err;
+}
+
 
   return data;
 };
@@ -941,181 +917,254 @@ const deriveTopSignals = (areas) => {
   }));
 };
 
-const SummaryCard = ({ firstName, ageRange, primaryConcern, analysisReport }) => {
+const SummaryCard = ({ analysisReport, firstName }) => {
+  const serverPayload =
+    analysisReport && typeof analysisReport === "object" ? analysisReport : null;
 
-  const visualPayload = useMemo(() => {
-    const serverPayload =
-      (analysisReport && typeof analysisReport === "object"
-        ? (analysisReport.canonical_payload || analysisReport.visual_payload || null)
-        : null);
+  const visualPayload = useMemo(
+    () => buildVisualPayload(serverPayload),
+    [serverPayload]
+  );
 
-    return buildVisualPayload({ serverPayload });
-  }, [analysisReport]);
-  const top = useMemo(() => deriveTopSignals(analysisReport?.areasOfFocus), [analysisReport]);
-  const excerpt = useMemo(() => {
-    const t = String(analysisReport?.report || "").trim();
-    if (!t) return "";
-    // A short excerpt that still reads well.
-    const cut = t.slice(0, 650);
-    const lastSpace = cut.lastIndexOf(" ");
-    return (lastSpace > 420 ? cut.slice(0, lastSpace) : cut).trim() + (t.length > cut.length ? "…" : "");
-  }, [analysisReport]);
+  const overallScore = visualPayload?.overall_score?.score ?? null;
+  const overallRag = visualPayload?.overall_score?.rag ?? null;
+
+  const clusters = Array.isArray(visualPayload?.clusters)
+    ? [...visualPayload.clusters].sort((a, b) => (a?.order ?? 999) - (b?.order ?? 999))
+    : [];
+
+  const analysisConfidenceScore =
+    serverPayload?.analysis_confidence?.score ??
+    (typeof serverPayload?.captureQuality?.confidence === "number"
+      ? Math.round(serverPayload.captureQuality.confidence * 100)
+      : null);
+
+  const analysisConfidenceNote =
+    serverPayload?.analysis_confidence?.note ||
+    serverPayload?.analysis_confidence?.explanation ||
+    null;
+
+  const ragLabel = (rag) =>
+    rag === "green" ? "Strong" : rag === "amber" ? "Moderate opportunity" : rag === "red" ? "Priority focus" : "—";
+
+  const ragDotClass = (rag) =>
+    rag === "green"
+      ? "bg-green-600"
+      : rag === "amber"
+      ? "bg-amber-500"
+      : rag === "red"
+      ? "bg-red-600"
+      : "bg-gray-300";
+
+  const ragBadgeClass = (rag) =>
+    rag === "green"
+      ? "bg-green-50 text-green-800 border-green-200"
+      : rag === "amber"
+      ? "bg-amber-50 text-amber-900 border-amber-200"
+      : rag === "red"
+      ? "bg-red-50 text-red-800 border-red-200"
+      : "bg-gray-50 text-gray-700 border-gray-200";
+
+  const scoreBarClass = (rag) =>
+    rag === "green"
+      ? "bg-green-200"
+      : rag === "amber"
+      ? "bg-amber-200"
+      : rag === "red"
+      ? "bg-red-200"
+      : "bg-gray-200";
+
+  const MetricRow = ({ m }) => {
+    const score = clampScore(m?.score);
+    const rag = m?.rag || (score >= 75 ? "green" : score >= 50 ? "amber" : "red");
+    return (
+      <div className="flex items-center gap-3 py-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-sm font-medium text-gray-900 truncate">
+              {m?.display_name || m?.metric_id || "Metric"}
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <span className={`text-[11px] px-2 py-0.5 rounded-full border ${ragBadgeClass(rag)}`}>
+                {ragLabel(rag)}
+              </span>
+              <span className="text-sm font-semibold text-gray-900 tabular-nums">
+                {score}/100
+              </span>
+            </div>
+          </div>
+          <div className="mt-2 h-2 rounded-full bg-gray-100 overflow-hidden">
+            <div
+              className={`h-2 ${scoreBarClass(rag)}`}
+              style={{ width: `${Math.max(0, Math.min(100, score))}%` }}
+              aria-label={`${score} out of 100`}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const ClusterCard = ({ c }) => {
+    const score = clampScore(c?.score);
+    const rag = c?.rag || (score >= 75 ? "green" : score >= 50 ? "amber" : "red");
+    const metrics = Array.isArray(c?.metrics) ? c.metrics : [];
+
+    const sortedMetrics = [...metrics].sort((a, b) => clampScore(a?.score) - clampScore(b?.score));
+    const topSignals = sortedMetrics.slice(0, 5);
+
+    return (
+      <div className="border rounded-2xl bg-white p-5 shadow-sm">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="text-base font-bold text-gray-900 truncate">
+              {c?.display_name || c?.cluster_id || "Cluster"}
+            </div>
+            <div className="mt-1 text-xs text-gray-600">
+              Weight: {typeof c?.weight === "number" ? `${Math.round(c.weight * 100)}%` : "—"}
+            </div>
+          </div>
+
+          <div className="text-right flex-shrink-0">
+            <div className="flex items-center justify-end gap-2">
+              <span className={`text-[11px] px-2 py-0.5 rounded-full border ${ragBadgeClass(rag)}`}>
+                {ragLabel(rag)}
+              </span>
+              <div className="text-2xl font-extrabold text-gray-900 tabular-nums">
+                {score}
+                <span className="text-sm font-semibold text-gray-500">/100</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Heatmap strip */}
+        {metrics.length > 0 && (
+          <div className="mt-4">
+            <div className="text-xs font-semibold text-gray-700 mb-2">Heatmap</div>
+            <div className="flex gap-1 flex-wrap">
+              {sortedMetrics.slice(0, 30).map((m) => {
+                const s = clampScore(m?.score);
+                const r = m?.rag || (s >= 75 ? "green" : s >= 50 ? "amber" : "red");
+                return (
+                  <div
+                    key={m?.metric_id || m?.display_name}
+                    title={`${m?.display_name || m?.metric_id}: ${s}/100 (${ragLabel(r)})`}
+                    className={`h-3 w-3 rounded ${r === "green" ? "bg-green-500" : r === "amber" ? "bg-amber-500" : r === "red" ? "bg-red-500" : "bg-gray-300"}`}
+                  />
+                );
+              })}
+            </div>
+            {metrics.length > 30 && (
+              <div className="mt-2 text-[11px] text-gray-500">
+                Showing 30 of {metrics.length} metrics.
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Top signals */}
+        {topSignals.length > 0 && (
+          <div className="mt-5">
+            <div className="text-xs font-semibold text-gray-700 mb-2">Key opportunities</div>
+            <div className="divide-y">
+              {topSignals.map((m) => (
+                <MetricRow key={m?.metric_id || m?.display_name} m={m} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Full breakout */}
+        {metrics.length > 0 && (
+          <details className="mt-4">
+            <summary className="cursor-pointer text-sm font-semibold text-gray-900 select-none">
+              Full cluster breakdown ({metrics.length})
+            </summary>
+            <div className="mt-3 divide-y">
+              {sortedMetrics.map((m) => (
+                <MetricRow key={m?.metric_id || m?.display_name} m={m} />
+              ))}
+            </div>
+          </details>
+        )}
+      </div>
+    );
+  };
 
   return (
-    <div className="bg-white border-2 border-gray-900 p-6">
-      <div className="flex flex-col lg:flex-row items-start justify-between gap-6">
-        {/* Left rail: keep readable in narrow layouts */}
-        <div className="w-full lg:w-[260px] lg:shrink-0">
-          <p className="text-[11px] tracking-wider text-gray-500 font-bold">DEFAULT SUMMARY VIEW</p>
-          <h4 className="text-2xl font-bold text-gray-900 mt-1">
+    <div className="border rounded-2xl bg-white p-6 shadow-sm">
+      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
+        <div className="md:max-w-[380px]">
+          <div className="text-[11px] tracking-widest font-semibold text-gray-500 uppercase">
+            Default summary view
+          </div>
+          <div className="mt-2 text-2xl font-extrabold text-gray-900 leading-tight">
             What This Analysis Flagged — At a Glance
-          </h4>
-          <p className="text-sm text-gray-700 mt-2">
+          </div>
+          <div className="mt-2 text-sm text-gray-600">
             Everything below is optional. Expand only what you want to read.
-          </p>
-        </div>
-
-        {/* Main summary + cluster breakdown */}
-        <div className="w-full lg:flex-1">
-          <div style={{ display:"flex", justifyContent:"space-between", gap:16, alignItems:"flex-start", marginTop:14, paddingTop:12, borderTop:"1px solid #e5e7eb" }}>
-                <div>
-                  <div style={{ fontSize:24, fontWeight:700, lineHeight:1.15 }}>
-                    {firstName && firstName.trim()
-                      ? `${firstName.trim()} — Your Curated Skin Protocol`
-                      : "Your Curated Skin Protocol"}
-                  </div>
-                  <div style={{ fontSize:15, marginTop:4, color:"#334155" }}>Your Personal Roadmap To Skin Health</div>
-                  <div style={{ fontSize:11, marginTop:2, color:"#64748b" }}>skindoctor.ai</div>
-                </div>
-
-                <div style={{ minWidth:280, textAlign:"right" }}>
-                  <div style={{ fontSize:12, color:"#64748b" }}>Overall Skin Health</div>
-                  <div style={{ display:"flex", justifyContent:"flex-end", alignItems:"baseline", gap:8, marginTop:6 }}>
-                    <span style={{ fontSize:56, fontWeight:800, lineHeight:1 }}>{visualPayload?.overall_score?.score ?? "—"}</span>
-                    <span style={{ fontSize:18, color:"#64748b" }}>/100</span>
-                    <span style={{ width:14, height:14, borderRadius:999, display:"inline-block", backgroundColor: ragColor(visualPayload?.overall_score?.rag || "unknown") }} />
-                  </div>
-
-                  {analysisReport?.analysisConfidence?.score != null && (
-                    <div style={{ marginTop:6, fontSize:12, color:"#475569" }}>
-                      Confidence: <span style={{ fontWeight:700 }}>{analysisReport.analysisConfidence.score}/100</span>
-                      {Array.isArray(analysisReport?.analysisConfidence?.reasons) && analysisReport.analysisConfidence.reasons.length > 0 && (
-                        <span style={{ color:"#64748b" }}> — {analysisReport.analysisConfidence.reasons.slice(0,2).join(" ")}</span>
-                      )}
-                    </div>
-                  )}
-                  <div style={{ display:"flex", flexDirection:"column", gap:6, marginTop:10, fontSize:11, color:"#475569", alignItems:"flex-end" }}>
-                    <span><span style={{ width:10, height:10, borderRadius:999, display:"inline-block", marginRight:6, backgroundColor: ragColor("green") }} /> Green = Strong</span>
-                    <span><span style={{ width:10, height:10, borderRadius:999, display:"inline-block", marginRight:6, backgroundColor: ragColor("amber") }} /> Amber = Moderate opportunity</span>
-                    <span><span style={{ width:10, height:10, borderRadius:999, display:"inline-block", marginRight:6, backgroundColor: ragColor("red") }} /> Red = Priority focus</span>
-                  </div>
-                </div>
-          </div>
-
-          <div style={{ display:"grid", gridTemplateColumns:"1fr", gap:14, marginTop:14 }}>
-                {(visualPayload?.clusters || []).map((c) => (
-                  <div key={c.cluster_id} style={{ border:"1px solid #e5e7eb", borderRadius:10, padding:12, background:"#fff" }}>
-                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, marginBottom:8 }}>
-                      <div style={{ fontSize:14, fontWeight:700 }}>{c.display_name}</div>
-                      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                        <span style={{ width:8, height:8, borderRadius:999, background: ragColor(c.rag) }} />
-                        <span style={{ fontSize:12, fontWeight:700, color:"#111827" }}>{Math.round(c.score)}/100</span>
-                      </div>
-                    </div>
-                    <div style={{ display:"flex", gap:12, alignItems:"flex-start" }}>
-                      <div style={{ flex:"0 0 auto" }}>
-                    {/* radial cluster */}
-                    <svg width="140" height="140" viewBox="0 0 140 140" style={{ display:"block", margin:"0 auto" }}>
-                      {c.metrics.map((m, i) => {
-                        const r = ringRadius - i * ringGap;
-                        const circ = 2 * Math.PI * r;
-                        const pct = Math.max(0, Math.min(1, (Number.isFinite(m.score) ? m.score : 0) / 100));
-                        const offset = circ * (1 - pct);
-                        const stroke = ragColor(m.rag);
-                        return (
-                          <g key={m.id}>
-                            <circle cx="70" cy="70" r={r} fill="none" stroke="#E5E7EB" strokeWidth={ringStroke} />
-                            <circle
-                              cx="70"
-                              cy="70"
-                              r={r}
-                              fill="none"
-                              stroke={stroke}
-                              strokeWidth={ringStroke}
-                              strokeDasharray={circ}
-                              strokeDashoffset={offset}
-                              strokeLinecap="round"
-                              transform="rotate(-90 70 70)"
-                            />
-                          </g>
-                        );
-                      })}
-                      <text x="70" y="74" textAnchor="middle" fontSize="22" fontWeight="800" fill="#111827">{Math.round(c.score)}</text>
-                      <text x="70" y="94" textAnchor="middle" fontSize="12" fontWeight="600" fill="#6B7280">/100</text>
-                    </svg>
-                      </div>
-
-                      <div style={{ flex:1, display:"flex", flexDirection:"column", gap:8 }}>
-                        {(c.metrics || []).map((m) => (
-                          <div key={m.metric_id} style={{ display:"flex", justifyContent:"space-between", gap:12, alignItems:"center" }}>
-                            <div style={{ fontSize:12, color:"#0f172a" }}>{m.display_name}</div>
-                            <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-                              <span style={{ fontSize:16, fontWeight:700, minWidth:28, textAlign:"right" }}>{m.score}</span>
-                              <span style={{ width:10, height:10, borderRadius:999, display:"inline-block", backgroundColor: ragColor(m.rag) }} />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-          </div>
-
-          <div className="text-gray-700">
-            <StaticMapPreview clusters={visualPayload?.clusters || []} />
           </div>
         </div>
-      </div>
 
-      <div className="grid md:grid-cols-2 gap-4 mt-6">
-        <div className="border border-gray-200 bg-gray-50 p-4">
-          <p className="text-[11px] tracking-wider text-gray-500 font-bold mb-2">CONTEXT</p>
-          <p className="text-sm text-gray-800">
-            <span className="font-bold text-gray-900">Age Range:</span> {ageRange || "—"}
-          </p>
-          <p className="text-sm text-gray-800 mt-1">
-            <span className="font-bold text-gray-900">Primary Concern:</span> {primaryConcern || "—"}
-          </p>
-          {analysisReport?.fitzpatrickType && (
-            <p className="text-sm text-gray-800 mt-1">
-              <span className="font-bold text-gray-900">Fitzpatrick:</span> {analysisReport.fitzpatrickType}
-            </p>
+        <div className="flex-1 min-w-0">
+          <div style={{ fontSize: 26, fontWeight: 900, lineHeight: 1.15 }}>
+            {(firstName && firstName.trim() ? `${firstName.trim()} — Your Curated Skin Protocol` : "Your Curated Skin Protocol")}
+          </div>
+          <div className="mt-1 text-sm text-gray-700">Your Personal Roadmap To Skin Health</div>
+          <div className="mt-1 text-xs text-gray-500">skindoctor.ai</div>
+
+          {analysisConfidenceScore != null && (
+            <div className="mt-3 text-xs text-gray-600">
+              <span className="font-semibold text-gray-800">Confidence:</span>{" "}
+              <span className="tabular-nums font-semibold text-gray-900">{analysisConfidenceScore}/100</span>
+              {analysisConfidenceNote ? (
+                <span className="text-gray-600"> — {analysisConfidenceNote}</span>
+              ) : null}
+            </div>
           )}
         </div>
 
-        <div className="border border-gray-200 bg-gray-50 p-4">
-          <p className="text-[11px] tracking-wider text-gray-500 font-bold mb-2">TOP SIGNALS</p>
-          {top.length ? (
-            <ul className="text-sm text-gray-800 space-y-2">
-              {top.slice(0, 3).map((s, i) => (
-                <li key={i} className="flex items-center justify-between gap-3">
-                  <span className="font-semibold">{s.title}</span>
-                  <RagPill score={typeof s.score === "number" ? s.score : NaN} />
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-sm text-gray-700">Signals will appear here when available.</p>
-          )}
+        <div className="md:w-[260px] md:text-right">
+          <div className="text-sm font-semibold text-gray-900">Overall Skin Health</div>
+          <div className="mt-2 flex items-end md:justify-end justify-start gap-3">
+            <div className="text-6xl font-black text-gray-900 tabular-nums leading-none">
+              {overallScore ?? "—"}
+            </div>
+            <div className="pb-2 text-base font-semibold text-gray-500">/100</div>
+          </div>
+          <div className="mt-2 flex items-center gap-2 md:justify-end">
+            <span className={`inline-block h-2.5 w-2.5 rounded-full ${ragDotClass(overallRag)}`} />
+            <span className="text-sm font-semibold text-gray-800">{ragLabel(overallRag)}</span>
+          </div>
+
+          <div className="mt-3 text-xs text-gray-700 space-y-1 md:ml-auto">
+            <div className="flex items-center gap-2 md:justify-end">
+              <span className="inline-block h-2.5 w-2.5 rounded-full bg-green-600" />
+              <span>Green = Strong</span>
+            </div>
+            <div className="flex items-center gap-2 md:justify-end">
+              <span className="inline-block h-2.5 w-2.5 rounded-full bg-amber-500" />
+              <span>Amber = Moderate opportunity</span>
+            </div>
+            <div className="flex items-center gap-2 md:justify-end">
+              <span className="inline-block h-2.5 w-2.5 rounded-full bg-red-600" />
+              <span>Red = Priority focus</span>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="border border-gray-200 bg-white p-4 mt-4">
-        <p className="text-[11px] tracking-wider text-gray-500 font-bold mb-2">SHORT EXCERPT</p>
-        <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
-          {excerpt || "Your short excerpt will appear here when the report loads."}
-        </p>
-      </div>
+      {clusters.length > 0 && (
+        <div className="mt-6">
+          <div className="text-sm font-bold text-gray-900 mb-3">Cluster Breakdown</div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {clusters.map((c) => (
+              <ClusterCard key={c?.cluster_id || c?.display_name} c={c} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -2130,7 +2179,16 @@ try {
   };
 
   return (
-    <div className="min-h-screen bg-white">
+    
+<style>{`
+  @media print {
+    .no-print { display: none !important; }
+    body { background: white !important; }
+    #root { padding: 0 !important; margin: 0 !important; }
+    a[href]:after { content: "" !important; }
+  }
+`}</style>
+<div className="min-h-screen bg-white">
       {identityLockActivating && (
         <IdentityLockOverlay
           onComplete={() => {
@@ -2562,13 +2620,22 @@ try {
   <div className="space-y-6">
     <div className="flex justify-between items-center">
       <h3 className="text-2xl font-bold text-gray-900">Your Results</h3>
-      <button
-        onClick={resetAnalysis}
-        className="px-4 py-2 bg-gray-300 text-gray-900 font-bold hover:bg-gray-400 text-sm"
-        type="button"
-      >
-        New Analysis
-      </button>
+      <div className="flex items-center gap-2 no-print">
+  <button
+    onClick={() => window.print()}
+    className="px-4 py-2 bg-gray-900 text-white font-bold hover:bg-black text-sm"
+    type="button"
+  >
+    Print / Save
+  </button>
+  <button
+    onClick={resetAnalysis}
+    className="px-4 py-2 bg-gray-300 text-gray-900 font-bold hover:bg-gray-400 text-sm"
+    type="button"
+  >
+    New Analysis
+  </button>
+</div>
     </div>
 
     {/* ✅ Default summary view (always visible) */}
@@ -2721,400 +2788,93 @@ try {
         )}
 
         {agencyChoice === 'guidance' && (
-          <div className="mt-6 bg-white border-2 border-gray-900 p-8">
-            <h4 className="font-bold text-gray-900 mb-4 text-2xl">Protocol Products</h4>
-              {(() => {
-                const p =
-                  analysisReport?.protocol_recommendation ||
-                  analysisReport?.canonical_payload?.protocol_recommendation;
-                if (p) {
-                  return (
-                    <div className="bg-purple-50 border-2 border-purple-200 p-5">
-                      <div className="flex items-start justify-between gap-3">
-                        <h5 className="font-bold text-gray-700 text-lg">{p.name}</h5>
-                        <span className="text-xs font-bold px-2 py-1 bg-purple-200 text-gray-700">
-                          {p.tier}
-                        </span>
-                      </div>
-                      <p className="text-sm text-gray-700 mt-2 mb-4">
-                        We recommend a single protocol set so your full routine stays cohesive. This
-                        protocol is designed to address all findings together, rather than assigning a
-                        separate product for each item.
-                      </p>
-                      {p.url ? (
-                        <a
-                          href={p.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-block text-center bg-purple-700 text-white py-3 px-4 font-bold hover:bg-purple-800"
-                          onClick={() => gaEvent("protocol_view_click", { protocol: p.id || p.name, primaryConcern })}
-                        >
-                          View {p.name}
-                        </a>
-                      ) : null}
-                    </div>
-                  );
-                }
-                return (
-                  <div className="grid md:grid-cols-2 gap-4">
-                    {analysisReport.recommendedProducts.map((p, i) => (
-                      <div key={i} className="bg-green-50 border-2 border-green-200 p-5">
-                        <h5 className="font-bold text-green-900 mb-2 text-lg">{p.name}</h5>
-                        <p className="text-sm text-green-800 mb-3">{p.description}</p>
-                        <a
-                          href={p.link}
-                          className="block text-center bg-green-600 text-white py-3 font-bold hover:bg-green-700"
-                          target="_blank"
-                          rel="noreferrer"
-                          onClick={() =>
-                            gaEvent('product_click', {
-                              productName: p.name,
-                              primaryConcern
-                            })
-                          }
-                        >
-                          View Product
-                        </a>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()}
-
-            <h4 className="font-bold text-gray-900 mb-4 text-2xl">
-              Recommended Treatments
-            </h4>
-            <div className="grid md:grid-cols-2 gap-4">
-              {analysisReport.recommendedServices.map((s, i) => (
-                <div key={i} className="bg-blue-50 border-2 border-blue-200 p-5">
-                  <h5 className="font-bold text-blue-900 mb-2 text-lg">{s.name}</h5>
-                  <p className="text-sm text-blue-800 mb-3">{s.description}</p>
-                  <p className="text-sm text-blue-900 font-semibold mb-2">
-                    Why We Recommend This:
-                  </p>
-                  <p className="text-sm text-blue-800 mb-3">{s.whyRecommended}</p>
-                  <div className="mb-4">
-                    <p className="text-xs font-bold text-blue-900 mb-1">Benefits:</p>
-                    <ul className="text-sm text-blue-800">
-                      {s.benefits.map((b, j) => (
-                        <li key={j}>✓ {b}</li>
-                      ))}
-                    </ul>
-                  </div>
-                  <a
-                    href="mailto:contact@skindoctor.ai"
-                    onClick={() =>
-                      gaEvent('book_appointment_click', {
-                        serviceName: s.name,
-                        primaryConcern
-                      })
-                    }
-                    className="block text-center bg-blue-600 text-white py-3 font-bold hover:bg-blue-700"
-                  >
-                    Book Appointment
-                  </a>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {!agencyChoice && (
-          <div className="mt-4 bg-gray-50 border border-gray-200 p-5">
-            <p className="text-sm text-gray-700">
-              Choose a path above — nothing is required.
-            </p>
-          </div>
-        )}
-      </AccordionSection>
-
-      <AccordionSection
-        id="report"
-        title="Full Cosmetic Report"
-        subtitle="The complete narrative report (expanded detail)."
-        open={!!openSections.report}
-        onToggle={toggleSection}
+  <div className="mt-6 border rounded-2xl bg-white p-6 shadow-sm">
+    <div className="flex items-start justify-between gap-3">
+      <div>
+        <h3 className="text-xl font-extrabold text-gray-900 mb-1">
+          Protocol Products and Treatments
+        </h3>
+        <p className="text-sm text-gray-600">
+          Personalized guidance mapped to your primary concern.
+        </p>
+      </div>
+      <button
+        onClick={() => setAgencyChoice(null)}
+        className="text-gray-900 font-bold"
+        aria-label="Collapse guidance"
+        type="button"
       >
-        <div className="bg-white border border-gray-200 p-6">
-          <h4 className="text-xl font-bold text-gray-900 mb-2">
-            What I’m Seeing (Cosmetic Education)
-          </h4>
-
-          <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-            {analysisReport?.report || "Your report is loading."}
-          </p>
-        </div>
-      </AccordionSection>
-
-      <AccordionSection
-        id="future"
-        title="Your Future Story"
-        subtitle="Cosmetic projection images anchored to your selfie (optional)."
-        open={!!openSections.future}
-        onToggle={toggleSection}
-      >
-        {agingImages.length > 0 ? (
-          <div className="bg-white border border-gray-200 p-6">
-            <h4 className="text-xl font-bold text-gray-900 mb-2">
-              Your Future Story (Cosmetic Projection)
-            </h4>
-            <p className="text-sm text-gray-700 mb-6">
-              These are visual projections anchored to your selfie.
-            </p>
-
-            <div className="grid md:grid-cols-2 gap-4">
-              {agingImages.map((img) => (
-                <div key={img.key} className="relative border border-gray-200 bg-gray-50 p-3">
-                  <IdentityLockBadge
-                    placement="top-left"
-                    onClick={() => {
-                      gaEvent('identity_lock_badge_clicked', { key: img.key });
-                      setIdentityLockModalOpen(true);
-                    }}
-                  />
-
-                  <WatermarkOverlay />
-
-                  <img
-                    src={img.url}
-                    alt={img.label}
-                    className="w-full border border-gray-200"
-                    onLoad={() => gaEvent('aging_image_loaded', { key: img.key })}
-                  />
-
-                  <p className="text-sm font-bold text-gray-900 mt-3">{img.label}</p>
-
-                  <div className="mt-3 grid grid-cols-3 gap-2">
-                    <button
-                      onClick={() => handleShare({ url: img.url, label: img.label })}
-                      className="py-2 text-sm font-bold border bg-gray-900 text-white hover:bg-gray-800 border-gray-900"
-                      type="button"
-                    >
-                      Share
-                    </button>
-
-                    <button
-                      onClick={() => handleSave({ url: img.url, label: img.label })}
-                      className="py-2 text-sm font-bold border bg-white text-gray-900 hover:bg-gray-50 border-gray-300"
-                      type="button"
-                    >
-                      Save
-                    </button>
-
-                    <button
-                      onClick={() => handleCopyImageLink({ url: img.url, label: img.label })}
-                      className="py-2 text-sm font-bold border bg-white text-gray-900 hover:bg-gray-50 border-gray-300"
-                      type="button"
-                    >
-                      Copy
-                    </button>
-                  </div>
-
-                  {!reflectionSeen && (
-                    <p className="text-xs text-gray-600 mt-3">
-                      Sharing/saving activates after you read Dr. Lazuk’s note below.
-                    </p>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <div className="bg-gray-50 border border-gray-200 p-6">
-            <p className="text-sm text-gray-700">
-              Your Future Story images are delivered by email for privacy and performance. Please check
-              {analysisReport?.email ? (
-                <span className="font-semibold"> {analysisReport.email}</span>
-              ) : (
-                <span className="font-semibold"> your inbox</span>
-              )}
-              {" "}(and spam/promotions) for your Dr. Lazuk Virtual Skin Analysis email.
-            </p>
-          </div>
-        )}
-      </AccordionSection>
-
-      <AccordionSection
-        id="guidance"
-        title="Protocol Products and Treatments"
-        subtitle="Personalized guidance mapped to your primary concern."
-        open={!!openSections.guidance}
-        onToggle={toggleSection}
-      >
-        <div className="bg-white border-2 border-gray-900 p-8">
-          <h4 className="font-bold text-gray-900 mb-4 text-2xl">Protocol Products</h4>
-          <div className="grid md:grid-cols-3 gap-4 mb-8">
-            {analysisReport.recommendedProducts.map((p, i) => (
-              <div key={i} className="bg-gray-50 border p-4">
-                <h5 className="font-bold text-gray-900 mb-1">{p.name}</h5>
-                <p className="text-gray-900 font-bold mb-2">${p.price}</p>
-                <ul className="text-sm text-gray-700 mb-3">
-                  {p.benefits.map((b, j) => (
-                    <li key={j}>✓ {b}</li>
-                  ))}
-                </ul>
-                <a
-                  href={p.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={() =>
-                    gaEvent('product_click', {
-                      productName: p.name,
-                      category: p.category,
-                      price: p.price,
-                      primaryConcern
-                    })
-                  }
-                  className="block text-center bg-gray-900 text-white py-2 font-bold hover:bg-gray-800"
-                >
-                  View
-                </a>
-              </div>
-            ))}
-          </div>
-
-          <h4 className="font-bold text-gray-900 mb-4 text-2xl">
-            Recommended Treatments
-          </h4>
-          <div className="grid md:grid-cols-2 gap-4">
-            {analysisReport.recommendedServices.map((s, i) => (
-              <div key={i} className="bg-blue-50 border-2 border-blue-200 p-5">
-                <h5 className="font-bold text-blue-900 mb-2 text-lg">{s.name}</h5>
-                <p className="text-sm text-blue-800 mb-3">{s.description}</p>
-                <p className="text-sm text-blue-900 font-semibold mb-2">
-                  Why We Recommend This:
-                </p>
-                <p className="text-sm text-blue-800 mb-3">{s.whyRecommended}</p>
-                <div className="mb-4">
-                  <p className="text-xs font-bold text-blue-900 mb-1">Benefits:</p>
-                  <ul className="text-sm text-blue-800">
-                    {s.benefits.map((b, j) => (
-                      <li key={j}>✓ {b}</li>
-                    ))}
-                  </ul>
-                </div>
-                <a
-                  href="mailto:contact@skindoctor.ai"
-                  onClick={() =>
-                    gaEvent('book_appointment_click', {
-                      serviceName: s.name,
-                      primaryConcern
-                    })
-                  }
-                  className="block text-center bg-blue-600 text-white py-3 font-bold hover:bg-blue-700"
-                >
-                  Book Appointment
-                </a>
-              </div>
-            ))}
-          </div>
-        </div>
-      </AccordionSection>
-
-      <AccordionSection
-        id="message"
-        title="A Message from Dr. Lazuk"
-        subtitle="Reading this activates sharing/saving on Future Story images."
-        open={!!openSections.message}
-        onToggle={toggleSection}
-      >
-        <PostImageReflection
-          onSeen={() => {
-            if (!reflectionSeen) {
-              setReflectionSeen(true);
-              gaEvent('reflection_seen', { step: 'results' });
-              showToast("Thank you. Sharing and saving are now available.");
-            }
-          }}
-        />
-      </AccordionSection>
+        –
+      </button>
     </div>
+
+    {/* Recommended Protocol (single protocol only) */}
+    <div className="mt-5 border rounded-2xl p-5 bg-white">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-sm font-semibold text-gray-500">Your Recommended Protocol</div>
+          <div className="mt-1 text-lg font-extrabold text-gray-900">
+            {protocolRecommendation?.name || "Your Curated Protocol"}
+          </div>
+          {protocolRecommendation?.summary ? (
+            <div className="mt-2 text-sm text-gray-700">
+              {protocolRecommendation.summary}
+            </div>
+          ) : (
+            <div className="mt-2 text-sm text-gray-700">
+              We recommend a single protocol so your full routine stays cohesive.
+            </div>
+          )}
+        </div>
+
+        {protocolRecommendation?.tier ? (
+          <span className="text-[11px] px-2 py-0.5 rounded-full border bg-gray-50 text-gray-700 border-gray-200">
+            {protocolRecommendation.tier}
+          </span>
+        ) : null}
+      </div>
+
+      {protocolRecommendation?.url ? (
+        <div className="mt-4">
+          <a
+            href={protocolRecommendation.url}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center justify-center px-4 py-2 rounded-xl bg-gray-900 text-white font-bold hover:bg-black text-sm"
+          >
+            View {protocolRecommendation?.name || "Protocol"}
+          </a>
+        </div>
+      ) : null}
+
+      {protocolRecommendation?.reasoning ? (
+        <details className="mt-4">
+          <summary className="cursor-pointer text-sm font-semibold text-gray-900 select-none">
+            Why this was selected
+          </summary>
+          <div className="mt-2 text-sm text-gray-700 whitespace-pre-wrap">
+            {protocolRecommendation.reasoning}
+          </div>
+        </details>
+      ) : null}
+    </div>
+
+    {/* Treatments are allowed; products must remain inside the protocol */}
+    {Array.isArray(protocolRecommendation?.treatments) && protocolRecommendation.treatments.length > 0 ? (
+      <div className="mt-6">
+        <div className="text-lg font-extrabold text-gray-900">Recommended Treatments</div>
+        <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+          {protocolRecommendation.treatments.map((t) => (
+            <div key={t?.name || t} className="border rounded-2xl p-4 bg-white">
+              <div className="font-bold text-gray-900">{t?.name || t}</div>
+              {t?.why ? <div className="mt-1 text-sm text-gray-700">{t.why}</div> : null}
+            </div>
+          ))}
+        </div>
+      </div>
+    ) : null}
   </div>
 )}
-
-<canvas ref={canvasRef} className="hidden" />
-          </div>
-        )}
-
-        {activeTab === 'chat' && (
-          <div className="bg-white border shadow-sm overflow-hidden" style={{ height: '600px' }}>
-            <div className="flex flex-col h-full">
-              <div className="bg-gray-900 text-white p-6">
-                <h2 className="text-2xl font-bold">Ask Dr. Lazuk</h2>
-                <p className="text-xs text-gray-300 mt-1">
-                  Educational and cosmetic discussion only. This chat is not medical advice.
-                </p>
-              </div>
-              <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50">
-                {chatMessages.map((msg, i) => (
-                  <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[80%] p-4 ${
-                      msg.role === 'user' ? 'bg-gray-900 text-white' : 'bg-white border text-gray-900'
-                    }`}>
-                      <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                    </div>
-                  </div>
-                ))}
-                {chatLoading && (
-                  <div className="flex justify-start">
-                    <div className="bg-white border p-4">
-                      <Loader className="animate-spin" size={20} />
-                    </div>
-                  </div>
-                )}
-              </div>
-              <div className="border-t p-4 bg-white">
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={inputMessage}
-                    onChange={(e) => setInputMessage(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-                    placeholder="Ask a cosmetic skincare question..."
-                    className="flex-1 px-4 py-3 border-2 focus:outline-none focus:border-gray-900"
-                  />
-                  <button
-                    onClick={sendMessage}
-                    disabled={chatLoading}
-                    className="px-8 py-3 bg-gray-900 text-white font-bold hover:bg-gray-800 disabled:bg-gray-400"
-                    type="button"
-                  >
-                    <Send size={20} />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'education' && (
-          <div className="bg-white border shadow-sm p-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Our Esthetic Services</h2>
-            <div className="grid md:grid-cols-1 gap-6">
-              {estheticServices.map((s, i) => (
-                <div key={i} className="border-2 p-6">
-                  <h3 className="font-bold text-xl text-gray-900 mb-2">{s.name}</h3>
-                  <p className="text-gray-700 mb-4">{s.description}</p>
-                  <div className="mb-4">
-                    <p className="font-bold text-gray-900 mb-2">Benefits:</p>
-                    <ul className="text-sm text-gray-700">
-                      {s.benefits.map((b, j) => (
-                        <li key={j}>✓ {b}</li>
-                      ))}
-                    </ul>
-                  </div>
-                  <a
-                    href="mailto:contact@skindoctor.ai"
-                    onClick={() => gaEvent('services_learn_more_click', { serviceName: s.name })}
-                    className="block text-center bg-gray-900 text-white py-3 font-bold hover:bg-gray-800"
-                  >
-                    Learn More
-                  </a>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       <div className="bg-gray-900 text-white py-8 mt-12">
