@@ -692,6 +692,7 @@ const IdentityLockOverlay = ({ onComplete }) => {
         </p>
       </div>
     </div>
+    </>
   );
 };
 
@@ -2179,16 +2180,16 @@ try {
   };
 
   return (
-    
-<style>{`
-  @media print {
-    .no-print { display: none !important; }
-    body { background: white !important; }
-    #root { padding: 0 !important; margin: 0 !important; }
-    a[href]:after { content: "" !important; }
-  }
-`}</style>
-<div className="min-h-screen bg-white">
+    <>
+	<style>{`
+	  @media print {
+	    .no-print { display: none !important; }
+	    body { background: white !important; }
+	    #root { padding: 0 !important; margin: 0 !important; }
+	    a[href]:after { content: "" !important; }
+	  }
+	`}</style>
+	<div className="min-h-screen bg-white">
       {identityLockActivating && (
         <IdentityLockOverlay
           onComplete={() => {
