@@ -435,6 +435,39 @@ function clamp01(x) {
   return Math.max(0, Math.min(1, n));
 }
 
+// -------------------------
+// Analysis Confidence (0..100)
+// Converts capture-quality evaluation into a single user-facing score.
+// Purpose: avoid hard-fail on imperfect photos; proceed best-effort with clear disclosure.
+// -------------------------
+function computeAnalysisConfidence(captureQuality) {
+  // Default: assume good capture.
+  const cq = captureQuality && typeof captureQuality === "object" ? captureQuality : null;
+  if (!cq) return { score: 100, level: "high", reasons: [], requirementsForRetry: [] };
+
+  const raw = clamp01(cq.confidence ?? 0.8);
+  let score = Math.round(raw * 100);
+
+  const reasons = Array.isArray(cq.reasons) ? cq.reasons.filter(Boolean) : [];
+  const requirementsForRetry = Array.isArray(cq.requirementsForRetry)
+    ? cq.requirementsForRetry.filter(Boolean)
+    : [];
+
+  // If the evaluator says it is NOT usable, cap the score and add penalties per reason.
+  if (cq.isUsable === false) {
+    score = Math.min(score, 60);
+    score -= Math.min(20, reasons.length * 7);
+  }
+
+  // Small penalty for any listed issues (even if usable).
+  if (reasons.length > 0) score -= Math.min(10, Math.max(0, reasons.length - 1) * 3);
+
+  score = Math.max(25, Math.min(100, score));
+
+  const level = score >= 85 ? "high" : score >= 65 ? "medium" : "low";
+  return { score, level, reasons, requirementsForRetry };
+}
+
 function ceilingLevel(level) {
   const l = String(level || "").toLowerCase();
   if (l === "severe" || l === "high") return "moderate";
@@ -2588,20 +2621,13 @@ module.exports = async function handler(req, res) {
 
     const client = await getOpenAIClient();
 
-    // ✅ NEW: Capture Quality Gate BEFORE cooldown consumption
+    // ✅ Capture Quality Evaluation (modifier, not a hard stop)
+    // We proceed with best-effort analysis even when photo quality is suboptimal,
+    // but surface an explicit confidence score and actionable retry tips.
     const captureQuality = await evaluateCaptureQuality({ client, photoDataUrl });
+    const analysisConfidence = computeAnalysisConfidence(captureQuality);
 
-    if (captureQuality && captureQuality.isUsable === false) {
-      return res.status(400).json({
-        ok: false,
-        error: "photo_not_usable",
-        message:
-          "I’m not able to run a reliable cosmetic assessment from this photo. Please upload a clear, front-facing selfie with your full face visible in good lighting.",
-        captureQuality,
-      });
-    }
-
-    // Enforce 30-day cooldown per email (only after photo is usable)
+    // Enforce 30-day cooldown per email (analysis proceeds even if confidence is low)
     checkCooldownOrThrow(cleanEmail);
 
     const buildAnalysis = await getBuildAnalysis();
@@ -2726,6 +2752,12 @@ NON-NEGOTIABLE REQUIREMENTS:
    Never use "Dear You" or any other greeting.
 2) The letter MUST reference at least ONE concrete selfie detail from the provided context:
    glasses, eye color, hair, clothing color, or another visible detail.
+
+ANALYSIS CONFIDENCE (ALWAYS DISCLOSE BRIEFLY):
+- Confidence score: ${analysisConfidence.score}/100.
+- If below 90/100, include 1–2 sentences early in the letter explaining that guidance is best-effort based on the photo quality, and list the top 1–2 reasons.
+- Include one short “how to improve confidence next time” hint (e.g., better lighting, more frontal angle, no occlusions, closer framing).
+- Keep tone calm, non-alarming, and non-judgmental.
 3) The letter MUST incorporate the 15-point dermatologist visual analysis categories below,
    woven naturally in narrative (do NOT list them as a checklist).
    The 15 categories are:
@@ -2769,6 +2801,9 @@ Person details:
 - Age range: ${cleanAgeRange}
 - Primary cosmetic concern: ${cleanPrimaryConcern}
 - Visitor question: ${cleanVisitorQuestion || "none provided"}
+
+Capture quality & confidence (do NOT print JSON; use it to disclose limitations + how to improve confidence):
+${JSON.stringify({ analysisConfidence, captureQuality }, null, 2)}
 
 Structured analysis context (do NOT print JSON; weave it into the letter):
 ${JSON.stringify(analysisContext, null, 2)}
@@ -3077,6 +3112,10 @@ const agingJob = {
       fitzpatrickSummary: fitzpatrickSummary || null,
       agingPreviewImages,
       selfieUrlForEmail: emailSafeSelfieUrl || null,
+
+      // ✅ New: capture-quality disclosure (additive)
+      analysisConfidence,
+      captureQuality,
 
       // ADD: Dermatology Engine payload (structured JSON)
       dermEngine: dermEngine || null,
