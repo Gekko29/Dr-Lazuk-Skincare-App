@@ -2768,8 +2768,9 @@ try {
                       ) : (
                         <> your inbox</>
                       )}
-                      {' '} (and spam/promotions).
-                  ) : (
+	                      {' '} (and spam/promotions).
+	                    </>
+	                  ) : (
                     <>
                       Your Future Story images are delivered by email for privacy and performance. Please check
                       {analysisReport?.email ? (
@@ -2778,6 +2779,7 @@ try {
                         <> your inbox</>
                       )}
                       {' '} (and spam/promotions).
+	                    </>
                   )}
                 </p>
               </div>
