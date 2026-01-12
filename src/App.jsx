@@ -692,6 +692,7 @@ const IdentityLockOverlay = ({ onComplete }) => {
         </p>
       </div>
     </div>
+    </>
   );
 };
 
@@ -1046,16 +1047,11 @@ const SummaryCard = ({ analysisReport, firstName }) => {
               {sortedMetrics.slice(0, 30).map((m) => {
                 const s = clampScore(m?.score);
                 const r = m?.rag || (s >= 75 ? "green" : s >= 50 ? "amber" : "red");
-                const colorClass =
-                  r === "green" ? "bg-green-500" :
-                  r === "amber" ? "bg-amber-500" :
-                  r === "red" ? "bg-red-500" :
-                  "bg-gray-300";
                 return (
                   <div
                     key={m?.metric_id || m?.display_name}
                     title={`${m?.display_name || m?.metric_id}: ${s}/100 (${ragLabel(r)})`}
-                    className={`h-3 w-3 rounded ${colorClass}`}
+                    className={`h-3 w-3 rounded ${r === "green" ? "bg-green-500" : r === "amber" ? "bg-amber-500" : r === "red" ? "bg-red-500" : "bg-gray-300"}`}
                   />
                 );
               })}
@@ -1063,11 +1059,10 @@ const SummaryCard = ({ analysisReport, firstName }) => {
             {metrics.length > 30 && (
               <div className="mt-2 text-[11px] text-gray-500">
                 Showing 30 of {metrics.length} metrics.
-    </div>
-  )}
-
-      </div>
-  )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Top signals */}
         {topSignals.length > 0 && (
@@ -2867,8 +2862,7 @@ try {
     </div>
 
     {/* Treatments are allowed; products must remain inside the protocol */}
-    {Array.isArray(analysisReport.protocolRecommendation?.treatments) &&
-      analysisReport.protocolRecommendation.treatments.length > 0 ? (
+    {Array.isArray(analysisReport.protocolRecommendation?.treatments) && analysisReport.protocolRecommendation.treatments.length > 0 ? (
       <div className="mt-6">
         <div className="text-lg font-extrabold text-gray-900">Recommended Treatments</div>
         <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -2884,9 +2878,7 @@ try {
   </div>
 )}
       </AccordionSection>
-    </div>
-  </div>
-)}
+      </div>
 
       <div className="bg-gray-900 text-white py-8 mt-12">
         <div className="max-w-6xl mx-auto px-4 text-center">
