@@ -2591,6 +2591,7 @@ try {
                         <>
                           <Loader className="animate-spin" size={20} />
                           <span>Analyzing...</span>
+                        </>
                       ) : (
                         'View Results'
                       )}
