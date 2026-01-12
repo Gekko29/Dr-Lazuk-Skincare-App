@@ -2879,7 +2879,6 @@ try {
     </div>
   </div>
 )}
-        )}
 
       <div className="bg-gray-900 text-white py-8 mt-12">
         <div className="max-w-6xl mx-auto px-4 text-center">
@@ -2890,6 +2889,7 @@ try {
         </div>
       </div>
     </div>
+        )}
   );
 };
 
