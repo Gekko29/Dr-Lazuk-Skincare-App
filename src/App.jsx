@@ -1924,7 +1924,8 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 
       setAnalysisReport({
         report: data.report,
-        recommendedProducts: getRecommendedProducts(primaryConcern),
+        protocolRecommendation: data?.protocol_recommendation || null,
+        protocolProducts: Array.isArray(data?.protocol_recommendation?.products) ? data.protocol_recommendation.products : [],
         recommendedServices: getRecommendedServices(primaryConcern),
         fitzpatrickType: data.fitzpatrickType || null,
         fitzpatrickSummary: data.fitzpatrickSummary || null,
@@ -2815,11 +2816,11 @@ try {
         <div className="min-w-0">
           <div className="text-sm font-semibold text-gray-500">Your Recommended Protocol</div>
           <div className="mt-1 text-lg font-extrabold text-gray-900">
-            {protocolRecommendation?.name || "Your Curated Protocol"}
+            {analysisReport.protocolRecommendation?.name || "Your Curated Protocol"}
           </div>
-          {protocolRecommendation?.summary ? (
+          {analysisReport.protocolRecommendation?.summary ? (
             <div className="mt-2 text-sm text-gray-700">
-              {protocolRecommendation.summary}
+              {analysisReport.protocolRecommendation.summary}
             </div>
           ) : (
             <div className="mt-2 text-sm text-gray-700">
@@ -2828,44 +2829,44 @@ try {
           )}
         </div>
 
-        {protocolRecommendation?.tier ? (
+        {analysisReport.protocolRecommendation?.tier ? (
           <span className="text-[11px] px-2 py-0.5 rounded-full border bg-gray-50 text-gray-700 border-gray-200">
-            {protocolRecommendation.tier}
+            {analysisReport.protocolRecommendation.tier}
           </span>
         ) : null}
       </div>
 
-      {protocolRecommendation?.url ? (
+      {analysisReport.protocolRecommendation?.url ? (
         <div className="mt-4">
           <a
-            href={protocolRecommendation.url}
+            href={analysisReport.protocolRecommendation.url}
             target="_blank"
             rel="noreferrer"
             className="inline-flex items-center justify-center px-4 py-2 rounded-xl bg-gray-900 text-white font-bold hover:bg-black text-sm"
           >
-            View {protocolRecommendation?.name || "Protocol"}
+            View {analysisReport.protocolRecommendation?.name || "Protocol"}
           </a>
         </div>
       ) : null}
 
-      {protocolRecommendation?.reasoning ? (
+      {analysisReport.protocolRecommendation?.reasoning ? (
         <details className="mt-4">
           <summary className="cursor-pointer text-sm font-semibold text-gray-900 select-none">
             Why this was selected
           </summary>
           <div className="mt-2 text-sm text-gray-700 whitespace-pre-wrap">
-            {protocolRecommendation.reasoning}
+            {analysisReport.protocolRecommendation.reasoning}
           </div>
         </details>
       ) : null}
     </div>
 
     {/* Treatments are allowed; products must remain inside the protocol */}
-    {Array.isArray(protocolRecommendation?.treatments) && protocolRecommendation.treatments.length > 0 ? (
+    {Array.isArray(analysisReport.protocolRecommendation?.treatments) && analysisReport.protocolRecommendation.treatments.length > 0 ? (
       <div className="mt-6">
         <div className="text-lg font-extrabold text-gray-900">Recommended Treatments</div>
         <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-          {protocolRecommendation.treatments.map((t) => (
+          {analysisReport.protocolRecommendation.treatments.map((t) => (
             <div key={t?.name || t} className="border rounded-2xl p-4 bg-white">
               <div className="font-bold text-gray-900">{t?.name || t}</div>
               {t?.why ? <div className="mt-1 text-sm text-gray-700">{t.why}</div> : null}
