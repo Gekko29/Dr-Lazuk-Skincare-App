@@ -2549,6 +2549,7 @@ try {
                   </div>
                 </div>
               </div>
+              </>
             )}
 
             {step === 'email' && (
