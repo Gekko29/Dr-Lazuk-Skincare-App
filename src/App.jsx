@@ -995,6 +995,15 @@ const SummaryCard = ({ firstName, ageRange, primaryConcern, analysisReport }) =>
                     <span style={{ fontSize:18, color:"#64748b" }}>/100</span>
                     <span style={{ width:14, height:14, borderRadius:999, display:"inline-block", backgroundColor: ragColor(visualPayload?.overall_score?.rag || "unknown") }} />
                   </div>
+
+                  {analysisReport?.analysisConfidence?.score != null && (
+                    <div style={{ marginTop:6, fontSize:12, color:"#475569" }}>
+                      Confidence: <span style={{ fontWeight:700 }}>{analysisReport.analysisConfidence.score}/100</span>
+                      {Array.isArray(analysisReport?.analysisConfidence?.reasons) && analysisReport.analysisConfidence.reasons.length > 0 && (
+                        <span style={{ color:"#64748b" }}> — {analysisReport.analysisConfidence.reasons.slice(0,2).join(" ")}</span>
+                      )}
+                    </div>
+                  )}
                   <div style={{ display:"flex", flexDirection:"column", gap:6, marginTop:10, fontSize:11, color:"#475569", alignItems:"flex-end" }}>
                     <span><span style={{ width:10, height:10, borderRadius:999, display:"inline-block", marginRight:6, backgroundColor: ragColor("green") }} /> Green = Strong</span>
                     <span><span style={{ width:10, height:10, borderRadius:999, display:"inline-block", marginRight:6, backgroundColor: ragColor("amber") }} /> Amber = Moderate opportunity</span>
@@ -1872,6 +1881,10 @@ ${SUPPORTIVE_FOOTER_LINE}`);
         agingPreviewImages: data.agingPreviewImages || null,
         agingJob: data.agingJob || null,
         areasOfFocus: data.areasOfFocus || data.focusAreas || null,
+
+        // ✅ Capture-quality derived confidence (additive)
+        analysisConfidence: data.analysisConfidence || null,
+        captureQuality: data.captureQuality || null,
 
         // ✅ Server-authoritative visualization payload (clusters + scores)
         canonical_payload:
