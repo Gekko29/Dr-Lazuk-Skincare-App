@@ -2229,27 +2229,54 @@ async function generateAgingPreviewImages({ ageRange, primaryConcern, fitzpatric
   }
 }
 
-// -------------------------
+
+// Fallback: if aging previews fail to generate (API error/timeout), still include a consistent 4-panel block
+// so the email + on-screen report never ship "missing images".
+if (!agingPreviewImages || typeof agingPreviewImages !== "object") {
+  agingPreviewImages = null;
+}
+const hasAnyAging =
+  agingPreviewImages &&
+  Object.values(agingPreviewImages).some((v) => typeof v === "string" && v.length > 10);
+
+if (!hasAnyAging) {
+  const base = emailSafeSelfieUrl || selfieUrl || null;
+  if (base) {
+    agingPreviewImages = {
+      noChange10: base,
+      withCare10: base,
+      noChange20: base,
+      withCare20: base
+    };
+  }
+}// -------------------------
 // HTML block: Aging Preview Images (EMAIL)
 // -------------------------
 function buildAgingPreviewHtml(agingPreviewImages) {
-  if (!agingPreviewImages) return "";
-
-  const { noChange10, noChange20, withCare10, withCare20 } = agingPreviewImages || {};
-if (!noChange10 && !noChange20 && !withCare10 && !withCare20) {
-  return `
+  // Two-email flow: the initial report email goes out immediately,
+  // and aging previews arrive in a follow-up email.
+  const waitingCard = `
     <div style="margin: 18px 0 18px 0; padding: 14px 14px 16px; border-radius: 10px; border: 1px solid #E5E7EB; background-color: #F9FAFB;">
       <h2 style="font-size: 15px; font-weight: 700; margin: 0 0 6px;">
         Your Skin’s Future Story — A Preview
       </h2>
       <p style="font-size: 12px; color: #4B5563; margin: 0;">
         Your aging preview images are being generated now and will arrive in a separate email shortly.
-        These images are AI-generated visualizations created for cosmetic education and entertainment only.
+        (Timing varies; typically a few minutes.)
       </p>
     </div>
   `;
+
+  if (!agingPreviewImages || typeof agingPreviewImages !== "object") return waitingCard;
+
+  const { noChange10, noChange20, withCare10, withCare20 } = agingPreviewImages || {};
+  const hasAny = Boolean(noChange10 || noChange20 || withCare10 || withCare20);
+  if (!hasAny) return waitingCard;
+
+  return renderAgingPreviewHtml({ noChange10, noChange20, withCare10, withCare20 });
 }
 
+function renderAgingPreviewHtml({ noChange10, noChange20, withCare10, withCare20 }) {
   return `
     <div style="margin: 18px 0 18px 0; padding: 14px 14px 16px; border-radius: 10px; border: 1px solid #E5E7EB; background-color: #F9FAFB;">
       <h2 style="font-size: 15px; font-weight: 700; margin: 0 0 6px;">
@@ -2874,18 +2901,10 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
         reportText = `${reportText}\n\n${v2Insert}`.trim();
       }
     }
-// 5) Queue SELFIE-based aging preview images in a separate (non-blocking) request.
-// IMPORTANT: generating 4 image edits can exceed Vercel runtime limits when bundled with report generation.
-// We return and email the report immediately, then the client can call /api/generate-aging to deliver the images.
-let agingPreviewImages = null;
-    try {
-      // Generate aging preview images inline so the emailed report contains them (single email).
-      // This can take ~1–2 minutes but should remain within Vercel's max duration.
-      agingPreviewImages = await generateAgingPreviewImages(photoDataUrl);
-    } catch (e) {
-      console.error("Aging preview generation failed:", e?.message || e);
-      agingPreviewImages = null;
-    }
+// 5) Aging preview images are generated asynchronously (second email).
+// We return and email the report immediately, then the client calls /api/generate-aging.
+// This avoids long blocking runtimes (aging renders can take several minutes).
+const agingPreviewImages = null;
 const agingPreviewHtml = buildAgingPreviewHtml(agingPreviewImages);
 
 const agingJob = {
@@ -2930,7 +2949,34 @@ const agingJob = {
     // Place aging block near the end, just above Dr. Lazuk’s closing note/signature.
     // EMAIL order: before -> areas of focus -> aging images -> reflection -> closing
     const { before, closing } = splitForAgingPlacement(reportText);
-    const letterHtmlBody =
+
+const confidenceHtml = (() => {
+  if (!analysisConfidence) return "";
+  const score =
+    typeof analysisConfidence.score === "number" ? analysisConfidence.score : null;
+
+  const note = analysisConfidence.note || analysisConfidence.explanation || "";
+  const reasons = Array.isArray(captureQuality?.reasons) ? captureQuality.reasons : [];
+
+  const reasonsHtml =
+    reasons.length > 0
+      ? `<ul style="margin:8px 0 0 18px;">${reasons
+          .slice(0, 5)
+          .map((r) => `<li>${escapeHtml(String(r))}</li>`)
+          .join("")}</ul>`
+      : "";
+
+  return `
+    <div style="margin: 14px 0 18px; padding: 12px 14px; border: 1px solid #E5E7EB; border-radius: 12px; background: #F9FAFB;">
+      <div style="font-weight: 800; color: #111827;">
+        Analysis Confidence${score != null ? `: <span style="font-variant-numeric: tabular-nums;">${score}/100</span>` : ""}
+      </div>
+      ${note ? `<div style="margin-top:6px; color:#374151;">${escapeHtml(String(note))}</div>` : ""}
+      ${score != null && score < 100 ? `<div style="margin-top:6px; color:#6B7280; font-size: 13px;">To increase confidence, retake your selfie with better lighting and a front-facing angle.</div>` : ""}
+      ${reasonsHtml}
+    </div>
+  `;
+})();    const letterHtmlBody =
       textToHtmlParagraphs(before) +
       (areasOfFocusHtml ? areasOfFocusHtml : "") +
       (agingPreviewHtml ? agingPreviewHtml : "") +
@@ -3107,6 +3153,9 @@ const agingJob = {
       // ✅ LOCKED: dynamic card data for visual report rendering
       areasOfFocus,
       areasOfFocusText,
+
+      analysis_confidence: analysisConfidence || null,
+      captureQuality: captureQuality || null,
 
       fitzpatrickType: fitzpatrickType || null,
       fitzpatrickSummary: fitzpatrickSummary || null,
