@@ -2229,27 +2229,7 @@ async function generateAgingPreviewImages({ ageRange, primaryConcern, fitzpatric
   }
 }
 
-
-// Fallback: if aging previews fail to generate (API error/timeout), still include a consistent 4-panel block
-// so the email + on-screen report never ship "missing images".
-if (!agingPreviewImages || typeof agingPreviewImages !== "object") {
-  agingPreviewImages = null;
-}
-const hasAnyAging =
-  agingPreviewImages &&
-  Object.values(agingPreviewImages).some((v) => typeof v === "string" && v.length > 10);
-
-if (!hasAnyAging) {
-  const base = emailSafeSelfieUrl || selfieUrl || null;
-  if (base) {
-    agingPreviewImages = {
-      noChange10: base,
-      withCare10: base,
-      noChange20: base,
-      withCare20: base
-    };
-  }
-}// -------------------------
+// -------------------------
 // HTML block: Aging Preview Images (EMAIL)
 // -------------------------
 function buildAgingPreviewHtml(agingPreviewImages) {
