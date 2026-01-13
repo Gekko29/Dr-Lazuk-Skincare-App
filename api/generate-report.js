@@ -3129,15 +3129,13 @@ const confidenceHtml = (() => {
             primaryConcern: primaryConcern || null,
           },
           { nowIso }
-        )
+        );
     const visual_payload = buildVisualPayloadFromCanonical(canonical_payload);
     const protocol_recommendation = recommendProtocol({
       primaryConcern,
       clusters: visual_payload.clusters,
     });
     canonical_payload.protocol_recommendation = protocol_recommendation;
-
-;
 
     return res.status(200).json({
       ok: true,
