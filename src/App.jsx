@@ -2857,7 +2857,6 @@ try {
           </div>
         </details>
       ) : null}
-    </div>
 
     {/* Treatments are allowed; products must remain inside the protocol */}
     {Array.isArray(analysisReport.protocolRecommendation?.treatments) && analysisReport.protocolRecommendation.treatments.length > 0 ? (
@@ -2878,11 +2877,6 @@ try {
       </AccordionSection>
     </div>
   </div>
-)}
-      </div>
-        )}
-
-      </div>
       <div className="bg-gray-900 text-white py-8 mt-12">
         <div className="max-w-6xl mx-auto px-4 text-center">
           <p className="text-sm text-gray-400">© 2026 by SkinDoctor AI®</p>
