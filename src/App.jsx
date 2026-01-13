@@ -532,8 +532,12 @@ const validateCapturedImage = async ({ dataUrl, faces }) => {
 
   // ✅ Debug bundle (used only when DEBUG_RETAKE is enabled)
   const debug = {
-    meanBrightness: Number(meanBrightness?.toFixed?.(1) ?? meanBrightness),
-    gradVar: Number(gradVar?.toFixed?.(1) ?? gradVar)
+    meanBrightness: typeof meanBrightness === 'number' && !Number.isNaN(meanBrightness) 
+      ? Number(meanBrightness.toFixed(1)) 
+      : null,
+    gradVar: typeof gradVar === 'number' && !Number.isNaN(gradVar)
+      ? Number(gradVar.toFixed(1))
+      : null
   };
 
   // Hard reject only if truly unusable
@@ -566,8 +570,13 @@ const validateCapturedImage = async ({ dataUrl, faces }) => {
       const cy = (bb.y + bb.height / 2) / imgH; // 0..1
 
       // ✅ add framing debug
-      debug.faceRatio = Number(ratio?.toFixed?.(3) ?? ratio);
-      debug.faceCenter = { cx: Number(cx?.toFixed?.(3) ?? cx), cy: Number(cy?.toFixed?.(3) ?? cy) };
+      debug.faceRatio = typeof ratio === 'number' && !Number.isNaN(ratio)
+        ? Number(ratio.toFixed(3))
+        : null;
+      debug.faceCenter = {
+        cx: typeof cx === 'number' && !Number.isNaN(cx) ? Number(cx.toFixed(3)) : null,
+        cy: typeof cy === 'number' && !Number.isNaN(cy) ? Number(cy.toFixed(3)) : null
+      };
 
       // Require a reasonably large, not-too-close face in frame
       // (Partial faces often show small boxes; extreme close-ups show huge boxes.)
