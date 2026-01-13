@@ -4,10 +4,13 @@
 // Two-email flow:
 // 1) /api/generate-report sends the main report email immediately.
 // 2) The client calls this endpoint to generate the 4 aging previews and email them.
+//
+// NOTE: Uses Resend via HTTPS fetch() (NO "resend" npm dependency).
 
-const { Resend } = require("resend");
 const OpenAI = require("openai");
 const crypto = require("crypto");
+// Ensure File is available in Node runtime (Vercel)
+const { File } = require("node:buffer");
 
 function json(res, status, body) {
   res.statusCode = status;
@@ -26,6 +29,30 @@ function getEnv(name, required = true) {
 function safeTrim(s, max = 200) {
   if (!s || typeof s !== "string") return "";
   return s.trim().slice(0, max);
+}
+
+async function readJsonBody(req) {
+  // Vercel often provides req.body as object (already parsed),
+  // but sometimes it's a string. This normalizes safely.
+  if (req.body && typeof req.body === "object") return req.body;
+  if (typeof req.body === "string") {
+    try {
+      return JSON.parse(req.body);
+    } catch {
+      return {};
+    }
+  }
+
+  // Fallback: read raw stream
+  const chunks = [];
+  for await (const chunk of req) chunks.push(chunk);
+  const raw = Buffer.concat(chunks).toString("utf8");
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
 }
 
 function buildAgingOnlyEmailHtml({ firstName, selfieUrl, agingImages }) {
@@ -84,32 +111,12 @@ async function fetchUrlAsBytes(url) {
   return Buffer.from(ab);
 }
 
-async function getToFileHelper() {
-  // OpenAI Node SDK provides toFile in many versions.
-  // Use it when available; otherwise fall back to global File (if present).
-  try {
-    const uploads = require("openai/uploads");
-    if (uploads && typeof uploads.toFile === "function") return uploads.toFile;
-  } catch (_) {}
-  return null;
-}
-
 async function generateEditsFromSelfieBytes(openai, selfieBytes, prompt) {
-  const toFile = await getToFileHelper();
-
-  let image;
-  if (toFile) {
-    image = await toFile(selfieBytes, "selfie.jpg", { type: "image/jpeg" });
-  } else if (typeof File !== "undefined") {
-    image = new File([selfieBytes], "selfie.jpg", { type: "image/jpeg" });
-  } else {
-    // Last-resort: throw a clear error (this is usually the root cause of Vercel 500s here).
-    throw new Error("Node runtime missing File/toFile for OpenAI image uploads. Please use openai/uploads toFile.");
-  }
+  const file = new File([selfieBytes], "selfie.jpg", { type: "image/jpeg" });
 
   const result = await openai.images.edits({
     model: "gpt-image-1",
-    image,
+    image: file,
     prompt,
     size: "1024x1024",
   });
@@ -128,9 +135,9 @@ async function uploadBufferToCloudinary(buffer, folder, publicIdPrefix) {
   const timestamp = Math.floor(Date.now() / 1000);
   const publicId = `${publicIdPrefix}_${crypto.randomBytes(6).toString("hex")}`;
 
-  const cryptoNode = require("crypto");
+  // Cloudinary signature
   const toSign = `folder=${folder}&public_id=${publicId}&timestamp=${timestamp}${apiSecret}`;
-  const signature = cryptoNode.createHash("sha1").update(toSign).digest("hex");
+  const signature = crypto.createHash("sha1").update(toSign).digest("hex");
 
   const formParts = [];
   const pushField = (name, value) => {
@@ -140,7 +147,7 @@ async function uploadBufferToCloudinary(buffer, folder, publicIdPrefix) {
     formParts.push(Buffer.from(`\r\n`));
   };
 
-  // file part
+  // file
   formParts.push(Buffer.from(`--${boundary}\r\n`));
   formParts.push(
     Buffer.from(
@@ -188,12 +195,29 @@ async function generateAgingPreviewImagesFromUrl(openai, selfiePublicUrl) {
       "Generate a realistic age progression of this exact person 20 years in the future assuming consistent high-quality skincare and sun protection. Keep facial identity identical. Natural lighting. Subtle improvement.",
   };
 
-  // Generate sequentially to reduce spikes/timeouts
   const out = {};
   for (const [key, prompt] of Object.entries(prompts)) {
     const imgBytes = await generateEditsFromSelfieBytes(openai, selfieBytes, prompt);
     const url = await uploadBufferToCloudinary(imgBytes, "drlazuk/aging-previews", key);
     out[key] = url;
+  }
+  return out;
+}
+
+async function sendResendEmail({ to, from, subject, html }) {
+  const apiKey = getEnv("RESEND_API_KEY");
+  const resp = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ from, to, subject, html }),
+  });
+
+  const out = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    throw new Error(`Resend send failed: ${out?.message || out?.error || resp.statusText}`);
   }
   return out;
 }
@@ -205,7 +229,9 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const { firstName, email, selfiePublicUrl } = req.body || {};
+    const body = await readJsonBody(req);
+
+    const { firstName, email, selfiePublicUrl } = body || {};
     const safeEmail = safeTrim(email, 320);
     const safeFirstName = safeTrim(firstName, 80);
 
@@ -217,7 +243,6 @@ module.exports = async function handler(req, res) {
     }
 
     const openai = new OpenAI({ apiKey: getEnv("OPENAI_API_KEY") });
-    const resend = new Resend(getEnv("RESEND_API_KEY"));
 
     const agingImages = await generateAgingPreviewImagesFromUrl(openai, selfiePublicUrl);
 
@@ -227,8 +252,14 @@ module.exports = async function handler(req, res) {
       agingImages,
     });
 
-    await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL || "Dr. Lazuk Esthetics <no-reply@drlazuk.com>",
+    // Prefer your existing env var names (seen in your Vercel UI)
+    const from =
+      getEnv("RESEND_FROM_EMAIL", false) ||
+      getEnv("EMAIL_FROM", false) ||
+      "Dr. Lazuk <noreply@drlazuk.com>";
+
+    await sendResendEmail({
+      from,
       to: safeEmail,
       subject: "Your Aging Preview Images — Dr. Lazuk",
       html,
