@@ -247,6 +247,82 @@ function buildCanonicalPayloadFromSignalsV2(visualSignalsV2 = {}, { nowIso } = {
   };
 }
 
+
+/* ---------------------------------------
+   Visual Payload Builder (UI compatibility)
+--------------------------------------- */
+function buildVisualPayloadFromCanonical(canonical) {
+  const clusters = Array.isArray(canonical?.clusters) ? canonical.clusters : [];
+  // Flatten metrics to compute top signals (lowest scores = most attention)
+  const allMetrics = [];
+  clusters.forEach((c) => {
+    (c.metrics || []).forEach((m) => {
+      allMetrics.push({
+        cluster_id: c.cluster_id,
+        cluster_name: c.display_name,
+        metric_id: m.metric_id,
+        label: m.label,
+        score: m.score,
+        rag: m.rag,
+      });
+    });
+  });
+
+  allMetrics.sort((a, b) => (a.score ?? 999) - (b.score ?? 999));
+  const topSignals = allMetrics.slice(0, 8);
+
+  return {
+    version: "v2-ui",
+    overall: canonical?.overall || null,
+    // Shape expected by App.jsx radial cluster UI
+    clusters: clusters.map((c) => ({
+      id: c.cluster_id,
+      title: c.display_name,
+      score: c.score,
+      rag: c.rag,
+      metrics: (c.metrics || []).map((m) => ({
+        id: m.metric_id,
+        label: m.label,
+        score: m.score,
+        rag: m.rag,
+      })),
+    })),
+    topSignals,
+  };
+}
+
+function recommendProtocol({ primaryConcern, clusters }) {
+  // Locked logic:
+  // Hydration/Barrier: Radiant (Basic) -> Luxe (Advanced)
+  // Sensitivity/Calming: Clarite (Basic) -> Serein (Advanced)
+  // If sensitivity is mentioned/primary -> Clarite track (upgrade to Serein if any additional/moderate finding)
+  // Otherwise default Radiant if one primary concern and nothing moderate; upgrade to Luxe if aging is primary and hydration is moderate/secondary or any additional/moderate finding.
+  const pc = (primaryConcern || "").toLowerCase();
+  const hasSensitivity = pc.includes("sens") || pc.includes("red") || pc.includes("ros") || pc.includes("irrit");
+  // Determine if there is any moderate finding: any cluster score < 70 treated as moderate/attention threshold
+  const scores = (clusters || []).map((c) => Number(c.score)).filter((n) => Number.isFinite(n));
+  const hasModerate = scores.some((s) => s < 70);
+
+  if (hasSensitivity) {
+    return hasModerate
+      ? { id: "serein", name: "Serein Balance", tier: "Advanced", url: "https://www.skindoctor.ai/product-page/serein-balance-advanced-skincare-deep-hydration-restored-calm-resilient-skin" }
+      : { id: "clarite", name: "Clarite Protocol", tier: "Basic", url: "https://www.skindoctor.ai/product-page/clarite-protocol" };
+  }
+
+  const hasAging = pc.includes("aging") || pc.includes("wrinkle") || pc.includes("firm") || pc.includes("lift");
+  const hydrationCluster = (clusters || []).find((c) => (c.id || c.cluster_id || "").toLowerCase().includes("hydr"));
+  const hydrationScore = hydrationCluster ? Number(hydrationCluster.score) : NaN;
+  const hydrationModerate = Number.isFinite(hydrationScore) ? hydrationScore < 75 : false;
+
+  if (hasAging && (hydrationModerate || hasModerate)) {
+    return { id: "luxe", name: "Luxe Renewal", tier: "Advanced", url: "https://www.skindoctor.ai/product-page/luxe-renewal-complete-skincare-solution-advanced-firming-elevated-renewal" };
+  }
+
+  return hasModerate
+    ? { id: "luxe", name: "Luxe Renewal", tier: "Advanced", url: "https://www.skindoctor.ai/product-page/luxe-renewal-complete-skincare-solution-advanced-firming-elevated-renewal" }
+    : { id: "radiant", name: "Radiant Protocol", tier: "Basic", url: "https://www.skindoctor.ai/product-page/radiant-protocol-skincare-solution-natural-hydration-luminosity" };
+}
+
 // --- Fallback: build canonical payload when visualSignalsV2 is missing/invalid ---
 // Model B philosophy: prefer real signal scores; otherwise infer conservative, non-alarmist scores
 // from the report narrative so the UI can still render rings, numbers, and RAG consistently.
@@ -357,6 +433,39 @@ function clamp01(x) {
   const n = Number(x);
   if (Number.isNaN(n)) return 0;
   return Math.max(0, Math.min(1, n));
+}
+
+// -------------------------
+// Analysis Confidence (0..100)
+// Converts capture-quality evaluation into a single user-facing score.
+// Purpose: avoid hard-fail on imperfect photos; proceed best-effort with clear disclosure.
+// -------------------------
+function computeAnalysisConfidence(captureQuality) {
+  // Default: assume good capture.
+  const cq = captureQuality && typeof captureQuality === "object" ? captureQuality : null;
+  if (!cq) return { score: 100, level: "high", reasons: [], requirementsForRetry: [] };
+
+  const raw = clamp01(cq.confidence ?? 0.8);
+  let score = Math.round(raw * 100);
+
+  const reasons = Array.isArray(cq.reasons) ? cq.reasons.filter(Boolean) : [];
+  const requirementsForRetry = Array.isArray(cq.requirementsForRetry)
+    ? cq.requirementsForRetry.filter(Boolean)
+    : [];
+
+  // If the evaluator says it is NOT usable, cap the score and add penalties per reason.
+  if (cq.isUsable === false) {
+    score = Math.min(score, 60);
+    score -= Math.min(20, reasons.length * 7);
+  }
+
+  // Small penalty for any listed issues (even if usable).
+  if (reasons.length > 0) score -= Math.min(10, Math.max(0, reasons.length - 1) * 3);
+
+  score = Math.max(25, Math.min(100, score));
+
+  const level = score >= 85 ? "high" : score >= 65 ? "medium" : "low";
+  return { score, level, reasons, requirementsForRetry };
 }
 
 function ceilingLevel(level) {
@@ -2072,7 +2181,7 @@ async function ensureStablePublicImageUrl(anyImage) {
 async function normalizeAgingPreviewImagesToPublicUrls(agingPreviewImages) {
   if (!agingPreviewImages) return agingPreviewImages;
 
-  const keys = ["noChange10", "noChange20", "withCare10", "withCare20"];
+  const keys = ["tile","noChange10", "noChange20", "withCare10", "withCare20"];
   const out = { ...agingPreviewImages };
 
   await Promise.all(
@@ -2090,33 +2199,40 @@ async function normalizeAgingPreviewImagesToPublicUrls(agingPreviewImages) {
 // -------------------------
 async function generateAgingPreviewImages({ ageRange, primaryConcern, fitzpatrickType, photoDataUrl }) {
   if (!process.env.OPENAI_API_KEY) {
-    return { noChange10: null, noChange20: null, withCare10: null, withCare20: null };
+    return { tile: null, noChange10: null, noChange20: null, withCare10: null, withCare20: null };
   }
   if (!photoDataUrl) {
-    return { noChange10: null, noChange20: null, withCare10: null, withCare20: null };
+    return { tile: null, noChange10: null, noChange20: null, withCare10: null, withCare20: null };
   }
 
   const fitzText = fitzpatrickType
     ? `with Fitzpatrick type ${fitzpatrickType}`
     : "with a realistic skin tone and texture";
 
-  const baseStyleNoChange =
-    "ultra-realistic portrait, neutral expression, studio lighting, no makeup, no filters, no retouching, no beautification, no flattering bias, no skin smoothing, subtle signs of aging rendered honestly but respectfully, realistic pores and texture";
-  const baseStyleWithCare =
-    'ultra-realistic portrait, neutral expression, studio lighting, minimal/no makeup, no heavy filters, tasteful and slight "well-cared-for" bias allowed (subtle, not fake), realistic pores and texture, realistic aging but clearly supported by consistent skincare and sun protection (no plastic-smooth skin)';
+  // Single composite tile to reduce render time (one OpenAI call instead of four)
+  const tilePrompt = `
+Using the SAME PERSON from the provided selfie (preserve identity, facial structure, ethnicity, and features),
+generate ONE single 2x2 composite image (a tile) with identical framing/lighting/pose in all quadrants.
 
-  const prompts = {
-    noChange10: `Using the SAME PERSON from the provided selfie (preserve identity, facial structure, ethnicity, and features), show them about 10 years in the future if they do not meaningfully improve skincare — more pronounced fine lines, duller tone, more visible sun and lifestyle effects, still dignified and human. ${fitzText}. ${baseStyleNoChange}.`,
-    noChange20: `Using the SAME PERSON from the provided selfie (preserve identity, facial structure, ethnicity, and features), show them about 20 years in the future with minimal skincare support — deeper wrinkles, more sagging, more uneven pigment and sun markings, still dignified, no caricature. ${fitzText}. ${baseStyleNoChange}.`,
-    withCare10: `Using the SAME PERSON from the provided selfie (preserve identity, facial structure, ethnicity, and features), show them about 10 years in the future if they follow a gentle, consistent dermatologist-guided routine with sun protection — healthier glow, more even tone, refined texture, realistic aging but clearly well cared-for. ${fitzText}. ${baseStyleWithCare}.`,
-    withCare20: `Using the SAME PERSON from the provided selfie (preserve identity, facial structure, ethnicity, and features), show them about 20 years in the future with consistent skincare, sun protection, and healthy lifestyle — naturally aged but radiant, balanced skin, softened lines, graceful aging, no unrealistic perfection. ${fitzText}. ${baseStyleWithCare}.`,
-  };
+Layout:
+- Top-left: ~10 years in the future, minimal skincare changes
+- Top-right: ~20 years in the future, minimal skincare changes
+- Bottom-left: ~10 years in the future, with consistent skincare and sun protection
+- Bottom-right: ~20 years in the future, with consistent skincare and sun protection
+
+Render subtle, realistic, dignified cosmetic aging (no caricature, no dramatic shock effects).
+No beautification filters, no plastic smoothing, keep realistic pores/texture.
+${fitzText}.
+  `.trim();
+
+  const prompts = { tile: tilePrompt };
 
   try {
-    return await generateEditsFromSelfie({ photoDataUrl, prompts, size: "256x256" });
+    // 512x512 is sufficient for email/mobile and is faster than larger sizes
+    return await generateEditsFromSelfie({ photoDataUrl, prompts, size: "512x512" });
   } catch (err) {
-    console.error("Error generating selfie-based aging preview images:", err);
-    return { noChange10: null, noChange20: null, withCare10: null, withCare20: null };
+    console.error("Error generating selfie-based aging preview tile:", err);
+    return { tile: null, noChange10: null, noChange20: null, withCare10: null, withCare20: null };
   }
 }
 
@@ -2124,11 +2240,49 @@ async function generateAgingPreviewImages({ ageRange, primaryConcern, fitzpatric
 // HTML block: Aging Preview Images (EMAIL)
 // -------------------------
 function buildAgingPreviewHtml(agingPreviewImages) {
-  if (!agingPreviewImages) return "";
+  // Two-email flow: the initial report email goes out immediately,
+  // and aging previews arrive in a follow-up email.
+  const waitingCard = `
+    <div style="margin: 18px 0 18px 0; padding: 14px 14px 16px; border-radius: 10px; border: 1px solid #E5E7EB; background-color: #F9FAFB;">
+      <h2 style="font-size: 15px; font-weight: 700; margin: 0 0 6px;">
+        Your Skin’s Future Story — A Preview
+      </h2>
+      <p style="font-size: 12px; color: #4B5563; margin: 0;">
+        Your aging preview images are being generated now and will arrive in a separate email shortly.
+        (Timing varies; typically a few minutes.)
+      </p>
+    </div>
+  `;
 
-  const { noChange10, noChange20, withCare10, withCare20 } = agingPreviewImages || {};
-  if (!noChange10 && !noChange20 && !withCare10 && !withCare20) return "";
+  if (!agingPreviewImages || typeof agingPreviewImages !== "object") return waitingCard;
 
+// Fast-path: single composite tile
+if (agingPreviewImages.tile) {
+  return `
+    <div style="margin: 18px 0 18px 0; padding: 14px 14px 16px; border-radius: 10px; border: 1px solid #E5E7EB; background-color: #F9FAFB;">
+      <h2 style="font-size: 15px; font-weight: 700; margin: 0 0 6px;">
+        Your Skin’s Future Story — A Preview
+      </h2>
+      <p style="font-size: 12px; color: #4B5563; margin: 0 0 10px;">
+        This is a single composite tile (2×2) visualization for cosmetic education and entertainment only.
+        It is not a medical prediction and may not reflect your actual future appearance.
+      </p>
+      <img src="${agingPreviewImages.tile}" alt="Composite aging preview tile" style="width: 100%; border-radius: 10px; border: 1px solid #E5E7EB;" />
+      <p style="font-size: 11px; color: #6B7280; margin: 8px 0 0;">
+        Top: minimal changes · Bottom: consistent care · Left: ~10 years · Right: ~20 years
+      </p>
+    </div>
+  `;
+}
+
+const { noChange10, noChange20, withCare10, withCare20 } = agingPreviewImages || {};
+const hasAny = Boolean(noChange10 || noChange20 || withCare10 || withCare20);
+if (!hasAny) return waitingCard;
+
+return renderAgingPreviewHtml({ noChange10, noChange20, withCare10, withCare20 });
+}
+
+function renderAgingPreviewHtml({ noChange10, noChange20, withCare10, withCare20 }) {
   return `
     <div style="margin: 18px 0 18px 0; padding: 14px 14px 16px; border-radius: 10px; border: 1px solid #E5E7EB; background-color: #F9FAFB;">
       <h2 style="font-size: 15px; font-weight: 700; margin: 0 0 6px;">
@@ -2182,7 +2336,7 @@ function buildAgingPreviewHtml(agingPreviewImages) {
 }
 
 // Calls OpenAI Images Edits endpoint directly (multipart/form-data)
-async function generateEditsFromSelfie({ photoDataUrl, prompts, size = "256x256" }) {
+async function generateEditsFromSelfie({ photoDataUrl, prompts, size = "1024x1024" }) {
   const parsed = parseDataUrl(photoDataUrl);
   if (!parsed) throw new Error("Selfie must be a valid data URL (data:image/...;base64,...)");
 
@@ -2222,14 +2376,21 @@ async function generateEditsFromSelfie({ photoDataUrl, prompts, size = "256x256"
     return null;
   }
 
-  const [noChange10, noChange20, withCare10, withCare20] = await Promise.all([
-    oneEdit(prompts.noChange10),
-    oneEdit(prompts.noChange20),
-    oneEdit(prompts.withCare10),
-    oneEdit(prompts.withCare20),
-  ]);
+// If a single composite tile prompt is provided, generate only one image (fast path)
+if (prompts && typeof prompts === "object" && prompts.tile) {
+  const tile = await oneEdit(prompts.tile);
+  return { tile, noChange10: null, noChange20: null, withCare10: null, withCare20: null };
+}
 
-  return { noChange10, noChange20, withCare10, withCare20 };
+const [noChange10, noChange20, withCare10, withCare20] = await Promise.all([
+  oneEdit(prompts.noChange10),
+  oneEdit(prompts.noChange20),
+  oneEdit(prompts.withCare10),
+  oneEdit(prompts.withCare20),
+]);
+
+return { tile: null, noChange10, noChange20, withCare10, withCare20 };
+
 }
 
 // -------------------------
@@ -2441,6 +2602,10 @@ function hasGreetingOkLine(text) {
 // -------------------------
 module.exports = async function handler(req, res) {
   try {
+    // Ensure these exist in scope even when optional branches are skipped
+    let agingPreviewImages = null;
+    let agingPreviewHtml = "";
+    let agingJob = null;
     if (req.method !== "POST") {
       res.setHeader("Allow", ["POST"]);
       return res.status(405).json({ ok: false, error: "Method not allowed" });
@@ -2500,20 +2665,13 @@ module.exports = async function handler(req, res) {
 
     const client = await getOpenAIClient();
 
-    // ✅ NEW: Capture Quality Gate BEFORE cooldown consumption
+    // ✅ Capture Quality Evaluation (modifier, not a hard stop)
+    // We proceed with best-effort analysis even when photo quality is suboptimal,
+    // but surface an explicit confidence score and actionable retry tips.
     const captureQuality = await evaluateCaptureQuality({ client, photoDataUrl });
+    const analysisConfidence = computeAnalysisConfidence(captureQuality);
 
-    if (captureQuality && captureQuality.isUsable === false) {
-      return res.status(400).json({
-        ok: false,
-        error: "photo_not_usable",
-        message:
-          "I’m not able to run a reliable cosmetic assessment from this photo. Please upload a clear, front-facing selfie with your full face visible in good lighting.",
-        captureQuality,
-      });
-    }
-
-    // Enforce 30-day cooldown per email (only after photo is usable)
+    // Enforce 30-day cooldown per email (analysis proceeds even if confidence is low)
     checkCooldownOrThrow(cleanEmail);
 
     const buildAnalysis = await getBuildAnalysis();
@@ -2638,6 +2796,12 @@ NON-NEGOTIABLE REQUIREMENTS:
    Never use "Dear You" or any other greeting.
 2) The letter MUST reference at least ONE concrete selfie detail from the provided context:
    glasses, eye color, hair, clothing color, or another visible detail.
+
+ANALYSIS CONFIDENCE (ALWAYS DISCLOSE BRIEFLY):
+- Confidence score: ${analysisConfidence.score}/100.
+- If below 90/100, include 1–2 sentences early in the letter explaining that guidance is best-effort based on the photo quality, and list the top 1–2 reasons.
+- Include one short “how to improve confidence next time” hint (e.g., better lighting, more frontal angle, no occlusions, closer framing).
+- Keep tone calm, non-alarming, and non-judgmental.
 3) The letter MUST incorporate the 15-point dermatologist visual analysis categories below,
    woven naturally in narrative (do NOT list them as a checklist).
    The 15 categories are:
@@ -2681,6 +2845,9 @@ Person details:
 - Age range: ${cleanAgeRange}
 - Primary cosmetic concern: ${cleanPrimaryConcern}
 - Visitor question: ${cleanVisitorQuestion || "none provided"}
+
+Capture quality & confidence (do NOT print JSON; use it to disclose limitations + how to improve confidence):
+${JSON.stringify({ analysisConfidence, captureQuality }, null, 2)}
 
 Structured analysis context (do NOT print JSON; weave it into the letter):
 ${JSON.stringify(analysisContext, null, 2)}
@@ -2751,21 +2918,26 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
         reportText = `${reportText}\n\n${v2Insert}`.trim();
       }
     }
+    
+    // 5) Aging preview images are generated asynchronously (second email).
+    // We return and email the report immediately, then the client calls /api/generate-aging.
+    // This avoids long blocking runtimes (aging renders can take several minutes).
 
-    // 5) Generate SELFIE-based aging preview images
-    let agingPreviewImages = await generateAgingPreviewImages({
-      ageRange: cleanAgeRange,
-      primaryConcern: cleanPrimaryConcern,
-      fitzpatrickType,
-      photoDataUrl, // IMPORTANT: use original selfie dataURL as base for edits
-    });
+    // 5) Aging preview images are generated asynchronously (second email).
+    // We email the report immediately, then the client calls /api/generate-aging.
+    agingPreviewImages = null;
+    agingPreviewHtml = buildAgingPreviewHtml(agingPreviewImages);
 
-    // ✅ Server-side watermark removed (client-side watermark only)
-    // Then stabilize to public URLs (Cloudinary/Vercel Blob)
-    agingPreviewImages = await normalizeAgingPreviewImagesToPublicUrls(agingPreviewImages);
-
-    const agingPreviewHtml = buildAgingPreviewHtml(agingPreviewImages);
-
+    agingJob = {
+      endpoint: "/api/generate-aging",
+      payload: {
+        firstName,
+        email,
+        // Use the already-public email-safe selfie URL to avoid re-uploading base64
+        selfiePublicUrl: emailSafeSelfieUrl,
+      },
+    };
+    
     // Reflection HTML (must be inserted AFTER aging images)
     const reflectionHtml = buildEmailReflectionSectionHtml();
 
@@ -2799,7 +2971,34 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
     // Place aging block near the end, just above Dr. Lazuk’s closing note/signature.
     // EMAIL order: before -> areas of focus -> aging images -> reflection -> closing
     const { before, closing } = splitForAgingPlacement(reportText);
-    const letterHtmlBody =
+
+const confidenceHtml = (() => {
+  if (!analysisConfidence) return "";
+  const score =
+    typeof analysisConfidence.score === "number" ? analysisConfidence.score : null;
+
+  const note = analysisConfidence.note || analysisConfidence.explanation || "";
+  const reasons = Array.isArray(captureQuality?.reasons) ? captureQuality.reasons : [];
+
+  const reasonsHtml =
+    reasons.length > 0
+      ? `<ul style="margin:8px 0 0 18px;">${reasons
+          .slice(0, 5)
+          .map((r) => `<li>${escapeHtml(String(r))}</li>`)
+          .join("")}</ul>`
+      : "";
+
+  return `
+    <div style="margin: 14px 0 18px; padding: 12px 14px; border: 1px solid #E5E7EB; border-radius: 12px; background: #F9FAFB;">
+      <div style="font-weight: 800; color: #111827;">
+        Analysis Confidence${score != null ? `: <span style="font-variant-numeric: tabular-nums;">${score}/100</span>` : ""}
+      </div>
+      ${note ? `<div style="margin-top:6px; color:#374151;">${escapeHtml(String(note))}</div>` : ""}
+      ${score != null && score < 100 ? `<div style="margin-top:6px; color:#6B7280; font-size: 13px;">To increase confidence, retake your selfie with better lighting and a front-facing angle.</div>` : ""}
+      ${reasonsHtml}
+    </div>
+  `;
+})();    const letterHtmlBody =
       textToHtmlParagraphs(before) +
       (areasOfFocusHtml ? areasOfFocusHtml : "") +
       (agingPreviewHtml ? agingPreviewHtml : "") +
@@ -2953,62 +3152,48 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
           },
           { nowIso }
         );
+    const visual_payload = buildVisualPayloadFromCanonical(canonical_payload);
+    const protocol_recommendation = recommendProtocol({
+      primaryConcern,
+      clusters: visual_payload.clusters,
+    });
+    canonical_payload.protocol_recommendation = protocol_recommendation;
 
-    return 
-  // -------------------------------------------------------------------
-  // UI payload compatibility:
-  // - "areasOfFocus" is consumed by the React UI rings.
-  // - Older flows used narrative-only items; the UI requires score + rag.
-  // - We therefore expose:
-  //     areasOfFocus: scored cluster objects (preferred)
-  //     areasOfFocusLegacy: narrative items (for email/body rendering)
-  //     areasOfFocusV2: alias of scored clusters (future-proof)
-  // -------------------------------------------------------------------
-  const areasOfFocusV2 =
-    canonical_payload && Array.isArray(canonical_payload.clusters)
-      ? canonical_payload.clusters
-      : [];
-
-  const areasOfFocusForUI =
-    areasOfFocusV2.length
-      ? areasOfFocusV2
-      : (Array.isArray(areasOfFocus) ? areasOfFocus : []).map((it) => ({
-          id: it?.id || it?.key || "unknown",
-          title: it?.title || "Area of Focus",
-          score: 70,
-          rag: "amber",
-          confidence: 0.5,
-          basis: "ui_fallback",
-          keywords: Array.isArray(it?.keywords) ? it.keywords : [],
-          // keep any narrative copy if present
-          body: it?.body || it?.text || ""
-        }));
-res.status(200).json({
+    return res.status(200).json({
       ok: true,
 
       // ✅ Canonical payload for client-side visual report (scores + RAG)
       canonical_payload,
 
-      visual_payload: canonical_payload,
+      visual_payload,
+      protocol_recommendation,
 // Original narrative letter (UI can keep rendering this as-is)
       report: reportText,
 
       // ✅ LOCKED: dynamic card data for visual report rendering
-      areasOfFocus: areasOfFocusForUI,
-      areasOfFocusLegacy: areasOfFocus || [],
-      areasOfFocusV2,
+      areasOfFocus,
       areasOfFocusText,
+
+      analysis_confidence: analysisConfidence || null,
+      captureQuality: captureQuality || null,
 
       fitzpatrickType: fitzpatrickType || null,
       fitzpatrickSummary: fitzpatrickSummary || null,
       agingPreviewImages,
       selfieUrlForEmail: emailSafeSelfieUrl || null,
 
+      // ✅ New: capture-quality disclosure (additive)
+      analysisConfidence,
+      captureQuality,
+
       // ADD: Dermatology Engine payload (structured JSON)
       dermEngine: dermEngine || null,
 
       // ADD: Visual Signals V2 payload (structured JSON)
       visualSignalsV2: visualSignalsV2 || null,
+
+      emailSelfieUrl: emailSafeSelfieUrl,
+      agingJob,
 
       _debug: {
         usedIncomingImageAnalysis: !!incomingImageAnalysis,
