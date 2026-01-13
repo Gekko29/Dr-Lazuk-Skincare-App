@@ -2875,7 +2875,6 @@ try {
       </div>
     ) : null}
   </div>
-)}
       </AccordionSection>
       </div>
 
