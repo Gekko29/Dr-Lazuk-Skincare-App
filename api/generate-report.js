@@ -2901,22 +2901,24 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
         reportText = `${reportText}\n\n${v2Insert}`.trim();
       }
     }
-// 5) Aging preview images are generated asynchronously (second email).
-// We return and email the report immediately, then the client calls /api/generate-aging.
-// This avoids long blocking runtimes (aging renders can take several minutes).
-const agingPreviewImages = null;
-const agingPreviewHtml = buildAgingPreviewHtml(agingPreviewImages);
+    
+    // 5) Aging preview images are generated asynchronously (second email).
+    // We return and email the report immediately, then the client calls /api/generate-aging.
+    // This avoids long blocking runtimes (aging renders can take several minutes).
+    const agingPreviewImages = null;
+    const agingPreviewHtml = buildAgingPreviewHtml(agingPreviewImages);
 
-const agingJob = {
-  endpoint: "/api/generate-aging",
-  payload: {
-    firstName,
-    email,
-    // Use the already-public email-safe selfie URL to avoid re-uploading base64
-    selfiePublicUrl: emailSafeSelfieUrl,
-  },
-};
-// Reflection HTML (must be inserted AFTER aging images)
+    const agingJob = {
+      endpoint: "/api/generate-aging",
+      payload: {
+        firstName,
+        email,
+        // Use the already-public email-safe selfie URL to avoid re-uploading base64
+        selfiePublicUrl: emailSafeSelfieUrl,
+      },
+    };
+    
+    // Reflection HTML (must be inserted AFTER aging images)
     const reflectionHtml = buildEmailReflectionSectionHtml();
 
     // ✅ Confidence-aware Areas of Focus
