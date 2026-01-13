@@ -1,4 +1,4 @@
-// api/generate-report.js
+// api/generate-report.js Claude V3
 // FINAL — Dr. Lazuk Virtual Skin Analysis Report (Vercel-safe CJS)
 //
 // Key updates implemented:
