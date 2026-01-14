@@ -1883,7 +1883,10 @@ ${SUPPORTIVE_FOOTER_LINE}`);
           data?.agingPreviewImages?.noChange10 ||
           data?.agingPreviewImages?.noChange20 ||
           data?.agingPreviewImages?.withCare10 ||
-          data?.agingPreviewImages?.withCare20
+          data?.agingPreviewImages?.withCare20 ||
+          data?.agingPreviewImages?.tile ||
+          data?.agingPreviewImages?.tile512 ||
+          data?.agingPreviewImages?.tileUrl
         ),
         hasAreasOfFocus: !!(data?.areasOfFocus || data?.focusAreas)
       });
@@ -2029,6 +2032,12 @@ ${SUPPORTIVE_FOOTER_LINE}`);
   const handleShare = async ({ url, label }) => {
     if (!reflectionSeen) {
       gaEvent("share_blocked_before_reflection", { label });
+
+  const agingTile = useMemo(() => {
+    const p = analysisReport?.agingPreviewImages || {};
+    return p.tile || p.tile512 || p.tileUrl || null;
+  }, [analysisReport]);
+
       showToast("Take your time — sharing becomes available after you’ve read Dr. Lazuk’s note.");
       return;
     }
@@ -2581,7 +2590,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 
         {agencyChoice === 'understand' && (
           <div className="mt-6">
-            {agingImages.length > 0 ? (
+            {(agingTile || agingImages.length > 0) ? (
               <div className="bg-white border border-gray-200 p-6">
                 <h4 className="text-xl font-bold text-gray-900 mb-2">
                   Your Future Story (Cosmetic Projection)
@@ -2590,62 +2599,109 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                   These are visual projections anchored to your selfie.
                 </p>
 
-                <div className="grid md:grid-cols-2 gap-4">
-                  {agingImages.map((img) => (
-                    <div key={img.key} className="relative border border-gray-200 bg-gray-50 p-3">
-                      <IdentityLockBadge
-                        placement="top-left"
-                        onClick={() => {
-                          gaEvent('identity_lock_badge_clicked', { key: img.key });
-                          setIdentityLockModalOpen(true);
-                        }}
-                      />
+                {agingTile ? (
+                  <div className="relative border border-gray-200 bg-gray-50 p-3">
+                    <IdentityLockBadge
+                      placement="top-left"
+                      onClick={() => {
+                        gaEvent('identity_lock_badge_clicked', { key: 'tile' });
+                        setIdentityLockModalOpen(true);
+                      }}
+                    />
 
-                      <WatermarkOverlay />
+                    <WatermarkOverlay />
 
-                      <img
-                        src={img.url}
-                        alt={img.label}
-                        className="w-full border border-gray-200"
-                        onLoad={() => gaEvent('aging_image_loaded', { key: img.key })}
-                      />
+                    <img
+                      src={agingTile}
+                      alt="Aging preview tile (10/20 years • with/without care)"
+                      className="w-full border border-gray-200"
+                      onLoad={() => gaEvent('aging_image_loaded', { key: 'tile' })}
+                    />
 
-                      <p className="text-sm font-bold text-gray-900 mt-3">{img.label}</p>
+                    <p className="text-sm font-bold text-gray-900 mt-3">
+                      Aging Preview Tile (10/20 Years • With/Without Care)
+                    </p>
 
-                      <div className="mt-3 grid grid-cols-3 gap-2">
-                        <button
-                          onClick={() => handleShare({ url: img.url, label: img.label })}
-                          className="py-2 text-sm font-bold border bg-gray-900 text-white hover:bg-gray-800 border-gray-900"
-                          type="button"
-                        >
-                          Share
-                        </button>
-
-                        <button
-                          onClick={() => handleSave({ url: img.url, label: img.label })}
-                          className="py-2 text-sm font-bold border bg-white text-gray-900 hover:bg-gray-50 border-gray-300"
-                          type="button"
-                        >
-                          Save
-                        </button>
-
-                        <button
-                          onClick={() => handleCopyImageLink({ url: img.url, label: img.label })}
-                          className="py-2 text-sm font-bold border bg-white text-gray-900 hover:bg-gray-50 border-gray-300"
-                          type="button"
-                        >
-                          Copy
-                        </button>
-                      </div>
-
-                      {!reflectionSeen && (
-                        <p className="text-xs text-gray-600 mt-3">
-                          Sharing/saving activates after you read Dr. Lazuk’s note below.
-                        </p>
-                      )}
+                    <div className="mt-3 grid grid-cols-3 gap-2">
+                      <button
+                        onClick={() =>
+                          handleShare({ url: agingTile, label: 'Aging Preview Tile' })
+                        }
+                        className="py-2 text-sm font-bold border bg-gray-900 text-white hover:bg-gray-800 border-gray-900"
+                        type="button"
+                      >
+                        Share
+                      </button>
+                      <button
+                        onClick={() =>
+                          handleCopy({ url: agingTile, label: 'Aging Preview Tile' })
+                        }
+                        className="py-2 text-sm font-bold border border-gray-900 hover:bg-gray-100"
+                        type="button"
+                      >
+                        Copy
+                      </button>
+                      <button
+                        onClick={() =>
+                          handleDownload({ url: agingTile, label: 'Aging Preview Tile' })
+                        }
+                        className="py-2 text-sm font-bold border border-gray-900 hover:bg-gray-100"
+                        type="button"
+                      >
+                        Save
+                      </button>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ) : (
+                  <div className="grid md:grid-cols-2 gap-4">
+                    {agingImages.map((img) => (
+                      <div key={img.key} className="relative border border-gray-200 bg-gray-50 p-3">
+                        <IdentityLockBadge
+                          placement="top-left"
+                          onClick={() => {
+                            gaEvent('identity_lock_badge_clicked', { key: img.key });
+                            setIdentityLockModalOpen(true);
+                          }}
+                        />
+
+                        <WatermarkOverlay />
+
+                        <img
+                          src={img.url}
+                          alt={img.label}
+                          className="w-full border border-gray-200"
+                          onLoad={() => gaEvent('aging_image_loaded', { key: img.key })}
+                        />
+
+                        <p className="text-sm font-bold text-gray-900 mt-3">{img.label}</p>
+
+                        <div className="mt-3 grid grid-cols-3 gap-2">
+                          <button
+                            onClick={() => handleShare({ url: img.url, label: img.label })}
+                            className="py-2 text-sm font-bold border bg-gray-900 text-white hover:bg-gray-800 border-gray-900"
+                            type="button"
+                          >
+                            Share
+                          </button>
+                          <button
+                            onClick={() => handleCopy({ url: img.url, label: img.label })}
+                            className="py-2 text-sm font-bold border border-gray-900 hover:bg-gray-100"
+                            type="button"
+                          >
+                            Copy
+                          </button>
+                          <button
+                            onClick={() => handleDownload({ url: img.url, label: img.label })}
+                            className="py-2 text-sm font-bold border border-gray-900 hover:bg-gray-100"
+                            type="button"
+                          >
+                            Save
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="bg-gray-50 border border-gray-200 p-6">
@@ -2762,79 +2818,126 @@ ${SUPPORTIVE_FOOTER_LINE}`);
         open={!!openSections.future}
         onToggle={toggleSection}
       >
-        {agingImages.length > 0 ? (
-          <div className="bg-white border border-gray-200 p-6">
-            <h4 className="text-xl font-bold text-gray-900 mb-2">
-              Your Future Story (Cosmetic Projection)
-            </h4>
-            <p className="text-sm text-gray-700 mb-6">
-              These are visual projections anchored to your selfie.
-            </p>
+        {(agingTile || agingImages.length > 0) ? (
+              <div className="bg-white border border-gray-200 p-6">
+                <h4 className="text-xl font-bold text-gray-900 mb-2">
+                  Your Future Story (Cosmetic Projection)
+                </h4>
+                <p className="text-sm text-gray-700 mb-6">
+                  These are visual projections anchored to your selfie.
+                </p>
 
-            <div className="grid md:grid-cols-2 gap-4">
-              {agingImages.map((img) => (
-                <div key={img.key} className="relative border border-gray-200 bg-gray-50 p-3">
-                  <IdentityLockBadge
-                    placement="top-left"
-                    onClick={() => {
-                      gaEvent('identity_lock_badge_clicked', { key: img.key });
-                      setIdentityLockModalOpen(true);
-                    }}
-                  />
+                {agingTile ? (
+                  <div className="relative border border-gray-200 bg-gray-50 p-3">
+                    <IdentityLockBadge
+                      placement="top-left"
+                      onClick={() => {
+                        gaEvent('identity_lock_badge_clicked', { key: 'tile' });
+                        setIdentityLockModalOpen(true);
+                      }}
+                    />
 
-                  <WatermarkOverlay />
+                    <WatermarkOverlay />
 
-                  <img
-                    src={img.url}
-                    alt={img.label}
-                    className="w-full border border-gray-200"
-                    onLoad={() => gaEvent('aging_image_loaded', { key: img.key })}
-                  />
+                    <img
+                      src={agingTile}
+                      alt="Aging preview tile (10/20 years • with/without care)"
+                      className="w-full border border-gray-200"
+                      onLoad={() => gaEvent('aging_image_loaded', { key: 'tile' })}
+                    />
 
-                  <p className="text-sm font-bold text-gray-900 mt-3">{img.label}</p>
-
-                  <div className="mt-3 grid grid-cols-3 gap-2">
-                    <button
-                      onClick={() => handleShare({ url: img.url, label: img.label })}
-                      className="py-2 text-sm font-bold border bg-gray-900 text-white hover:bg-gray-800 border-gray-900"
-                      type="button"
-                    >
-                      Share
-                    </button>
-
-                    <button
-                      onClick={() => handleSave({ url: img.url, label: img.label })}
-                      className="py-2 text-sm font-bold border bg-white text-gray-900 hover:bg-gray-50 border-gray-300"
-                      type="button"
-                    >
-                      Save
-                    </button>
-
-                    <button
-                      onClick={() => handleCopyImageLink({ url: img.url, label: img.label })}
-                      className="py-2 text-sm font-bold border bg-white text-gray-900 hover:bg-gray-50 border-gray-300"
-                      type="button"
-                    >
-                      Copy
-                    </button>
-                  </div>
-
-                  {!reflectionSeen && (
-                    <p className="text-xs text-gray-600 mt-3">
-                      Sharing/saving activates after you read Dr. Lazuk’s note below.
+                    <p className="text-sm font-bold text-gray-900 mt-3">
+                      Aging Preview Tile (10/20 Years • With/Without Care)
                     </p>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <div className="bg-gray-50 border border-gray-200 p-6">
-            <p className="text-sm text-gray-700">
-              Your Future Story images are not available for this result.
-            </p>
-          </div>
-        )}
+
+                    <div className="mt-3 grid grid-cols-3 gap-2">
+                      <button
+                        onClick={() =>
+                          handleShare({ url: agingTile, label: 'Aging Preview Tile' })
+                        }
+                        className="py-2 text-sm font-bold border bg-gray-900 text-white hover:bg-gray-800 border-gray-900"
+                        type="button"
+                      >
+                        Share
+                      </button>
+                      <button
+                        onClick={() =>
+                          handleCopy({ url: agingTile, label: 'Aging Preview Tile' })
+                        }
+                        className="py-2 text-sm font-bold border border-gray-900 hover:bg-gray-100"
+                        type="button"
+                      >
+                        Copy
+                      </button>
+                      <button
+                        onClick={() =>
+                          handleDownload({ url: agingTile, label: 'Aging Preview Tile' })
+                        }
+                        className="py-2 text-sm font-bold border border-gray-900 hover:bg-gray-100"
+                        type="button"
+                      >
+                        Save
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid md:grid-cols-2 gap-4">
+                    {agingImages.map((img) => (
+                      <div key={img.key} className="relative border border-gray-200 bg-gray-50 p-3">
+                        <IdentityLockBadge
+                          placement="top-left"
+                          onClick={() => {
+                            gaEvent('identity_lock_badge_clicked', { key: img.key });
+                            setIdentityLockModalOpen(true);
+                          }}
+                        />
+
+                        <WatermarkOverlay />
+
+                        <img
+                          src={img.url}
+                          alt={img.label}
+                          className="w-full border border-gray-200"
+                          onLoad={() => gaEvent('aging_image_loaded', { key: img.key })}
+                        />
+
+                        <p className="text-sm font-bold text-gray-900 mt-3">{img.label}</p>
+
+                        <div className="mt-3 grid grid-cols-3 gap-2">
+                          <button
+                            onClick={() => handleShare({ url: img.url, label: img.label })}
+                            className="py-2 text-sm font-bold border bg-gray-900 text-white hover:bg-gray-800 border-gray-900"
+                            type="button"
+                          >
+                            Share
+                          </button>
+                          <button
+                            onClick={() => handleCopy({ url: img.url, label: img.label })}
+                            className="py-2 text-sm font-bold border border-gray-900 hover:bg-gray-100"
+                            type="button"
+                          >
+                            Copy
+                          </button>
+                          <button
+                            onClick={() => handleDownload({ url: img.url, label: img.label })}
+                            className="py-2 text-sm font-bold border border-gray-900 hover:bg-gray-100"
+                            type="button"
+                          >
+                            Save
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="bg-gray-50 border border-gray-200 p-6">
+                <p className="text-sm text-gray-700">
+                  Your Future Story images are not available for this result.
+                </p>
+              </div>
+            )}
       </AccordionSection>
 
       <AccordionSection
