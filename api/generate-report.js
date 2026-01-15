@@ -251,45 +251,128 @@ function buildCanonicalPayloadFromSignalsV2(visualSignalsV2 = {}, { nowIso } = {
 /* ---------------------------------------
    Visual Payload Builder (UI compatibility)
 --------------------------------------- */
-function buildVisualPayloadFromCanonical(canonical) {
-  const clusters = Array.isArray(canonical?.clusters) ? canonical.clusters : [];
-  // Flatten metrics to compute top signals (lowest scores = most attention)
-  const allMetrics = [];
-  clusters.forEach((c) => {
-    (c.metrics || []).forEach((m) => {
-      allMetrics.push({
-        cluster_id: c.cluster_id,
-        cluster_name: c.display_name,
-        metric_id: m.metric_id,
-        label: m.label,
-        score: m.score,
-        rag: m.rag,
-      });
-    });
-  });
 
-  allMetrics.sort((a, b) => (a.score ?? 999) - (b.score ?? 999));
-  const topSignals = allMetrics.slice(0, 8);
+function buildCanonicalPayloadFromIncomingImageAnalysis(imageAnalysis, { nowIso } = {}) {
+  if (!imageAnalysis || typeof imageAnalysis !== "object") return null;
+
+  const overall_score = imageAnalysis.overall_score || imageAnalysis.overallScore || null;
+  const incClusters = Array.isArray(imageAnalysis.clusters) ? imageAnalysis.clusters : null;
+  if (!overall_score || !incClusters) return null;
+
+  // Normalize to a single canonical shape
+  const clusters = incClusters
+    .map((c) => {
+      const metrics = Array.isArray(c.metrics) ? c.metrics : [];
+      const scores = metrics.map((m) => Number(m.score)).filter((n) => Number.isFinite(n));
+      const avg = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
+      return {
+        cluster_id: c.cluster_id || c.id || null,
+        display_name: c.display_name || c.title || null,
+        weight: typeof c.weight === "number" ? c.weight : null,
+        order: typeof c.order === "number" ? c.order : null,
+        score: avg,
+        rag: avg === null ? null : ragFromScore(avg),
+        metrics: metrics
+          .map((m) => ({
+            metric_id: m.metric_id || m.id || null,
+            display_name: m.display_name || m.label || m.title || null,
+            score: typeof m.score === "number" ? m.score : null,
+            rag: m.rag || (typeof m.score === "number" ? ragFromScore(m.score) : null),
+            cluster_id: m.cluster_id || c.cluster_id || c.id || null,
+            order: typeof m.order === "number" ? m.order : null,
+          }))
+          .filter((m) => m.metric_id),
+      };
+    })
+    .filter((c) => c.cluster_id);
+
+  return {
+    version: "locked-v1",
+    generated_at: nowIso || new Date().toISOString(),
+    model: "analyzeImage",
+    context: {
+      age_range: null,
+      primary_concern: null,
+    },
+    overall_score,
+    clusters,
+  };
+}
+
+function buildVisualPayloadFromCanonical(canonical) {
+  const overall = canonical?.overall_score || null;
+  const rawClusters = Array.isArray(canonical?.clusters) ? canonical.clusters : [];
+
+  const clusters = rawClusters
+    .map((c) => {
+      const metrics = Array.isArray(c.metrics) ? c.metrics : [];
+      const scores = metrics.map((m) => Number(m.score)).filter((n) => Number.isFinite(n));
+      const score = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : (typeof c.score === "number" ? c.score : null);
+      const rag = c.rag || (score === null ? null : ragFromScore(score));
+      return {
+        id: c.cluster_id || c.id,
+        title: c.display_name || c.title,
+        score,
+        rag,
+        metrics: metrics.map((m) => ({
+          id: m.metric_id || m.id,
+          label: m.display_name || m.label || m.title,
+          score: typeof m.score === "number" ? m.score : null,
+          rag: m.rag || (typeof m.score === "number" ? ragFromScore(m.score) : null),
+          order: typeof m.order === "number" ? m.order : null,
+        })).filter((m) => m.id),
+      };
+    })
+    .filter((c) => c.id);
 
   return {
     version: "v2-ui",
-    overall: canonical?.overall || null,
-    // Shape expected by App.jsx radial cluster UI
-    clusters: clusters.map((c) => ({
-      id: c.cluster_id,
-      title: c.display_name,
-      score: c.score,
-      rag: c.rag,
-      metrics: (c.metrics || []).map((m) => ({
-        id: m.metric_id,
-        label: m.label,
-        score: m.score,
-        rag: m.rag,
-      })),
-    })),
-    topSignals,
+    overall: overall && typeof overall.score === "number" ? overall : null,
+    clusters,
+    topSignals: [],
   };
 }
+
+
+function buildVisualPayloadFromCanonical(canonical) {
+  if (!canonical || typeof canonical !== "object") {
+    return { version: "v2-ui", overall: null, clusters: [], topSignals: [] };
+  }
+
+  // canonical is expected to have overall_score + clusters[] (locked shape from /api/analyzeImage)
+  const overall = canonical?.overall_score || null;
+
+  const clusters = Array.isArray(canonical?.clusters) ? canonical.clusters : [];
+  const uiClusters = clusters.map((c) => {
+    const metrics = Array.isArray(c?.metrics) ? c.metrics : [];
+    const metricScores = metrics.map((m) => (typeof m?.score === "number" ? m.score : null)).filter((x) => typeof x === "number");
+    const avg = metricScores.length ? Math.round(metricScores.reduce((a, b) => a + b, 0) / metricScores.length) : null;
+
+    return {
+      id: c.cluster_id || c.id || "unknown",
+      title: c.display_name || c.title || "",
+      weight: typeof c.weight === "number" ? c.weight : null,
+      order: typeof c.order === "number" ? c.order : null,
+      score: avg,
+      rag: typeof avg === "number" ? ragFromScore(avg) : (c.rag || "amber"),
+      metrics: metrics.map((m) => ({
+        id: m.metric_id || m.id || "",
+        label: m.display_name || m.label || "",
+        score: typeof m.score === "number" ? m.score : null,
+        rag: m.rag || (typeof m.score === "number" ? ragFromScore(m.score) : "amber"),
+        order: typeof m.order === "number" ? m.order : null,
+      })),
+    };
+  });
+
+  return {
+    version: "v2-ui",
+    overall,
+    clusters: uiClusters,
+    topSignals: [],
+  };
+}
+
 
 function recommendProtocol({ primaryConcern, clusters }) {
   // Locked logic:
@@ -2632,8 +2715,9 @@ module.exports = async function handler(req, res) {
       primaryConcern,
       visitorQuestion,
       photoDataUrl,
-      imageAnalysis: incomingImageAnalysis,
     } = req.body || {};
+
+    const incomingImageAnalysis = req.body?.incomingImageAnalysis || req.body?.imageAnalysis || null;
 
     // REQUIRED fields
     const cleanFirstName = String(firstName || "").trim();
@@ -3142,16 +3226,25 @@ const confidenceHtml = (() => {
       return candidates.some((x) => typeof x === "number" && Number.isFinite(x));
     };
 
-    const canonical_payload = validateVisualSignalsV2(visualSignalsV2)
-      ? buildCanonicalPayloadFromSignalsV2(visualSignalsV2, { nowIso })
-      : buildCanonicalPayloadFallback(
+    const canonical_payload = (incomingImageAnalysis && incomingImageAnalysis.ok && incomingImageAnalysis.clusters)
+      ? (buildCanonicalPayloadFromIncomingImageAnalysis(incomingImageAnalysis, { nowIso }) || buildCanonicalPayloadFallback(
           {
             reportText,
             ageRange: ageRange || null,
             primaryConcern: primaryConcern || null,
           },
           { nowIso }
-        );
+        ))
+      : (validateVisualSignalsV2(visualSignalsV2)
+        ? buildCanonicalPayloadFromSignalsV2(visualSignalsV2, { nowIso })
+        : buildCanonicalPayloadFallback(
+            {
+              reportText,
+              ageRange: ageRange || null,
+              primaryConcern: primaryConcern || null,
+            },
+            { nowIso }
+          ));
     const visual_payload = buildVisualPayloadFromCanonical(canonical_payload);
     const protocol_recommendation = recommendProtocol({
       primaryConcern,
