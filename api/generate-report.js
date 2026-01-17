@@ -1,71 +1,16 @@
 // api/generate-report.js
-// FINAL — Dr. Lazuk Virtual Skin Analysis Report (Vercel-safe CJS)
+// PROD — Dr. Lazuk Virtual Skin Analysis Report (Vercel-safe CJS)
 //
-// Key updates implemented:
+// Locked behaviors:
 // ✅ Requires FIRST NAME + EMAIL + SELFIE (photoDataUrl is mandatory)
-// ✅ Enforces "once every 30 days" per email (in-memory; swap to KV/DB for production)
+// ✅ Enforces 'once every 30 days' per email (in-memory; swap to KV/DB for production)
 // ✅ US-only geo gate
-// ✅ Strong vision enrichment if incoming imageAnalysis is weak/missing
-// ✅ Enforces greeting "Dear <firstName>,", bans "Dear You"
-// ✅ Generates a SINGLE 512x512 2x2 aging preview TILE using the selfie (OpenAI Images Edits)
-// ✅ Fixes email image rendering by converting selfie dataURL -> PUBLIC URL (Cloudinary or Vercel Blob)
-// ✅ Places the aging preview tile near the end of the letter: just above Dr. Lazuk’s closing note/signature
-// ✅ Keeps CommonJS compatibility (no top-level ESM imports)
-//
-// ADDITIONS (NO SUBTRACTIONS):
-// ✅ Adds Dermatology Engine JSON (observations vs interpretation, structured differential thinking,
-//    negative findings, confidence/limitations, two-signal evidence map, risk amplifiers, trajectory)
-// ✅ Appends dermEngine to API response (additive field)
-// ✅ (Optional) Includes dermEngine JSON block in CLINIC email only (visitor email remains unchanged)
-// ✅ Locks dermEngine JSON keys so UI can reliably render
-// ✅ Normalizes aging preview images to stable public URLs (prevents expiring OpenAI URLs)
-//
-// NEW (per request):
-// ✅ Adds “heart-to-heart” Reflection copy to EMAIL (NO TITLES)
-// ✅ Positions Reflection copy AFTER aging images in the emailed copies
-//
-// NEW (per request 12/22):
-// ✅ Clinic/Contact email default changed to contact@drlazuk.com (was contact@skindoctor.ai)
-//
-// IMPORTANT CHANGE (12/23):
-// ✅ Removed server-side watermark pixel-baking (Sharp) — watermark is client-side only now.
-//
-// NEW (LOCKED — per your directive):
-// ✅ “Areas of Focus” is now DYNAMIC (0–7 items, only triggered by analysis)
-// ✅ Naming convention is LOCKED:
-//    - The Compounding Risk
-//    - Do This Now
-// ✅ This section is course correction (not reassurance), physician-credible urgency without panic
-// ✅ The same Areas of Focus content appears in BOTH:
-//    - emailed report
-//    - on-screen (API response payload) report
-//
-// IMPORTANT FIX (12/24):
-// ✅ Prevents “always 7 categories” bug by scanning VALUE text only (not JSON keys/headings)
-// ✅ Triggers require risk/problem language (not just category words existing in the payload)
-//
-// NEW (12/26 — LOW LOE V2 FEATURES):
-// ✅ Adds Visual Signals V2 (low-LOE high-ROI image-specific signals)
-//    - Asymmetry (basic)
-//    - Oil–hydration mismatch pattern
-//    - Pigment distribution pattern
-//    - Barrier stress hotspots
-//    - Lips/perioral cues
-//    - Periorbital sub-zone cues
-//    - Neck–face aging ratio (confidence-weighted inference)
-//    - Micro-wrinkle density + orientation
-//    - Pores by zone
-//    - Glow/reflectance proxy
-// ✅ Adds short, no-title, paragraph-only “precision detail” insert into the LETTER (no headings)
-// ✅ Appends visualSignalsV2 JSON to API response and clinic email QA block (visitor unchanged)
-//
-// NEW (12/26 — QUALITY HARDENING):
-// ✅ Adds server-side Capture Quality Gate (reject partial/side/poor selfies BEFORE cooldown consumption)
-// ✅ Makes Areas of Focus confidence-aware (suppresses course correction when photo confidence is low)
-//
-// -------------------------
-// Node built-ins (required)
-// -------------------------
+// ✅ Uses incomingImageAnalysis when provided (vision-first; no keyword inference fallback)
+// ✅ Returns canonical_payload + visual_payload (clusters + per-metric scores + per-cluster RAG)
+// ✅ Recommends exactly ONE protocol (Radiant/Luxe or Clarite/Serein) with product-page URLs
+// ✅ Generates ONE aging preview image as a 512×512 2×2 tile and embeds it in the SAME email + JSON response
+// ✅ No legacy 4-image support; no 2-email flow
+
 const path = require("path");
 const crypto = require("crypto");
 // Ensure File is available in Node runtime (Vercel)
