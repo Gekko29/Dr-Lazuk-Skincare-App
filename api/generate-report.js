@@ -7,9 +7,9 @@
 // ✅ US-only geo gate
 // ✅ Strong vision enrichment if incoming imageAnalysis is weak/missing
 // ✅ Enforces greeting "Dear <firstName>,", bans "Dear You"
-// ✅ Generates 4 aging preview images USING THE SELFIE as the base (OpenAI Images Edits)
+// ✅ Generates a SINGLE 512x512 2x2 aging preview TILE using the selfie (OpenAI Images Edits)
 // ✅ Fixes email image rendering by converting selfie dataURL -> PUBLIC URL (Cloudinary or Vercel Blob)
-// ✅ Places the 4 aging images NEAR THE END of the letter: just above Dr. Lazuk’s closing note/signature
+// ✅ Places the aging preview tile near the end of the letter: just above Dr. Lazuk’s closing note/signature
 // ✅ Keeps CommonJS compatibility (no top-level ESM imports)
 //
 // ADDITIONS (NO SUBTRACTIONS):
@@ -68,6 +68,8 @@
 // -------------------------
 const path = require("path");
 const crypto = require("crypto");
+// Ensure File is available in Node runtime (Vercel)
+const { File } = require("node:buffer");
 const { pathToFileURL } = require("url");
 
 
@@ -2098,7 +2100,43 @@ function parseDataUrl(dataUrl) {
 }
 
 // Cloudinary uploader that accepts EITHER data URLs OR remote URLs
-async function uploadToCloudinaryFile(fileStr) {
+
+async function fetchUrlAsBytes(url) {
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`Failed to fetch URL (${resp.status})`);
+  const ab = await resp.arrayBuffer();
+  return Buffer.from(ab);
+}
+
+async function generateAgingTile512(openai, selfiePublicUrl) {
+  const selfieBytes = await fetchUrlAsBytes(selfiePublicUrl);
+  const file = new File([selfieBytes], "selfie.jpg", { type: "image/jpeg" });
+
+  // Single-call 2x2 tile (512x512) to avoid Vercel timeouts.
+  const prompt = [
+    "Create a single 2x2 grid collage (one image) showing realistic age-progressions of the SAME person from the input selfie.",
+    "Top-left: 10 Years — No Change (minimal skincare).",
+    "Top-right: 20 Years — No Change (minimal skincare).",
+    "Bottom-left: 10 Years — With Care (consistent SPF + quality skincare).",
+    "Bottom-right: 20 Years — With Care (consistent SPF + quality skincare).",
+    "Keep facial identity identical across all quadrants.",
+    "Do NOT exaggerate, do NOT add makeup, do NOT stylize, keep neutral background and natural lighting.",
+    "Render as ONE image containing the four labeled quadrants; labels should be subtle and readable."
+  ].join(" ");
+
+  const result = await openai.images.edits({
+    model: "gpt-image-1",
+    image: file,
+    prompt,
+    size: "512x512",
+  });
+
+  const b64 = result?.data?.[0]?.b64_json;
+  if (!b64) throw new Error("No image data returned from OpenAI images.edits");
+  return `data:image/png;base64,${b64}`;
+}
+
+async function uploadToCloudinaryFile(fileStr, folder = "drlazuk/visitor-selfies") {
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
   const apiKey = process.env.CLOUDINARY_API_KEY;
   const apiSecret = process.env.CLOUDINARY_API_SECRET;
@@ -2109,7 +2147,7 @@ async function uploadToCloudinaryFile(fileStr) {
 
   const timestamp = Math.floor(Date.now() / 1000);
   form.set("timestamp", String(timestamp));
-  form.set("folder", "drlazuk/visitor-selfies");
+  form.set("folder", folder);
 
   const toSign = `folder=${form.get("folder")}&timestamp=${timestamp}${apiSecret}`;
   const signature = crypto.createHash("sha1").update(toSign).digest("hex");
@@ -2264,7 +2302,8 @@ async function ensureStablePublicImageUrl(anyImage) {
 async function normalizeAgingPreviewImagesToPublicUrls(agingPreviewImages) {
   if (!agingPreviewImages) return agingPreviewImages;
 
-  const keys = ["tile","noChange10", "noChange20", "withCare10", "withCare20"];
+  // Locked: single 2x2 tile only (no legacy 4-image support)
+  const keys = ["tile", "tile512"];
   const out = { ...agingPreviewImages };
 
   await Promise.all(
@@ -2278,14 +2317,15 @@ async function normalizeAgingPreviewImagesToPublicUrls(agingPreviewImages) {
 }
 
 // -------------------------
-// 4 aging preview images (SELFIE-BASED via OpenAI Images Edits)
+// Aging preview (SELFIE-BASED via OpenAI Images Edits)
+// Locked: single 2x2 tile only
 // -------------------------
 async function generateAgingPreviewImages({ ageRange, primaryConcern, fitzpatrickType, photoDataUrl }) {
   if (!process.env.OPENAI_API_KEY) {
-    return { tile: null, noChange10: null, noChange20: null, withCare10: null, withCare20: null };
+    return { tile: null };
   }
   if (!photoDataUrl) {
-    return { tile: null, noChange10: null, noChange20: null, withCare10: null, withCare20: null };
+    return { tile: null };
   }
 
   const fitzText = fitzpatrickType
@@ -2315,165 +2355,30 @@ ${fitzText}.
     return await generateEditsFromSelfie({ photoDataUrl, prompts, size: "512x512" });
   } catch (err) {
     console.error("Error generating selfie-based aging preview tile:", err);
-    return { tile: null, noChange10: null, noChange20: null, withCare10: null, withCare20: null };
+    return { tile: null };
   }
 }
 
 // -------------------------
 // HTML block: Aging Preview Images (EMAIL)
 // -------------------------
+
 function buildAgingPreviewHtml(agingPreviewImages) {
-  // Two-email flow: the initial report email goes out immediately,
-  // and aging previews arrive in a follow-up email.
-  const waitingCard = `
-    <div style="margin: 18px 0 18px 0; padding: 14px 14px 16px; border-radius: 10px; border: 1px solid #E5E7EB; background-color: #F9FAFB;">
-      <h2 style="font-size: 15px; font-weight: 700; margin: 0 0 6px;">
-        Your Skin’s Future Story — A Preview
-      </h2>
-      <p style="font-size: 12px; color: #4B5563; margin: 0;">
-        Your aging preview images are being generated now and will arrive in a separate email shortly.
-        (Timing varies; typically a few minutes.)
-      </p>
-    </div>
-  `;
+  const tile = agingPreviewImages?.tile512;
+  if (!tile) return "";
 
-  if (!agingPreviewImages || typeof agingPreviewImages !== "object") return waitingCard;
-
-// Fast-path: single composite tile
-if (agingPreviewImages.tile) {
   return `
-    <div style="margin: 18px 0 18px 0; padding: 14px 14px 16px; border-radius: 10px; border: 1px solid #E5E7EB; background-color: #F9FAFB;">
-      <h2 style="font-size: 15px; font-weight: 700; margin: 0 0 6px;">
-        Your Skin’s Future Story — A Preview
-      </h2>
-      <p style="font-size: 12px; color: #4B5563; margin: 0 0 10px;">
-        This is a single composite tile (2×2) visualization for cosmetic education and entertainment only.
-        It is not a medical prediction and may not reflect your actual future appearance.
+    <div style="margin: 18px 0 6px; padding: 14px; border: 1px solid #E5E7EB; border-radius: 14px; background: #F9FAFB;">
+      <div style="font-size: 12px; font-weight: 800; color:#111827; margin: 0 0 8px;">Your Skin’s Future Story — A Preview</div>
+      <p style="font-size: 12px; color:#374151; margin: 0 0 10px;">
+        This is a single 2×2 simulation tile (10y/20y “no change” and “with care”). It’s meant for insight — not shock value.
       </p>
-      <img src="${agingPreviewImages.tile}" alt="Composite aging preview tile" style="width: 100%; border-radius: 10px; border: 1px solid #E5E7EB;" />
-      <p style="font-size: 11px; color: #6B7280; margin: 8px 0 0;">
-        Top: minimal changes · Bottom: consistent care · Left: ~10 years · Right: ~20 years
-      </p>
-    </div>
-  `;
-}
-
-const { noChange10, noChange20, withCare10, withCare20 } = agingPreviewImages || {};
-const hasAny = Boolean(noChange10 || noChange20 || withCare10 || withCare20);
-if (!hasAny) return waitingCard;
-
-return renderAgingPreviewHtml({ noChange10, noChange20, withCare10, withCare20 });
-}
-
-function renderAgingPreviewHtml({ noChange10, noChange20, withCare10, withCare20 }) {
-  return `
-    <div style="margin: 18px 0 18px 0; padding: 14px 14px 16px; border-radius: 10px; border: 1px solid #E5E7EB; background-color: #F9FAFB;">
-      <h2 style="font-size: 15px; font-weight: 700; margin: 0 0 6px;">
-        Your Skin’s Future Story — A Preview
-      </h2>
-      <p style="font-size: 12px; color: #4B5563; margin: 0 0 10px;">
-        These images are AI-generated visualizations created for cosmetic education and entertainment only.
-        They are not medical predictions and may not reflect your actual future appearance.
-        Their purpose is simply to show how lifestyle and skincare choices might influence the overall impression of aging over time.
-      </p>
-
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 8px;">
-        ${
-          noChange10
-            ? `<div>
-                <img src="${noChange10}" alt="Approximate 10-year future if routine does not change" style="width: 100%; border-radius: 10px; border: 1px solid #E5E7EB;" />
-                <p style="font-size: 11px; color: #4B5563; margin: 6px 0 0;">~10 years – minimal skincare changes</p>
-              </div>`
-            : ""
-        }
-
-        ${
-          noChange20
-            ? `<div>
-                <img src="${noChange20}" alt="Approximate 20-year future if routine does not change" style="width: 100%; border-radius: 10px; border: 1px solid #E5E7EB;" />
-                <p style="font-size: 11px; color: #4B5563; margin: 6px 0 0;">~20 years – minimal skincare changes</p>
-              </div>`
-            : ""
-        }
-
-        ${
-          withCare10
-            ? `<div>
-                <img src="${withCare10}" alt="Approximate 10-year future with consistent skincare" style="width: 100%; border-radius: 10px; border: 1px solid #E5E7EB;" />
-                <p style="font-size: 11px; color: #4B5563; margin: 6px 0 0;">~10 years – with consistent care</p>
-              </div>`
-            : ""
-        }
-
-        ${
-          withCare20
-            ? `<div>
-                <img src="${withCare20}" alt="Approximate 20-year future with consistent skincare" style="width: 100%; border-radius: 10px; border: 1px solid #E5E7EB;" />
-                <p style="font-size: 11px; color: #4B5563; margin: 6px 0 0;">~20 years – with consistent care</p>
-              </div>`
-            : ""
-        }
+      <img src="${tile}" alt="Aging preview tile" style="width: 100%; height: auto; display:block; border-radius: 12px;" />
+      <div style="font-size: 11px; color:#6B7280; margin-top: 10px;">
+        Notes: This is a visual simulation, not a prediction. Lighting, angle, and expression influence what the model can infer.
       </div>
     </div>
   `;
-}
-
-// Calls OpenAI Images Edits endpoint directly (multipart/form-data)
-async function generateEditsFromSelfie({ photoDataUrl, prompts, size = "1024x1024" }) {
-  const parsed = parseDataUrl(photoDataUrl);
-  if (!parsed) throw new Error("Selfie must be a valid data URL (data:image/...;base64,...)");
-
-  const buf = Buffer.from(parsed.b64, "base64");
-  const mime = parsed.mime || "image/png";
-  const filename = mime.includes("png") ? "selfie.png" : "selfie.jpg";
-
-  const headers = { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` };
-
-  async function oneEdit(prompt) {
-    const form = new FormData();
-    form.append("model", "gpt-image-1");
-    form.append("prompt", prompt);
-    form.append("size", size);
-
-    // IMPORTANT: gpt-image-1 does NOT support `response_format`
-    // It returns base64 in `b64_json` by default.
-    form.append("image", new Blob([buf], { type: mime }), filename);
-
-    const res = await fetch("https://api.openai.com/v1/images/edits", {
-      method: "POST",
-      headers,
-      body: form,
-    });
-
-    if (!res.ok) {
-      const txt = await res.text().catch(() => "");
-      throw new Error(`OpenAI images/edits failed (${res.status}): ${txt}`);
-    }
-
-    const json = await res.json().catch(() => ({}));
-    const d0 = json?.data?.[0] || null;
-
-    if (d0?.b64_json) return `data:image/png;base64,${d0.b64_json}`;
-    if (d0?.url) return d0.url; // fallback (rare)
-
-    return null;
-  }
-
-// If a single composite tile prompt is provided, generate only one image (fast path)
-if (prompts && typeof prompts === "object" && prompts.tile) {
-  const tile = await oneEdit(prompts.tile);
-  return { tile, noChange10: null, noChange20: null, withCare10: null, withCare20: null };
-}
-
-const [noChange10, noChange20, withCare10, withCare20] = await Promise.all([
-  oneEdit(prompts.noChange10),
-  oneEdit(prompts.noChange20),
-  oneEdit(prompts.withCare10),
-  oneEdit(prompts.withCare20),
-]);
-
-return { tile: null, noChange10, noChange20, withCare10, withCare20 };
-
 }
 
 // -------------------------
@@ -2729,6 +2634,11 @@ module.exports = async function handler(req, res) {
     if (!cleanFirstName) {
       return res.status(400).json({ ok: false, error: "missing_first_name", message: "First name is required." });
     }
+
+    // Time context (used for 30-day validity reminder)
+    const nowIso = new Date().toISOString();
+    const revisitAfterDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const revisitAfterLabel = revisitAfterDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
     if (!cleanEmail || !cleanEmail.includes("@")) {
       return res.status(400).json({ ok: false, error: "invalid_email", message: "Valid email is required." });
     }
@@ -3003,24 +2913,20 @@ Important: Use only selfie details that appear in the provided context. Do NOT i
       }
     }
     
-    // 5) Aging preview images are generated asynchronously (second email).
-    // We return and email the report immediately, then the client calls /api/generate-aging.
-    // This avoids long blocking runtimes (aging renders can take several minutes).
-
-    // 5) Aging preview images are generated asynchronously (second email).
-    // We email the report immediately, then the client calls /api/generate-aging.
+    // 5) Aging preview — SINGLE 512x512 2x2 tile generated inline (no second email, no 4-image loop).
+    // This stays fast enough for Vercel by doing exactly one OpenAI image edit.
     agingPreviewImages = null;
-    agingPreviewHtml = buildAgingPreviewHtml(agingPreviewImages);
+    try {
+      const tileDataUrl = await generateAgingTile512(client, emailSafeSelfieUrl);
+      const tileUrl = await uploadToCloudinaryFile(tileDataUrl, "drlazuk/aging-previews");
+      agingPreviewImages = { tile512: tileUrl };
+    } catch (e) {
+      console.warn("Aging tile generation failed (continuing without aging preview):", e?.message || e);
+      agingPreviewImages = null;
+    }
 
-    agingJob = {
-      endpoint: "/api/generate-aging",
-      payload: {
-        firstName,
-        email,
-        // Use the already-public email-safe selfie URL to avoid re-uploading base64
-        selfiePublicUrl: emailSafeSelfieUrl,
-      },
-    };
+    agingPreviewHtml = buildAgingPreviewHtml(agingPreviewImages);
+    agingJob = null;
     
     // Reflection HTML (must be inserted AFTER aging images)
     const reflectionHtml = buildEmailReflectionSectionHtml();
@@ -3116,6 +3022,15 @@ const confidenceHtml = (() => {
           <div style="margin-top: 10px;">
             ${letterHtmlBody}
           </div>
+          <div style="margin: 18px 0; padding: 12px 14px; border: 1px solid #E5E7EB; border-radius: 12px; background: #F9FAFB;">
+            <p style="margin:0 0 6px 0; font-size: 12px; color: #374151;"><strong>30-day protocol check-in</strong></p>
+            <p style="margin:0; font-size: 12px; color: #4B5563;">Your results are most useful as a baseline. Please revisit this analysis on or after <strong>${revisitAfterLabel}</strong> (30+ days) to track progress as part of your skincare protocol.</p>
+          </div>
+
+          <div style="margin: 0 0 18px; padding: 12px 14px; border: 1px solid #E5E7EB; border-radius: 12px; background: #FFFFFF;">
+            <p style="margin:0 0 6px 0; font-size: 12px; color: #374151;"><strong>How we handle your photo &amp; info</strong></p>
+            <p style="margin:0; font-size: 12px; color: #4B5563;">We use your photo only to generate this cosmetic, education-only analysis and the visuals shown in this report. We do not sell your information. We retain analysis artifacts only as needed for delivery, troubleshooting, and your 30-day re-check, and you can request deletion at any time by replying to this email.</p>
+          </div>
 
           <hr style="border-top: 1px solid #E5E7EB; margin: 24px 0;" />
           <p style="font-size: 12px; color: #6B7280; margin-bottom: 4px;">If you have any medical concerns or skin conditions, please see a qualified in-person professional.</p>
@@ -3206,7 +3121,6 @@ const confidenceHtml = (() => {
     // Response to frontend (VISUAL REPORT)
     // Prefer V2 signal scores (Model B). If signals are missing/invalid, fall back to
     // conservative narrative inference so rings/scores/RAG still render.
-    const nowIso = new Date().toISOString();
 
     const validateVisualSignalsV2 = (v) => {
       if (!v || typeof v !== "object") return false;
