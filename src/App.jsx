@@ -1880,15 +1880,10 @@ ${SUPPORTIVE_FOOTER_LINE}`);
         ageRange,
         hasFitz: !!(data.fitzpatrickType || data.fitzpatrickSummary),
         hasAgingPreviews: !!(
-          data?.agingPreviewImages &&
-          (
-            data.agingPreviewImages.agingTile512 ||
-            data.agingPreviewImages.agingTileUrl ||
-            data.agingPreviewImages.tile512 ||
-            data.agingPreviewImages.tileUrl ||
-            data.agingPreviewImages.tile ||
-            data.agingPreviewImages.url
-          )
+          data?.agingPreviewImages?.noChange10 ||
+          data?.agingPreviewImages?.noChange20 ||
+          data?.agingPreviewImages?.withCare10 ||
+          data?.agingPreviewImages?.withCare20
         ),
         hasAreasOfFocus: !!(data?.areasOfFocus || data?.focusAreas)
       });
@@ -2023,31 +2018,33 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 
   const agingPreviewImages = analysisReport?.agingPreviewImages || null;
 
-  // Locked: single 2x2 composite tile only (no legacy 4-image support)
+  // Supports either:
+  //  - legacy 4-image payload: { noChange10, noChange20, withCare10, withCare20 }
+  //  - new single composite tile payload: { tile: "https://..." }
   const agingTile =
     agingPreviewImages && typeof agingPreviewImages === "object"
-      ? (
-          agingPreviewImages.agingTile512 ||
-          agingPreviewImages.agingTileUrl ||
-          agingPreviewImages.tile512 ||
-          agingPreviewImages.tileUrl ||
-          agingPreviewImages.tile ||
-          agingPreviewImages.url ||
-          null
-        )
+      ? (agingPreviewImages.tile || agingPreviewImages.agingTile || null)
       : null;
 
-  const hasAgingTile = Boolean(agingTile);
+  const agingImages = useMemo(() => {
+    const p = (agingPreviewImages && typeof agingPreviewImages === "object") ? agingPreviewImages : {};
 
-  const agingCards = useMemo(() => {
-    if (!hasAgingTile) return [];
+    // Preferred: single composite image
+    if (agingTile) {
+      return [{ key: "tile", label: "Aging Preview (Composite)", url: agingTile }];
+    }
+
+    // Fallback: legacy 4 images
     return [
-      {
-        label: "Your Skin’s Future Story — A Preview",
-        url: agingTile,
-      },
-    ];
-  }, [hasAgingTile, agingTile]);
+      { key: "noChange10", label: "10 Years (No Change)", url: p.noChange10 || null },
+      { key: "noChange20", label: "20 Years (No Change)", url: p.noChange20 || null },
+      { key: "withCare10", label: "10 Years (With Care)", url: p.withCare10 || null },
+      { key: "withCare20", label: "20 Years (With Care)", url: p.withCare20 || null },
+    ].filter((x) => Boolean(x.url));
+  }, [agingPreviewImages, agingTile]);
+
+  const hasAgingTile = agingImages.length === 1 && agingImages[0]?.key === "tile";
+
 
   const handleShare = async ({ url, label }) => {
     if (!reflectionSeen) {
@@ -3053,3 +3050,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
       </div>
     </div>
   );
+
+};
+
+export default DermatologyApp;
