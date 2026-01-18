@@ -1815,7 +1815,7 @@ function buildAreasOfFocusItems({ analysisContext, imageAnalysis, visitorQuestio
     });
   }
 
-  return out; // 0–7 items
+  return out.slice(0, 3); // max 3 items
 }
 
 function buildAreasOfFocusSectionHtml({ analysisContext, imageAnalysis, visitorQuestion }) {
@@ -2055,7 +2055,7 @@ async function fetchUrlAsBytes(url) {
 
 async function generateAgingTile512(openai, selfiePublicUrl) {
   const selfieBytes = await fetchUrlAsBytes(selfiePublicUrl);
-  const file = new File([selfieBytes], "selfie.jpg", { type: "image/jpeg" });
+  const selfieBuf = Buffer.isBuffer(selfieBytes) ? selfieBytes : Buffer.from(selfieBytes);
 
   // Single-call 2x2 tile (512x512) to avoid Vercel timeouts.
   const prompt = [
@@ -2069,12 +2069,25 @@ async function generateAgingTile512(openai, selfiePublicUrl) {
     "Render as ONE image containing the four labeled quadrants; labels should be subtle and readable."
   ].join(" ");
 
-  const result = await openai.images.edits({
-    model: "gpt-image-1",
-    image: file,
-    prompt,
-    size: "512x512",
+  // Use direct REST call to avoid SDK version mismatches (e.g., openai.images.edits not available)
+  const form = new FormData();
+  form.append('model', 'gpt-image-1');
+  form.append('prompt', prompt);
+  form.append('size', '1024x1024');
+  form.append('response_format', 'b64_json');
+  form.append('image', new File([selfieBuf], 'selfie.png', { type: 'image/png' }));
+
+  const resp = await fetch('https://api.openai.com/v1/images/edits', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+    body: form,
   });
+
+  if (!resp.ok) {
+    const errTxt = await resp.text().catch(() => '');
+    throw new Error(`OpenAI images/edits failed: ${resp.status} ${resp.statusText} ${errTxt}`);
+  }
+  const result = await resp.json();
 
   const b64 = result?.data?.[0]?.b64_json;
   if (!b64) throw new Error("No image data returned from OpenAI images.edits");
@@ -2940,6 +2953,70 @@ const confidenceHtml = (() => {
       (reflectionHtml ? reflectionHtml : "") +
       (closing ? textToHtmlParagraphs(closing) : "");
 
+
+
+
+
+
+
+
+
+    // Skin health snapshot (visitor-facing): overall + per-cluster + recommended protocol
+    const snapshotOverall = incomingImageAnalysis?.overall_score || {};
+    const snapshotOverallScore = (typeof snapshotOverall.score === "number") ? snapshotOverall.score : null;
+    const snapshotOverallRag = snapshotOverall.rag || null;
+
+    const snapshotClusters = Array.isArray(incomingImageAnalysis?.clusters) ? incomingImageAnalysis.clusters : [];
+    const snapshotClusterRows = snapshotClusters
+      .slice()
+      .sort((a, b) => (a?.order ?? 999) - (b?.order ?? 999))
+      .map((c) => {
+        const name = escapeHtml(c?.display_name || c?.cluster_id || "");
+        const score = (typeof c?.score === "number") ? String(c.score) : "";
+        const rag = escapeHtml(c?.rag || "");
+        return `
+          <tr>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #E5E7EB; font-size: 12px; color:#111827;">${name}</td>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #E5E7EB; font-size: 12px; color:#111827; width: 72px; text-align:right;">${score}</td>
+            <td style="padding: 8px 10px; border-bottom: 1px solid #E5E7EB; font-size: 12px; color:#6B7280; width: 70px; text-align:right;">${rag}</td>
+          </tr>
+        `;
+      })
+      .join("");
+
+    const snapshotProtocolName = protocolRecommendation?.name ? escapeHtml(protocolRecommendation.name) : "";
+    const snapshotProtocolUrl = protocolRecommendation?.url ? escapeHtml(protocolRecommendation.url) : "";
+
+    const snapshotHtml = `
+      <div style="margin: 0 0 16px; padding: 14px; border: 1px solid #E5E7EB; border-radius: 14px; background: #F9FAFB;">
+        <div style="font-size: 14px; font-weight: 800; color:#111827; margin: 0 0 10px;">Skin Health Snapshot</div>
+        <div style="font-size: 12px; color:#374151; margin: 0 0 8px;">
+          <span style="font-weight:700; color:#111827;">Overall Skin Health Score:</span>
+          ${snapshotOverallScore === null ? "—" : snapshotOverallScore}
+          ${snapshotOverallRag ? ` <span style="color:#6B7280;">(${escapeHtml(snapshotOverallRag)})</span>` : ""}
+        </div>
+        ${snapshotProtocolName ? `
+          <div style="font-size: 12px; color:#374151; margin: 0 0 10px;">
+            <span style="font-weight:700; color:#111827;">Recommended Protocol:</span>
+            ${snapshotProtocolUrl ? `<a href="${snapshotProtocolUrl}" style="color:#111827; text-decoration: underline;">${snapshotProtocolName}</a>` : snapshotProtocolName}
+          </div>
+        ` : ""}
+        ${snapshotClusterRows ? `
+          <table style="width:100%; border-collapse: collapse; background:#FFFFFF; border: 1px solid #E5E7EB; border-radius: 12px; overflow:hidden;">
+            <thead>
+              <tr>
+                <th style="text-align:left; padding: 8px 10px; font-size: 11px; color:#6B7280; background:#FFFFFF; border-bottom: 1px solid #E5E7EB;">Cluster</th>
+                <th style="text-align:right; padding: 8px 10px; font-size: 11px; color:#6B7280; background:#FFFFFF; border-bottom: 1px solid #E5E7EB;">Score</th>
+                <th style="text-align:right; padding: 8px 10px; font-size: 11px; color:#6B7280; background:#FFFFFF; border-bottom: 1px solid #E5E7EB;">RAG</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${snapshotClusterRows}
+            </tbody>
+          </table>
+        ` : ""}
+      </div>
+    `;
     // Visitor email HTML — selfie image ALWAYS included (mandatory)
     // NOTE: Fitzpatrick results are NOT rendered to the visitor.
     const visitorHtml = `
@@ -2959,6 +3036,9 @@ const confidenceHtml = (() => {
               style="max-width: 240px; width: 100%; border-radius: 10px; border: 1px solid #E5E7EB; display: block;"
             />
           </div>
+
+    ${snapshotHtml}
+
 
           <p style="font-size: 11px; color: #92400E; margin: 0 0 10px 0;">
             This is a visual, cosmetic estimate only and is not a medical diagnosis.
