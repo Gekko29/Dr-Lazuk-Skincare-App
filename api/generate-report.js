@@ -2245,7 +2245,6 @@ async function generateAgingTile512(openai, selfiePublicUrl) {
   form.append('model', 'gpt-image-1');
   form.append('prompt', prompt);
   form.append('size', '1024x1024');
-  form.append('response_format', 'b64_json');
   form.append('image', new File([selfieBuf], 'selfie.png', { type: 'image/png' }));
 
   const resp = await fetch('https://api.openai.com/v1/images/edits', {
@@ -3119,10 +3118,57 @@ const confidenceHtml = (() => {
       ${reasonsHtml}
     </div>
   `;
-})();    
+})();
 
+    /* -----------------------
+       Canonical + Weighting + Protocol (must exist before structured sections / email build)
+    ----------------------- */
+    const canonical_payload = (incomingImageAnalysis && incomingImageAnalysis.ok && incomingImageAnalysis.clusters)
+      ? (buildCanonicalPayloadFromIncomingImageAnalysis(incomingImageAnalysis, { nowIso }) || buildCanonicalPayloadFallback(
+          {
+            reportText,
+            ageRange: ageRange || null,
+            primaryConcern: primaryConcern || null,
+          },
+          { nowIso }
+        ))
+      : (validateVisualSignalsV2(visualSignalsV2)
+        ? buildCanonicalPayloadFromSignalsV2(visualSignalsV2, { nowIso })
+        : buildCanonicalPayloadFallback(
+            {
+              reportText,
+              ageRange: ageRange || null,
+              primaryConcern: primaryConcern || null,
+            },
+            { nowIso }
+          ));
 
-    const structured_report_sections = buildStructuredSections({
+    canonical_payload.areasOfFocus = areasOfFocus;
+    canonical_payload.primaryConcern = primaryConcern;
+    canonical_payload.captureQuality = captureQuality;
+    canonical_payload.confidence = analysisConfidence || null;
+    canonical_payload.agingPreviewImages = agingPreviewImages;
+
+    // AI-INT-001: weighting engine -> Section #6 Condition Weighting Summary
+    const condition_weighting = computeConditionWeightingSummary({
+      primaryConcern,
+      visualSignalsV2: validateVisualSignalsV2(visualSignalsV2) ? visualSignalsV2 : null,
+      imageAnalysis,
+      clusters: canonical_payload.clusters
+    });
+    canonical_payload.condition_weighting = condition_weighting;
+
+    // AI-FNL-001/002: Primary + optional Secondary protocol + non-exclusivity clause
+    const protocol_recommendation = recommendProtocols({
+      primaryConcern,
+      clusters: canonical_payload.clusters,
+      conditionWeighting: condition_weighting
+    });
+    canonical_payload.protocol_recommendation = protocol_recommendation;
+
+    const visual_payload = buildVisualPayloadFromCanonical(canonical_payload);
+
+const structured_report_sections = buildStructuredSections({
       firstName,
       primaryConcern,
       captureQuality,
@@ -3386,27 +3432,6 @@ const protocolRecommendation = protocol_recommendation?.primary || null;
       ];
       return candidates.some((x) => typeof x === "number" && Number.isFinite(x));
     };
-
-    const canonical_payload = (incomingImageAnalysis && incomingImageAnalysis.ok && incomingImageAnalysis.clusters)
-      ? (buildCanonicalPayloadFromIncomingImageAnalysis(incomingImageAnalysis, { nowIso }) || buildCanonicalPayloadFallback(
-          {
-            reportText,
-            ageRange: ageRange || null,
-            primaryConcern: primaryConcern || null,
-          },
-          { nowIso }
-        ))
-      : (validateVisualSignalsV2(visualSignalsV2)
-        ? buildCanonicalPayloadFromSignalsV2(visualSignalsV2, { nowIso })
-        : buildCanonicalPayloadFallback(
-            {
-              reportText,
-              ageRange: ageRange || null,
-              primaryConcern: primaryConcern || null,
-            },
-            { nowIso }
-          ));
-    const visual_payload = buildVisualPayloadFromCanonical(canonical_payload);
     const condition_weighting = computeConditionWeighting({ primaryConcern, clusters: visual_payload.clusters });
     canonical_payload.condition_weighting = condition_weighting;
     const protocol_recommendation = recommendProtocols({
