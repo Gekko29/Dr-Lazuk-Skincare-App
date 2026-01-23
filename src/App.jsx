@@ -79,6 +79,7 @@ function buildVisualPayload({ serverPayload }) {
   const resolved =
     (serverPayload && Array.isArray(serverPayload.clusters) && serverPayload) ||
     (serverPayload.visual_payload && Array.isArray(serverPayload.visual_payload.clusters) && serverPayload.visual_payload) ||
+    (serverPayload.canonical_payload && Array.isArray(serverPayload.canonical_payload.clusters) && serverPayload.canonical_payload) ||
     (serverPayload.visualAnalysisV2 && Array.isArray(serverPayload.visualAnalysisV2.clusters) && serverPayload.visualAnalysisV2) ||
     null;
 
@@ -2806,7 +2807,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 
         {agencyChoice === 'guidance' && (
           <div className="mt-6 bg-white border-2 border-gray-900 p-8">
-            <h4 className="font-bold text-gray-900 mb-4 text-2xl">Recommended Products</h4>
+            <h4 className="font-bold text-gray-900 mb-4 text-2xl">Recommended Products (Dr. Lazuk Cosmetics®)</h4>
             <div className="grid md:grid-cols-3 gap-4 mb-8">
               {analysisReport.recommendedProducts.map((p, i) => (
                 <div key={i} className="bg-gray-50 border p-4">
@@ -3017,7 +3018,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
         onToggle={toggleSection}
       >
         <div className="bg-white border-2 border-gray-900 p-8">
-          <h4 className="font-bold text-gray-900 mb-4 text-2xl">Recommended Products</h4>
+          <h4 className="font-bold text-gray-900 mb-4 text-2xl">Recommended Products (Dr. Lazuk Cosmetics®)</h4>
           <div className="grid md:grid-cols-3 gap-4 mb-8">
             {analysisReport.recommendedProducts.map((p, i) => (
               <div key={i} className="bg-gray-50 border p-4">
