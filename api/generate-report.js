@@ -3524,4 +3524,3 @@ const protocolRecommendation = protocol_recommendation?.primary || null;
     });
   }
 };
-
