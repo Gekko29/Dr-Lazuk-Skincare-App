@@ -3432,12 +3432,13 @@ const protocolRecommendation = protocol_recommendation?.primary || null;
       ];
       return candidates.some((x) => typeof x === "number" && Number.isFinite(x));
     };
-    const condition_weighting = computeConditionWeighting({ primaryConcern, clusters: visual_payload.clusters });
+    const condition_weighting_engine = computeConditionWeighting({ primaryConcern, clusters: visual_payload.clusters });
+    visual_payload.condition_weighting_engine = condition_weighting_engine;
     canonical_payload.condition_weighting = condition_weighting;
     const protocol_recommendation = recommendProtocols({
       primaryConcern,
       clusters: visual_payload.clusters,
-      conditionWeighting: condition_weighting,
+      conditionWeighting: condition_weighting_engine,
     });
     canonical_payload.protocol_recommendation = protocol_recommendation;
 
