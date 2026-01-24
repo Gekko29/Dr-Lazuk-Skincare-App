@@ -3150,13 +3150,13 @@ const confidenceHtml = (() => {
     canonical_payload.agingPreviewImages = agingPreviewImages;
 
     // AI-INT-001: weighting engine -> Section #6 Condition Weighting Summary
-    const condition_weighting = computeConditionWeightingSummary({
+    const condition_weighting_summary = computeConditionWeightingSummary({
       primaryConcern,
       visualSignalsV2: validateVisualSignalsV2(visualSignalsV2) ? visualSignalsV2 : null,
       imageAnalysis,
       clusters: canonical_payload.clusters
     });
-    canonical_payload.condition_weighting = condition_weighting;
+    canonical_payload.condition_weighting = condition_weighting_summary;
 
     // AI-FNL-001/002: Primary + optional Secondary protocol + non-exclusivity clause
     const protocol_recommendation = recommendProtocols({
@@ -3434,7 +3434,7 @@ const protocolRecommendation = protocol_recommendation?.primary || null;
     };
     const condition_weighting_engine = computeConditionWeighting({ primaryConcern, clusters: visual_payload.clusters });
     visual_payload.condition_weighting_engine = condition_weighting_engine;
-    canonical_payload.condition_weighting = condition_weighting;
+    canonical_payload.condition_weighting = condition_weighting_summary;
     const protocol_recommendation = recommendProtocols({
       primaryConcern,
       clusters: visual_payload.clusters,
