@@ -3476,7 +3476,7 @@ const protocolRecommendation = protocol_recommendation?.primary || null;
     // Prefer V2 signal scores (Model B). If signals are missing/invalid, fall back to
     // conservative narrative inference so rings/scores/RAG still render.
 
-    const validateVisualSignalsV2 = (v) => {
+    function validateVisualSignalsV2(v) {
       if (!v || typeof v !== "object") return false;
       // Consider valid if we can find at least one numeric score field in the expected shape.
       const candidates = [
@@ -3492,7 +3492,7 @@ const protocolRecommendation = protocol_recommendation?.primary || null;
         v?.periorbital?.puffinessScore,
       ];
       return candidates.some((x) => typeof x === "number" && Number.isFinite(x));
-    };
+    }
     return res.status(200).json({
       ok: true,
 
