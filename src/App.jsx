@@ -944,6 +944,11 @@ const deriveTopSignals = (areas) => {
 
 const SummaryCard = ({ ageRange, primaryConcern, analysisReport }) => {
 
+  // SVG ring sizing constants (prevents runtime ReferenceError in production)
+  const ringStroke = 6;
+  const ringGap = 10;
+  const ringRadius = 34;
+
   const visualPayload = useMemo(() => {
     const serverPayload =
       (analysisReport && typeof analysisReport === "object"
@@ -3197,7 +3202,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
         <div className="max-w-6xl mx-auto px-4 text-center">
           <p className="text-sm text-gray-400">© 2026 by SkinDoctor AI®</p>
           <p className="text-sm text-gray-400 mt-2">
-            Dr. Lazuk Cosmetics® | Dr. Lazuk Esthetics® | Contact: contact@skindoctor.ai
+            Dr. Lazuk Cosmetics® | Lazuk Esthetics® | Contact: contact@skindoctor.ai
           </p>
         </div>
       </div>
