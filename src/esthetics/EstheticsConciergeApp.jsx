@@ -3,6 +3,7 @@ import React, { useMemo, useState } from "react";
 function normalizeEmail(v) {
   return String(v || "").trim().toLowerCase();
 }
+import EstheticsConciergeTypedFlow from "./EstheticsConciergeTypedFlow";
 
 export default function EstheticsConciergeApp() {
   const [stage, setStage] = useState("intake"); // intake | gated | blocked | error
