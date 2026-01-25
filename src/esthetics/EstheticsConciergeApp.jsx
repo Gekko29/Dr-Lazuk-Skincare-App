@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from "react";
+import EstheticsConciergeTypedFlow from "./EstheticsConciergeTypedFlow";
 
 function normalizeEmail(v) {
   return String(v || "").trim().toLowerCase();
 }
-import EstheticsConciergeTypedFlow from "./EstheticsConciergeTypedFlow";
 
 export default function EstheticsConciergeApp() {
   const [stage, setStage] = useState("intake"); // intake | gated | blocked | error
@@ -15,6 +15,10 @@ export default function EstheticsConciergeApp() {
   const [phone, setPhone] = useState("");
 
   const [gateResult, setGateResult] = useState(null);
+
+  // ✅ B2.1 wiring
+  const [user, setUser] = useState(null);
+  const [flags, setFlags] = useState(null);
 
   const canSubmit = useMemo(() => {
     return (
@@ -30,22 +34,41 @@ export default function EstheticsConciergeApp() {
     setGateResult(null);
 
     try {
+      const payload = {
+        firstName: String(firstName).trim(),
+        lastName: String(lastName).trim(),
+        email: normalizeEmail(email),
+        phone: String(phone || "").trim() || null,
+      };
+
       const res = await fetch("/api/esthetics/start-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          firstName: String(firstName).trim(),
-          lastName: String(lastName).trim(),
-          email: normalizeEmail(email),
-          phone: String(phone || "").trim() || null,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json().catch(() => ({}));
       setGateResult(data);
 
-      if (res.ok && data?.ok) setStage("gated");
-      else setStage("blocked");
+      // ✅ Store user + flags for B2.1 (typed flow → /api/esthetics/complete)
+      // Supports both response shapes:
+      // - Preferred: { ok:true, user:{...}, flags:{...} }
+      // - Older: { ok:true, flags:{...} } (we fall back to intake payload for user)
+      if (res.ok && data?.ok) {
+        const resolvedUser = data?.user || {
+          firstName: payload.firstName,
+          lastName: payload.lastName,
+          email: payload.email,
+          phone: payload.phone,
+        };
+
+        setUser(resolvedUser);
+        setFlags(data?.flags || null);
+
+        setStage("gated");
+      } else {
+        setStage("blocked");
+      }
     } catch (e) {
       setGateResult({ ok: false, error: "network_error" });
       setStage("error");
@@ -155,41 +178,46 @@ export default function EstheticsConciergeApp() {
         )}
 
         {stage === "gated" && (
-          <div className="mt-6 bg-white border border-gray-200 p-6">
-            <h2 className="text-lg font-bold">You’re eligible to continue</h2>
-            <p className="mt-1 text-sm text-gray-700">
-              Phase B1 is complete (route + gates). Phase B2 will enable realtime voice.
-            </p>
+          <div className="mt-6">
+            <div className="bg-white border border-gray-200 p-6">
+              <h2 className="text-lg font-bold">You’re eligible to continue</h2>
+              <p className="mt-1 text-sm text-gray-700">
+                Phase B1 is complete (route + gates). Phase B2 will enable realtime voice.
+              </p>
 
-            <div className="mt-4 bg-gray-50 border border-gray-200 p-4 text-sm text-gray-700">
-              <div className="font-semibold text-gray-900">Locked settings</div>
-              <ul className="list-disc ml-5 mt-2 space-y-1">
-                <li>Geo: within 20 miles of ZIP 30004</li>
-                <li>Rate limit: 2 uses per 24 hours (email + IP)</li>
-                <li>Emails: client + provider via Resend</li>
-                <li>Voice persona: female British (Phase B2)</li>
-                <li>Session cap: 12 minutes (Phase B2)</li>
-              </ul>
+              <div className="mt-4 bg-gray-50 border border-gray-200 p-4 text-sm text-gray-700">
+                <div className="font-semibold text-gray-900">Locked settings</div>
+                <ul className="list-disc ml-5 mt-2 space-y-1">
+                  <li>Geo: within 20 miles of ZIP 30004</li>
+                  <li>Rate limit: 2 uses per 24 hours (email + IP)</li>
+                  <li>Emails: client + provider via Resend</li>
+                  <li>Voice persona: female British (Phase B2)</li>
+                  <li>Session cap: 12 minutes (Phase B2)</li>
+                </ul>
+              </div>
+
+              <div className="mt-5 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => window.location.assign("/")}
+                  className="border-2 border-gray-300 hover:border-gray-900 hover:bg-gray-50 px-5 py-3 font-bold"
+                >
+                  Back to Skincare App
+                </button>
+
+                <button
+                  type="button"
+                  disabled
+                  className="bg-gray-300 text-gray-600 px-5 py-3 font-bold cursor-not-allowed"
+                  title="Phase B2 will enable this"
+                >
+                  Start Voice (Phase B2)
+                </button>
+              </div>
             </div>
 
-            <div className="mt-5 flex gap-3">
-              <button
-                type="button"
-                onClick={() => window.location.assign("/")}
-                className="border-2 border-gray-300 hover:border-gray-900 hover:bg-gray-50 px-5 py-3 font-bold"
-              >
-                Back to Skincare App
-              </button>
-
-              <button
-                type="button"
-                disabled
-                className="bg-gray-300 text-gray-600 px-5 py-3 font-bold cursor-not-allowed"
-                title="Phase B2 will enable this"
-              >
-                Start Voice (Phase B2)
-              </button>
-            </div>
+            {/* ✅ B2.1 typed conversation flow (emails + transcript) */}
+            <EstheticsConciergeTypedFlow user={user} flags={flags || gateResult?.flags || null} />
           </div>
         )}
 
@@ -231,3 +259,4 @@ export default function EstheticsConciergeApp() {
     </div>
   );
 }
+
