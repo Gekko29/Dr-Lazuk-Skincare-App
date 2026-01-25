@@ -397,6 +397,12 @@ function computeConditionWeighting({ primaryConcern, clusters }) {
   return { conditions: normalized, primary: normalized[0] || null, secondary: normalized[1] || null };
 }
 
+// Back-compat shim: older callsites used computeConditionWeightingSummary().
+// Keep it as a thin wrapper to prevent runtime ReferenceErrors.
+function computeConditionWeightingSummary({ primaryConcern, clusters }) {
+  return computeConditionWeighting({ primaryConcern, clusters });
+}
+
 function buildProtocolSet(id) {
   // Locked set URLs (as previously approved)
   const map = {
@@ -3570,3 +3576,4 @@ const protocolRecommendation = protocol_recommendation?.primary || null;
     });
   }
 };
+
