@@ -12,6 +12,7 @@
 // ✅ No legacy 4-image support; no 2-email flow
 
 const path = require("path");
+const fs = require("fs");
 const crypto = require("crypto");
 // Ensure File is available in Node runtime (Vercel)
 const { File } = require("node:buffer");
@@ -774,14 +775,67 @@ function deriveVisualSignalsV2({ primaryConcern, ageRange, imageContext }) {
 async function getOpenAIClient() {
   const mod = await import("openai");
   const OpenAI = mod?.default || mod;
-  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  return new OpenAI({ apiKey: process.async function getBuildAnalysis() {
+  // Prefer external implementation if it exists in the deployed bundle.
+  // If it’s missing (common in serverless bundling / repo drift), fall back to an inline implementation
+  // to prevent 500s.
+  const candidates = [
+    path.join(__dirname, "..", "lib", "analysis.js"),
+    path.join(process.cwd(), "lib", "analysis.js"),
+    path.join(process.cwd(), "src", "lib", "analysis.js"),
+  ];
+
+  for (const p of candidates) {
+    try {
+      if (fs.existsSync(p)) {
+        const fileUrl = pathToFileURL(p).href;
+        const mod = await import(fileUrl);
+        if (mod && typeof mod.buildAnalysis === "function") return mod.buildAnalysis;
+      }
+    } catch (_) {
+      // continue to next candidate
+    }
+  }
+
+  return inlineBuildAnalysis;
 }
 
-async function getBuildAnalysis() {
-  // Load ../lib/analysis.js (ESM) safely from CJS
-  const fileUrl = pathToFileURL(path.join(__dirname, "..", "lib", "analysis.js")).href;
-  const mod = await import(fileUrl);
-  return mod.buildAnalysis;
+const INLINE_BUILD_ANALYSIS_VERSION = "inline-2026-01-24";
+
+/**
+ * Inline buildAnalysis fallback.
+ * Keeps the report pipeline running even if /lib/analysis.js is missing from the function bundle.
+ */
+async function inlineBuildAnalysis({ form, selfie, vision } = {}) {
+  const safeForm = form && typeof form === "object" ? form : {};
+  const safeSelfie = selfie && typeof selfie === "object" ? selfie : {};
+  const safeVision = vision && typeof vision === "object" ? vision : {};
+
+  const primaryConcerns = Array.isArray(safeForm.primaryConcerns)
+    ? safeForm.primaryConcerns.filter(Boolean)
+    : typeof safeForm.primaryConcerns === "string"
+      ? safeForm.primaryConcerns.split(",").map(s => s.trim()).filter(Boolean)
+      : [];
+
+  // Minimal derived signals used across prompts/UI. Keep this conservative.
+  const derived = {
+    primaryConcerns,
+    ageRange: safeForm.ageRange || safeForm.age || null,
+    sex: safeForm.sex || safeForm.gender || null,
+    fitzpatrick: safeForm.fitzpatrick || safeVision.fitzpatrick || null,
+    location: safeForm.location || safeForm.zip || null,
+  };
+
+  return {
+    version: INLINE_BUILD_ANALYSIS_VERSION,
+    form: safeForm,
+    selfie: safeSelfie,
+    vision: safeVision,
+    derived,
+    createdAt: new Date().toISOString(),
+  };
+}
+eturn mod.buildAnalysis;
 }
 
 // -------------------------
@@ -3525,4 +3579,3 @@ const protocolRecommendation = protocol_recommendation?.primary || null;
     });
   }
 };
-
