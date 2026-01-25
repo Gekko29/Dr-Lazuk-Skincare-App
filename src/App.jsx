@@ -14,6 +14,7 @@ import {
 
 // ✅ Google Analytics helpers
 import { gaEvent, gaPageView, getGaClientId } from "./lib/ga";
+import EstheticsConciergeApp from "./esthetics/EstheticsConciergeApp";
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -1198,7 +1199,7 @@ const AgencyLayer = ({ onChoose }) => {
         Nothing here is required. Choose what feels supportive.
       </p>
 
-      <div className="grid md:grid-cols-2 gap-3">
+      <div className="grid md:grid-cols-3 gap-3">
         <button
           onClick={() => onChoose?.("understand")}
           className="border-2 border-gray-300 hover:border-gray-900 hover:bg-gray-50 p-5 text-left"
@@ -1218,6 +1219,16 @@ const AgencyLayer = ({ onChoose }) => {
           <p className="font-bold text-gray-900">Guidance</p>
           <p className="text-sm text-gray-700 mt-1">
             Explore products and treatments tailored to your concern.
+          </p>
+        </button>
+        <button
+          onClick={() => onChoose?.("esthetics")}
+          className="border-2 border-gray-300 hover:border-gray-900 hover:bg-gray-50 p-5 text-left"
+          type="button"
+        >
+          <p className="font-bold text-gray-900">Esthetics</p>
+          <p className="text-sm text-gray-700 mt-1">
+            Explore esthetic treatments curated to your goals.
           </p>
         </button>
       </div>
@@ -1289,6 +1300,11 @@ SkinDoctor.ai`;
 };
 
 const DermatologyApp = () => {
+  // SPA mode switch: Esthetics Concierge
+  if (typeof window !== "undefined" && window.location.pathname === "/esthetics-concierge") {
+    return <EstheticsConciergeApp />;
+  }
+
   const [activeTab, setActiveTab] = useState('home');
   const [step, setStep] = useState('photo');
 
@@ -2729,6 +2745,10 @@ ${SUPPORTIVE_FOOTER_LINE}`);
           onChoose={(choice) => {
             setAgencyChoice(choice);
             gaEvent('agency_choice', { choice });
+
+            if (choice === "esthetics") {
+              window.location.assign("/esthetics-concierge");
+            }
           }}
         />
 
