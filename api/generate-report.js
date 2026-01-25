@@ -775,7 +775,10 @@ function deriveVisualSignalsV2({ primaryConcern, ageRange, imageContext }) {
 async function getOpenAIClient() {
   const mod = await import("openai");
   const OpenAI = mod?.default || mod;
-  return new OpenAI({ apiKey: process.async function getBuildAnalysis() {
+  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+}
+
+async function getBuildAnalysis() {
   // Prefer external implementation if it exists in the deployed bundle.
   // If it’s missing (common in serverless bundling / repo drift), fall back to an inline implementation
   // to prevent 500s.
@@ -834,8 +837,6 @@ async function inlineBuildAnalysis({ form, selfie, vision } = {}) {
     derived,
     createdAt: new Date().toISOString(),
   };
-}
-eturn mod.buildAnalysis;
 }
 
 // -------------------------
@@ -3216,7 +3217,7 @@ const confidenceHtml = (() => {
     const protocol_recommendation = recommendProtocols({
       primaryConcern,
       clusters: canonical_payload.clusters,
-      conditionWeighting: condition_weighting
+      conditionWeighting: condition_weighting_summary
     });
     canonical_payload.protocol_recommendation = protocol_recommendation;
 
@@ -3486,16 +3487,6 @@ const protocolRecommendation = protocol_recommendation?.primary || null;
       ];
       return candidates.some((x) => typeof x === "number" && Number.isFinite(x));
     };
-    const condition_weighting_engine = computeConditionWeighting({ primaryConcern, clusters: visual_payload.clusters });
-    visual_payload.condition_weighting_engine = condition_weighting_engine;
-    canonical_payload.condition_weighting = condition_weighting_summary;
-    const protocol_recommendation = recommendProtocols({
-      primaryConcern,
-      clusters: visual_payload.clusters,
-      conditionWeighting: condition_weighting_engine,
-    });
-    canonical_payload.protocol_recommendation = protocol_recommendation;
-
     return res.status(200).json({
       ok: true,
 
