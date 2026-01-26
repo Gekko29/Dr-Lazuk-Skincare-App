@@ -3267,19 +3267,14 @@ ${SUPPORTIVE_FOOTER_LINE}`);
             </div>
           </div>
         )}
-      </div>
-      )}
-// ... (Your previous code above)
-
-          {/* Corrected Footer Line inside App */}
-          <p className="text-[10px] text-gray-400 mt-8 pb-4">
+     <p className="text-[10px] text-gray-400 mt-8 pb-4 text-center">
             Dr. Lazuk Cosmetics® | Lazuk Esthetics® | Contact: contact@skindoctor.ai
           </p>
         </div>
-      </main> 
+      </main>
     </div>
-  ); 
-}; 
+  );
+};
 
 /* ---------------------------------------
    SKINDOCTOR.AI REVENUE MACHINE SERVICES
@@ -3310,9 +3305,7 @@ const estheticServices = [
 const DermatologyApp = () => {
   return (
     <div className="min-h-screen bg-white">
-      {/* Renders your main application logic */}
-      <App /> 
-      
+      <App />
       <footer className="bg-gray-900 text-white py-12 mt-12 border-t border-gray-800">
         <div className="max-w-6xl mx-auto px-4 text-center">
           <p className="text-sm text-gray-400">© 2026 by SkinDoctor AI®</p>
