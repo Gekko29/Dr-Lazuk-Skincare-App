@@ -3262,16 +3262,11 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                   >
                     Learn More
                   </a>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-  <p className="text-center text-gray-400 mt-8 pb-4">
+                  <p className="text-center text-gray-400 mt-8 pb-4">
             Dr. Lazuk Cosmetics | Lazuk Esthetics | contact@skindoctor.ai
           </p>
         </div>
-      </main>
+      </div>
     </div>
   );
 };
