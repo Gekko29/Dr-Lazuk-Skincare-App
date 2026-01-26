@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { CONCIERGE_COPY, t } from "./lib/conciergeCopy"; // adjust path if needed
+import { CONCIERGE_COPY, t } from "../lib/conciergeCopy"; // adjust path if needed
 
 function normEmail(v) {
   return String(v || "").trim().toLowerCase();
