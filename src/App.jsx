@@ -2630,7 +2630,8 @@ ${SUPPORTIVE_FOOTER_LINE}`);
               })()}
             </div>
           </div>
-        </div>iv className="flex flex-wrap gap-2 items-center">
+        </div>
+      <div className="flex flex-wrap gap-2 items-center">
       <button
         onClick={openKeySections}
         className="px-4 py-2 bg-gray-900 text-white font-bold hover:bg-gray-800 text-sm"
@@ -2906,7 +2907,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
             
 
           </div>
-        </div>
+        )}
       </AccordionSection>
 
       <AccordionSection
