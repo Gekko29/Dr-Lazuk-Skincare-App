@@ -3262,28 +3262,47 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                   >
                     Learn More
                   </a>
-               <p className="text-center text-gray-400 mt-8 pb-4">
-            Dr. Lazuk Cosmetics | Lazuk Esthetics | contact@skindoctor.ai
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+      )}
+
+      <div className="bg-gray-900 text-white py-8 mt-12">
+        <div className="max-w-6xl mx-auto px-4 text-center">
+          <p className="text-sm text-gray-400">Â© 2026 by SkinDoctor AIÂ®</p>
+          <p className="text-sm text-gray-400 mt-2">
+            Dr. Lazuk CosmeticsÂ® | Lazuk EstheticsÂ® | Contact: contact@skindoctor.ai
           </p>
         </div>
-      </div>
-    </div>
-  );
+    // ... (previous code above)
+
+  // This closes the main <main> container
+  ); 
 };
 
+// Ensure the code BEFORE this line ends with:
+//   ); 
+// };
+
+/* ---------------------------------------
+   SKINDOCTOR.AI REVENUE MACHINE SERVICES
+--------------------------------------- */
 const estheticServices = [
   {
-    name: "IV Detox and Nutrient Therapy",
+    name: "IV Detox & Nutrient Therapy",
     description: "Medical-grade infusions to flush toxins and replenish essential skin nutrients.",
     benefits: ["Internal Hydration", "Cellular Detox", "Radiance Boost"]
   },
   {
     name: "Candela Laser Hair Removal",
-    description: "Permanent hair reduction using industry-leading technology.",
+    description: "Permanent hair reduction using industry-leading Candela technology for all skin types.",
     benefits: ["Permanent Results", "Safe for All Tones", "Precision Targeted"]
   },
   {
-    name: "Beauty Injections and Fillers",
+    name: "Beauty Injections & Fillers",
     description: "Neuromodulators and fillers to soften lines and restore facial volume.",
     benefits: ["Natural Aesthetics", "Volume Restoration", "Structural Support"]
   },
@@ -3297,17 +3316,16 @@ const estheticServices = [
 const DermatologyApp = () => {
   return (
     <div className="min-h-screen bg-white">
-      <App />
-      <footer className="bg-gray-900 text-white py-12 mt-12 border-t border-gray-800">
+      {/* This renders your main application logic */}
+      <App /> 
+      
+      <footer className="bg-gray-900 text-white py-12 mt-12">
         <div className="max-w-6xl mx-auto px-4 text-center">
-          <p className="text-sm text-gray-400">Copyright 2026 SkinDoctor AI</p>
-          <div className="flex flex-wrap justify-center gap-4 text-[10px] text-gray-500 mt-2 uppercase tracking-widest">
-            <span>Injections</span>
-            <span>IV Detox</span>
-            <span>Laser</span>
-            <span>Rejuvenation</span>
-          </div>
-          <p className="text-[9px] text-gray-600 mt-4 italic">
+          <p className="text-sm text-gray-400">Â© 2026 by SkinDoctor AIÂ®</p>
+          <p className="text-[10px] text-gray-600 mt-2 uppercase tracking-widest">
+            Beauty Injections â€¢ IV Detox â€¢ Candela Laser â€¢ Skin Rejuvenation
+          </p>
+          <p className="text-[9px] text-gray-500 mt-4 italic">
             Clinical Intelligence Powered by SkinDoctor.ai
           </p>
         </div>
