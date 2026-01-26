@@ -2569,9 +2569,9 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 
             {analysisReport && (
               <div className="bg-white p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="text-3xl font-extrabold leading-tight text-gray-900">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="text-3xl font-extrabold leading-tight text-gray-900">
               {(analysisReport?.client?.firstName || firstName || "Your")}, Your Personal Roadmap To Skin Health
             </div>
             <div className="mt-2 text-sm font-semibold text-gray-500">
