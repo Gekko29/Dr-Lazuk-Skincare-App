@@ -3183,6 +3183,11 @@ ${SUPPORTIVE_FOOTER_LINE}`);
         </div>
       </AccordionSection>
 
+              </div>
+            )}
+          </div>
+        )}
+
         {activeTab === 'chat' && (
           <div className="bg-white border shadow-sm overflow-hidden" style={{ height: '600px' }}>
             <div className="flex flex-col h-full">
