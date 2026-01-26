@@ -3240,49 +3240,57 @@ ${SUPPORTIVE_FOOTER_LINE}`);
         )}
 
         {activeTab === 'education' && (
-  <div className="bg-white border shadow-sm p-8">
-    <h2 className="text-2xl font-bold text-gray-900 mb-6">Our Esthetic Services</h2>
-    <div className="grid md:grid-cols-1 gap-6">
-      {estheticServices.map((s, i) => (
-        <div key={i} className="border-2 p-6">
-          <h3 className="font-bold text-xl text-gray-900 mb-2">{s.name}</h3>
-          <p className="text-gray-700 mb-4">{s.description}</p>
-          <div className="mb-4">
-            <p className="font-bold text-gray-900 mb-2">Benefits:</p>
-            <ul className="text-sm text-gray-700">
-              {s.benefits.map((b, j) => (
-                <li key={j}>✓ {b}</li>
+          <div className="bg-white border shadow-sm p-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">Our Esthetic Services</h2>
+            <div className="grid md:grid-cols-1 gap-6">
+              {estheticServices.map((s, i) => (
+                <div key={i} className="border-2 p-6">
+                  <h3 className="font-bold text-xl text-gray-900 mb-2">{s.name}</h3>
+                  <p className="text-gray-700 mb-4">{s.description}</p>
+                  <div className="mb-4">
+                    <p className="font-bold text-gray-900 mb-2">Benefits:</p>
+                    <ul className="text-sm text-gray-700">
+                      {s.benefits.map((b, j) => (
+                        <li key={j}>✓ {b}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <a
+                    href="mailto:contact@skindoctor.ai"
+                    onClick={() => gaEvent('services_learn_more_click', { serviceName: s.name })}
+                    className="block text-center bg-gray-900 text-white py-3 font-bold hover:bg-gray-800"
+                  >
+                    Learn More
+                  </a>
+                </div>
               ))}
-            </ul>
+            </div>
           </div>
-          <a
-            href="mailto:contact@skindoctor.ai"
-            onClick={() => gaEvent('services_learn_more_click', { serviceName: s.name })}
-            className="block text-center bg-gray-900 text-white py-3 font-bold hover:bg-gray-800"
-          >
-            Learn More
-          </a>
-        </div>
-      ))}
-    </div>
-  </div>
-)}
-</main>
+        )}
+      </div>
+      )}
 
-<footer className="bg-gray-900 text-white py-8 mt-12">
-  <div className="max-w-6xl mx-auto px-4 text-center">
-    <p className="text-sm text-gray-400">© 2026 by SkinDoctor AI®</p>
-    <p className="text-sm text-gray-400 mt-2">
-      Dr. Lazuk Cosmetics® | Lazuk Esthetics® | Contact:{' '}
-      <a href="mailto:contact@skindoctor.ai" className="underline">
-        contact@skindoctor.ai
-      </a>
-    </p>
-  </div>
-</footer>
-</div>  {/* closes <div className="min-h-screen bg-white"> */}
-);      {/* closes return ( ... ) of your main App/DermatologyApp component */}
-};      {/* closes that component declaration */}
+      <div className="bg-gray-900 text-white py-8 mt-12">
+        <div className="max-w-6xl mx-auto px-4 text-center">
+          <p className="text-sm text-gray-400">© 2026 by SkinDoctor AI®</p>
+          <p className="text-sm text-gray-400 mt-2">
+            Dr. Lazuk Cosmetics® | Lazuk Esthetics® | Contact: contact@skindoctor.ai
+          </p>
+        </div>
+    // ... (previous code above)
+
+  // This closes the main <main> container
+  ); 
+};
+
+// Ensure the code BEFORE this line ends with:
+//   ); 
+// };
+
+// ... (Your existing App logic should end like this)
+      </div>
+    ); 
+};
 
 /* ---------------------------------------
    SKINDOCTOR.AI REVENUE MACHINE SERVICES
@@ -3290,31 +3298,45 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 const estheticServices = [
   {
     name: "IV Detox & Nutrient Therapy",
-    description:
-      "Medical-grade infusions to flush toxins and replenish essential skin nutrients.",
-    benefits: ["Internal Hydration", "Cellular Detox", "Radiance Boost"],
+    description: "Medical-grade infusions to flush toxins and replenish essential skin nutrients.",
+    benefits: ["Internal Hydration", "Cellular Detox", "Radiance Boost"]
   },
   {
     name: "Candela Laser Hair Removal",
-    description:
-      "Permanent hair reduction using industry-leading Candela technology for all skin types.",
-    benefits: ["Permanent Results", "Safe for All Tones", "Precision Targeted"],
+    description: "Permanent hair reduction using industry-leading Candela technology for all skin types.",
+    benefits: ["Permanent Results", "Safe for All Tones", "Precision Targeted"]
   },
   {
     name: "Beauty Injections & Fillers",
-    description:
-      "Neuromodulators and fillers to soften lines and restore facial volume.",
-    benefits: ["Natural Aesthetics", "Volume Restoration", "Structural Support"],
+    description: "Neuromodulators and fillers to soften lines and restore facial volume.",
+    benefits: ["Natural Aesthetics", "Volume Restoration", "Structural Support"]
   },
   {
     name: "Skin Rejuvenation Treatments",
-    description:
-      "Advanced RF microneedling and chemical peels to stimulate collagen.",
-    benefits: ["Pore Refinement", "Scar Reduction", "Texture Smoothing"],
-  },
+    description: "Advanced RF microneedling and chemical peels to stimulate collagen.",
+    benefits: ["Pore Refinement", "Scar Reduction", "Texture Smoothing"]
+  }
 ];
 
-// If you already have a main component (e.g. DermatologyApp or App) above,
-// do NOT redefine DermatologyApp here. Just export it once, e.g.:
+const DermatologyApp = () => {
+  return (
+    <div className="min-h-screen bg-white">
+      {/* Renders your main application logic */}
+      <App /> 
+      
+      <footer className="bg-gray-900 text-white py-12 mt-12">
+        <div className="max-w-6xl mx-auto px-4 text-center">
+          <p className="text-sm text-gray-400">© 2026 by SkinDoctor AI®</p>
+          <p className="text-[10px] text-gray-600 mt-2 uppercase tracking-widest">
+            Beauty Injections • IV Detox • Candela Laser • Skin Rejuvenation
+          </p>
+          <p className="text-[9px] text-gray-500 mt-4 italic">
+            Clinical Intelligence Powered by SkinDoctor.ai
+          </p>
+        </div>
+      </footer>
+    </div>
+  );
+};
 
-export default DermatologyApp;   // or: export default App;
+export default DermatologyApp;
