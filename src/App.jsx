@@ -3267,8 +3267,8 @@ ${SUPPORTIVE_FOOTER_LINE}`);
             </div>
           </div>
         )}
-     <p className="text-[10px] text-gray-400 mt-8 pb-4 text-center">
-            Dr. Lazuk Cosmetics | Lazuk Esthetics | Contact: contact@skindoctor.ai
+    <p className="text-center text-gray-400 mt-8 pb-4">
+            Dr. Lazuk Cosmetics | Lazuk Esthetics | contact@skindoctor.ai
           </p>
         </div>
       </main>
@@ -3276,9 +3276,6 @@ ${SUPPORTIVE_FOOTER_LINE}`);
   );
 };
 
-/* ---------------------------------------
-   SKINDOCTOR.AI REVENUE MACHINE SERVICES
---------------------------------------- */
 const estheticServices = [
   {
     name: "IV Detox and Nutrient Therapy",
@@ -3287,7 +3284,7 @@ const estheticServices = [
   },
   {
     name: "Candela Laser Hair Removal",
-    description: "Permanent hair reduction using industry-leading Candela technology for all skin types.",
+    description: "Permanent hair reduction using industry-leading technology.",
     benefits: ["Permanent Results", "Safe for All Tones", "Precision Targeted"]
   },
   {
@@ -3308,9 +3305,9 @@ const DermatologyApp = () => {
       <App />
       <footer className="bg-gray-900 text-white py-12 mt-12 border-t border-gray-800">
         <div className="max-w-6xl mx-auto px-4 text-center">
-          <p className="text-sm text-gray-400">Copyright 2026 by SkinDoctor AI</p>
-          <p className="text-[10px] text-gray-500 mt-2 uppercase tracking-[0.2em]">
-            Beauty Injections - IV Detox - Candela Laser - Skin Rejuvenation
+          <p className="text-sm text-gray-400">Copyright 2026 SkinDoctor AI</p>
+          <p className="text-[10px] text-gray-500 mt-2 uppercase">
+            Injections - IV Detox - Laser - Rejuvenation
           </p>
           <p className="text-[9px] text-gray-600 mt-4 italic">
             Clinical Intelligence Powered by SkinDoctor.ai
