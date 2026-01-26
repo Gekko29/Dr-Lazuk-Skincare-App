@@ -12,7 +12,7 @@ import {
   Loader
 } from 'lucide-react';
 
-// ✅ Google Analytics helpers
+// âœ… Google Analytics helpers
 import { gaEvent, gaPageView, getGaClientId } from "./lib/ga";
 import EstheticsConciergeApp from "./esthetics/EstheticsConciergeApp";
 
@@ -209,11 +209,11 @@ function ragColor(rag){
 --------------------------------------- */
 const REFLECTION_SECTIONS = [
   {
-    title: "Section 1 — Holding the Moment",
+    title: "Section 1 â€” Holding the Moment",
     body:
-`If you’re feeling a little unsettled right now, that’s normal.
+`If youâ€™re feeling a little unsettled right now, thatâ€™s normal.
 
-What you just saw can bring up many emotions—surprise, curiosity, concern, even resistance. Some people feel a quiet moment of reflection. Others feel a jolt they weren’t expecting. There is no right or wrong reaction here.
+What you just saw can bring up many emotionsâ€”surprise, curiosity, concern, even resistance. Some people feel a quiet moment of reflection. Others feel a jolt they werenâ€™t expecting. There is no right or wrong reaction here.
 
 I want you to know something important:
 
@@ -221,39 +221,39 @@ What you are seeing is not a verdict.
 It is not a prediction carved in stone.
 And it is certainly not a judgment.
 
-What you’re seeing is a visual story—one possible path based on today’s data, today’s habits, today’s environment. Nothing more, and nothing less.
+What youâ€™re seeing is a visual storyâ€”one possible path based on todayâ€™s data, todayâ€™s habits, todayâ€™s environment. Nothing more, and nothing less.
 
-As a physician, I’ve spent decades studying faces, skin, and the quiet signals the body gives long before change becomes obvious. I can tell you this with confidence: the future of your skin is not decided by time alone. It is shaped—slowly, consistently—by care, protection, and intention.
+As a physician, Iâ€™ve spent decades studying faces, skin, and the quiet signals the body gives long before change becomes obvious. I can tell you this with confidence: the future of your skin is not decided by time alone. It is shapedâ€”slowly, consistentlyâ€”by care, protection, and intention.
 
-If there is one thing I want you to take from this moment, it’s this:
+If there is one thing I want you to take from this moment, itâ€™s this:
 
-Your face is not aging “toward” something.
+Your face is not aging â€œtowardâ€ something.
 It is responding to how it is supported.
 
 And support can always be adjusted.
 
-You don’t need to act today.
-You don’t need to decide anything right now.
-You only need to understand that what you just saw represents possibility—not destiny.
+You donâ€™t need to act today.
+You donâ€™t need to decide anything right now.
+You only need to understand that what you just saw represents possibilityâ€”not destiny.
 
-When you’re ready, the way forward is not about chasing youth.
-It’s about strengthening resilience.
-Protecting what’s already beautiful.
+When youâ€™re ready, the way forward is not about chasing youth.
+Itâ€™s about strengthening resilience.
+Protecting whatâ€™s already beautiful.
 And allowing your outer appearance to reflect the care you give yourself internally.
 
 Until then, take a breath.
 Let this information settle.`
   },
   {
-    title: "Section 2 — If You’re Wondering Whether This Future Is Changeable",
+    title: "Section 2 â€” If Youâ€™re Wondering Whether This Future Is Changeable",
     body:
-`It’s a fair question—and an important one.
+`Itâ€™s a fair questionâ€”and an important one.
 
-What you just saw represents one possible trajectory, not a fixed destination. Skin does not age in isolation, and it does not age uniformly. It responds—quietly and continuously—to how it is supported over time.
+What you just saw represents one possible trajectory, not a fixed destination. Skin does not age in isolation, and it does not age uniformly. It respondsâ€”quietly and continuouslyâ€”to how it is supported over time.
 
 In clinical practice, the most meaningful differences we see are not created by extremes. They come from consistency: protecting the skin barrier, minimizing chronic inflammation, supporting hydration, and reducing cumulative environmental stress.
 
-This is why two people of the same age can look remarkably different over time—not because one did “more,” but because their skin was supported differently.
+This is why two people of the same age can look remarkably different over timeâ€”not because one did â€œmore,â€ but because their skin was supported differently.
 
 There is no single correct path forward.
 Some people focus on daily care.
@@ -264,36 +264,36 @@ All of these approaches can influence direction.
 
 What matters most is understanding this:
 
-The future of your skin is responsive—not predetermined.
+The future of your skin is responsiveâ€”not predetermined.
 
 And responsiveness means you retain influence, at every stage.`
   },
   {
-    title: "Section 3 — If You’re Wondering How This Was Created",
+    title: "Section 3 â€” If Youâ€™re Wondering How This Was Created",
     body:
-`That question matters—and you deserve a clear answer.
+`That question mattersâ€”and you deserve a clear answer.
 
 This experience was not created using a generic aging filter or a randomized model. Every image and insight was anchored to your own face, starting with the photo you provided.
 
-Rather than replacing your features, the system analyzed them—your facial structure, proportions, texture patterns, tone distribution, and visible environmental stress signals. From there, it calculated how those same features tend to evolve over time under similar conditions.
+Rather than replacing your features, the system analyzed themâ€”your facial structure, proportions, texture patterns, tone distribution, and visible environmental stress signals. From there, it calculated how those same features tend to evolve over time under similar conditions.
 
 The intention was never to create something dramatic.
 It was to create something recognizable.
 
 Technology alone does not decide how this information is presented.
 
-As a physician, my role is to ensure that what you see is framed responsibly, explained clearly, and never used to provoke fear or urgency. This is why the results are delivered as interpretation—not diagnosis, not judgment, and not instruction.
+As a physician, my role is to ensure that what you see is framed responsibly, explained clearly, and never used to provoke fear or urgency. This is why the results are delivered as interpretationâ€”not diagnosis, not judgment, and not instruction.
 
 This analysis exists to inform, not to persuade.`
   },
   {
-    title: "Section 4 — Why Revisiting This Over Time Can Be Meaningful",
+    title: "Section 4 â€” Why Revisiting This Over Time Can Be Meaningful",
     body:
-`Skin does not change overnight—and neither does its direction.
+`Skin does not change overnightâ€”and neither does its direction.
 
 In medicine, we learn the most not from a single snapshot, but from patterns over time. What stabilizes. What shifts. What responds to care. Your skin follows the same principle.
 
-Revisiting this analysis periodically is not about watching for flaws or chasing perfection. It’s about understanding how your skin responds to the way you live, protect, and care for it.
+Revisiting this analysis periodically is not about watching for flaws or chasing perfection. Itâ€™s about understanding how your skin responds to the way you live, protect, and care for it.
 
 Over time, subtle changes become clearer:
 - whether hydration and texture are stabilizing
@@ -302,23 +302,23 @@ Over time, subtle changes become clearer:
 
 These shifts are often difficult to notice day to day, but meaningful over months.
 
-By returning to this analysis when you feel ready, you’re not checking on your appearance—you’re observing your skin’s conversation with time.
+By returning to this analysis when you feel ready, youâ€™re not checking on your appearanceâ€”youâ€™re observing your skinâ€™s conversation with time.
 
 There is no required schedule.
 There is no expectation to act.
 
-But for those who choose to revisit, this becomes a way to stay informed, grounded, and thoughtful—making decisions based on evidence rather than emotion.
+But for those who choose to revisit, this becomes a way to stay informed, grounded, and thoughtfulâ€”making decisions based on evidence rather than emotion.
 
 A Final Thought
 
 Skin health is not a single moment.
-It’s a relationship—one that evolves with time, environment, and care.
+Itâ€™s a relationshipâ€”one that evolves with time, environment, and care.
 
 This tool exists to support that relationship.
 Nothing more.
 Nothing less.
 
-When you’re ready to listen again, it will be here.
+When youâ€™re ready to listen again, it will be here.
 
 With care,
 Dr. Iryna Lazuk`
@@ -333,7 +333,7 @@ const CAPTURE_PREP_COPY = {
   subtitle:
     "To ensure the most accurate and meaningful results, a few simple steps matter.",
   intro:
-    "To create an analysis that truly reflects your skin — not surface distractions — we need a clear, honest view of your face. This process does not judge appearance. It evaluates structure, tone, texture, and skin signals that can be obscured by makeup, lighting, or accessories.",
+    "To create an analysis that truly reflects your skin â€” not surface distractions â€” we need a clear, honest view of your face. This process does not judge appearance. It evaluates structure, tone, texture, and skin signals that can be obscured by makeup, lighting, or accessories.",
   bullets: [
     {
       head: "Clean, makeup-free skin",
@@ -367,7 +367,7 @@ const CAPTURE_PREP_COPY = {
     }
   ],
   outro:
-    "If the image doesn’t meet the quality needed for accurate analysis, the system may ask you to retake it. This isn’t an error — it’s how we protect the integrity of your results."
+    "If the image doesnâ€™t meet the quality needed for accurate analysis, the system may ask you to retake it. This isnâ€™t an error â€” itâ€™s how we protect the integrity of your results."
 };
 
 /* ---------------------------------------
@@ -566,7 +566,7 @@ const validateCapturedImage = async ({ dataUrl, faces }) => {
 
   const { meanBrightness, gradVar } = computeBrightnessAndBlur(canvas);
 
-  // ✅ Debug bundle (used only when DEBUG_RETAKE is enabled)
+  // âœ… Debug bundle (used only when DEBUG_RETAKE is enabled)
   const debug = {
     meanBrightness: Number(meanBrightness?.toFixed?.(1) ?? meanBrightness),
     gradVar: Number(gradVar?.toFixed?.(1) ?? gradVar)
@@ -582,7 +582,7 @@ const validateCapturedImage = async ({ dataUrl, faces }) => {
     return { ok: false, code: 'blurry', message: RETAKE_MESSAGES.blurry, debug };
   }
 
-  // ✅ Stricter face checks (partial / off-angle / clipped faces)
+  // âœ… Stricter face checks (partial / off-angle / clipped faces)
   if (faces && Array.isArray(faces)) {
     // If multiple faces are detected, reject (prevents group photos / background faces)
     if (faces.length > 1) {
@@ -601,7 +601,7 @@ const validateCapturedImage = async ({ dataUrl, faces }) => {
       const cx = (bb.x + bb.width / 2) / imgW;  // 0..1
       const cy = (bb.y + bb.height / 2) / imgH; // 0..1
 
-      // ✅ add framing debug
+      // âœ… add framing debug
       debug.faceRatio = Number(ratio?.toFixed?.(3) ?? ratio);
       debug.faceCenter = { cx: Number(cx?.toFixed?.(3) ?? cx), cy: Number(cy?.toFixed?.(3) ?? cy) };
 
@@ -686,10 +686,10 @@ const callAnalyzeImage = async ({ imageBase64, notes }) => {
 const IdentityLockOverlay = ({ onComplete }) => {
   const steps = useMemo(
     () => [
-      "Mapping facial structure…",
-      "Identifying proportional landmarks…",
-      "Calibrating analysis to your unique features…",
-      "Anchoring projections to your facial architecture…"
+      "Mapping facial structureâ€¦",
+      "Identifying proportional landmarksâ€¦",
+      "Calibrating analysis to your unique featuresâ€¦",
+      "Anchoring projections to your facial architectureâ€¦"
     ],
     []
   );
@@ -710,11 +710,11 @@ const IdentityLockOverlay = ({ onComplete }) => {
       <div className="max-w-lg w-full border border-gray-200 bg-white shadow-sm p-8">
         <div className="flex items-center gap-3 mb-4">
           <Loader className="animate-spin" size={22} />
-          <h3 className="text-xl font-bold text-gray-900">Activating Identity Lock™</h3>
+          <h3 className="text-xl font-bold text-gray-900">Activating Identity Lockâ„¢</h3>
         </div>
         <p className="text-sm text-gray-700 mb-4">{steps[idx]}</p>
         <p className="text-xs text-gray-600">
-          This ensures your analysis and future projections remain specific to you — not a generic model.
+          This ensures your analysis and future projections remain specific to you â€” not a generic model.
         </p>
       </div>
     </div>
@@ -731,7 +731,7 @@ const Modal = ({ title, body, onClose }) => {
         <div className="flex justify-between items-start gap-4">
           <h3 className="text-lg font-bold text-gray-900">{title}</h3>
           <button onClick={onClose} className="text-gray-700 hover:text-gray-900 font-bold" type="button">
-            ✕
+            âœ•
           </button>
         </div>
         <p className="text-sm text-gray-700 mt-3 whitespace-pre-wrap">{body}</p>
@@ -760,10 +760,10 @@ const IdentityLockBadge = ({ onClick, placement = "top-left" }) => {
     <button
       onClick={onClick}
       className={`absolute ${pos} z-10 bg-white/85 backdrop-blur border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-900 shadow-sm hover:bg-white`}
-      title="Identity Lock™ Enabled"
+      title="Identity Lockâ„¢ Enabled"
       type="button"
     >
-      Identity Lock™ Enabled
+      Identity Lockâ„¢ Enabled
     </button>
   );
 };
@@ -771,7 +771,7 @@ const IdentityLockBadge = ({ onClick, placement = "top-left" }) => {
 /* ---------------------------------------
    Watermark Overlay (UI failsafe)
 --------------------------------------- */
-const WatermarkOverlay = ({ text = "SkinDoctor.ai • Dr. Lazuk Esthetics® | Cosmetics®" }) => {
+const WatermarkOverlay = ({ text = "SkinDoctor.ai â€¢ Dr. Lazuk EstheticsÂ® | CosmeticsÂ®" }) => {
   return (
     <div className="absolute bottom-3 right-3 z-10 bg-black/55 backdrop-blur-sm px-3 py-2 text-[11px] text-white font-semibold select-none">
       {text}
@@ -821,7 +821,7 @@ const normalizeAreasOfFocus = (areas) => {
     items.sort((a, b) => (Number(b.score || 0) - Number(a.score || 0)));
   }
 
-  // ✅ UI failsafe: show only the top 3 by default
+  // âœ… UI failsafe: show only the top 3 by default
   return items.slice(0, 3);
 };
 
@@ -965,7 +965,7 @@ const SummaryCard = ({ ageRange, primaryConcern, analysisReport }) => {
     // A short excerpt that still reads well.
     const cut = t.slice(0, 650);
     const lastSpace = cut.lastIndexOf(" ");
-    return (lastSpace > 420 ? cut.slice(0, lastSpace) : cut).trim() + (t.length > cut.length ? "…" : "");
+    return (lastSpace > 420 ? cut.slice(0, lastSpace) : cut).trim() + (t.length > cut.length ? "â€¦" : "");
   }, [analysisReport]);
 
   return (
@@ -974,7 +974,7 @@ const SummaryCard = ({ ageRange, primaryConcern, analysisReport }) => {
         <div className="flex-1">
           <p className="text-[11px] tracking-wider text-gray-500 font-bold">DEFAULT SUMMARY VIEW</p>
           <h4 className="text-2xl font-bold text-gray-900 mt-1">
-            What This Analysis Flagged — At a Glance
+            What This Analysis Flagged â€” At a Glance
           </h4>
           <p className="text-sm text-gray-700 mt-2">
             Everything below is optional. Expand only what you want to read.
@@ -990,7 +990,7 @@ const SummaryCard = ({ ageRange, primaryConcern, analysisReport }) => {
                 <div style={{ minWidth:280, textAlign:"right" }}>
                   <div style={{ fontSize:12, color:"#64748b" }}>Overall Skin Health</div>
                   <div style={{ display:"flex", justifyContent:"flex-end", alignItems:"baseline", gap:8, marginTop:6 }}>
-                    <span style={{ fontSize:56, fontWeight:800, lineHeight:1 }}>{visualPayload?.overall_score?.score ?? "—"}</span>
+                    <span style={{ fontSize:56, fontWeight:800, lineHeight:1 }}>{visualPayload?.overall_score?.score ?? "â€”"}</span>
                     <span style={{ fontSize:18, color:"#64748b" }}>/100</span>
                     <span style={{ width:14, height:14, borderRadius:999, display:"inline-block", backgroundColor: ragColor(visualPayload?.overall_score?.rag || "unknown") }} />
                   </div>
@@ -1070,10 +1070,10 @@ const SummaryCard = ({ ageRange, primaryConcern, analysisReport }) => {
         <div className="border border-gray-200 bg-gray-50 p-4">
           <p className="text-[11px] tracking-wider text-gray-500 font-bold mb-2">CONTEXT</p>
           <p className="text-sm text-gray-800">
-            <span className="font-bold text-gray-900">Age Range:</span> {ageRange || "—"}
+            <span className="font-bold text-gray-900">Age Range:</span> {ageRange || "â€”"}
           </p>
           <p className="text-sm text-gray-800 mt-1">
-            <span className="font-bold text-gray-900">Primary Concern:</span> {primaryConcern || "—"}
+            <span className="font-bold text-gray-900">Primary Concern:</span> {primaryConcern || "â€”"}
           </p>
           {analysisReport?.fitzpatrickType && (
             <p className="text-sm text-gray-800 mt-1">
@@ -1125,7 +1125,7 @@ const AccordionSection = ({ id, title, subtitle, open, onToggle, children }) => 
           <p className="text-base font-bold text-gray-900">{title}</p>
           {subtitle && <p className="text-sm text-gray-700 mt-1">{subtitle}</p>}
         </div>
-        <div className="text-gray-700 font-bold text-xl">{open ? "−" : "+"}</div>
+        <div className="text-gray-700 font-bold text-xl">{open ? "âˆ’" : "+"}</div>
       </button>
 
       {open && <div className="px-6 pb-6">{children}</div>}
@@ -1182,7 +1182,7 @@ const PostImageReflection = ({ onSeen }) => {
       </div>
 
       <p className="mt-4 text-xs text-gray-600">
-        When you’re ready, you can simply close this page — or return to it later.
+        When youâ€™re ready, you can simply close this page â€” or return to it later.
       </p>
     </div>
   );
@@ -1292,9 +1292,9 @@ const downloadImage = async (urlOrDataUrl, filename) => {
 };
 
 const buildShareText = ({ label }) => {
-  return `I tried Dr. Lazuk’s Identity Lock™ cosmetic skin analysis. Here is my “Future Story” preview (${label}).
+  return `I tried Dr. Lazukâ€™s Identity Lockâ„¢ cosmetic skin analysis. Here is my â€œFuture Storyâ€ preview (${label}).
 
-This is cosmetic education only—not medical advice.
+This is cosmetic education onlyâ€”not medical advice.
 
 SkinDoctor.ai`;
 };
@@ -1322,14 +1322,14 @@ const DermatologyApp = () => {
   const [captureGuidanceSeen, setCaptureGuidanceSeen] = useState(false);
   const [captureSupportMessage, setCaptureSupportMessage] = useState(null);
 
-  // ✅ Debug-only: stores why we asked for a retake (NOT shown unless DEBUG_RETAKE)
+  // âœ… Debug-only: stores why we asked for a retake (NOT shown unless DEBUG_RETAKE)
   const [captureSupportReason, setCaptureSupportReason] = useState('');
 
-  // ✅ Debug-only: store measured values used by the retake logic (NOT shown unless DEBUG_RETAKE)
+  // âœ… Debug-only: store measured values used by the retake logic (NOT shown unless DEBUG_RETAKE)
   const [captureSupportDebug, setCaptureSupportDebug] = useState(null);
   // shape: { meanBrightness?: number, gradVar?: number, faceRatio?: number, faceCenter?: {cx:number, cy:number} }
 
-  // ✅ Debug flag (localStorage-based) — safe to ship; only QA sees it
+  // âœ… Debug flag (localStorage-based) â€” safe to ship; only QA sees it
   const DEBUG_RETAKE =
     typeof window !== 'undefined' &&
     (window.localStorage.getItem('dl_debugRetake') === '1' ||
@@ -1342,7 +1342,7 @@ const DermatologyApp = () => {
   const [reflectionSeen, setReflectionSeen] = useState(false);
   const [agencyChoice, setAgencyChoice] = useState(null);
 
-// ✅ Accordion (multi-open)
+// âœ… Accordion (multi-open)
 const [openSections, setOpenSections] = useState({
   focus: false,
   paths: false,
@@ -1382,7 +1382,7 @@ const collapseAll = () => {
 
   const [shareToast, setShareToast] = useState(null);
 
-  // ✅ NEW: email-step messaging (cooldown + patience notice)
+  // âœ… NEW: email-step messaging (cooldown + patience notice)
   const [analysisUiError, setAnalysisUiError] = useState('');
   const [analysisUiNotice, setAnalysisUiNotice] = useState('');
 
@@ -1390,7 +1390,7 @@ const collapseAll = () => {
     {
       role: 'assistant',
       content:
-        'Hello! I am your Dr. Lazuk virtual assistant. I can help you think through your skincare in a cosmetic, educational way—but this chat is not medical advice.'
+        'Hello! I am your Dr. Lazuk virtual assistant. I can help you think through your skincare in a cosmetic, educational wayâ€”but this chat is not medical advice.'
     }
   ]);
   const [inputMessage, setInputMessage] = useState('');
@@ -1468,7 +1468,7 @@ const collapseAll = () => {
     {
       name: 'Luxury Beauty Facial (1.5-Hour Comprehensive)',
       description:
-        'A deeply restorative facial that includes advanced cleansing, gentle exfoliation, extractions as needed, facial massage, hydration, and LED therapy as part of the treatment—not as a separate service.',
+        'A deeply restorative facial that includes advanced cleansing, gentle exfoliation, extractions as needed, facial massage, hydration, and LED therapy as part of the treatmentâ€”not as a separate service.',
       benefits: [
         'Deep pore cleansing',
         'Improved tone and texture',
@@ -1494,7 +1494,7 @@ const collapseAll = () => {
         'Best when you feel heavy, puffy, or sluggish in the body, or want a non-invasive sculpting and smoothing option with no downtime.'
     },
     {
-      name: 'Candela eMatrix® RF Skin Rejuvenation',
+      name: 'Candela eMatrixÂ® RF Skin Rejuvenation',
       description:
         'Fractional radiofrequency treatment that targets fine lines, acne scars, large pores, and overall skin texture while being safe for many skin tones.',
       benefits: [
@@ -1505,7 +1505,7 @@ const collapseAll = () => {
       ],
       recommendFor: ['aging', 'texture', 'acne', 'pigmentation'],
       whyRecommended:
-        'Recommended when you want more than a facial can offer—especially for long-standing texture, scars, or fine lines—without committing to aggressive lasers.'
+        'Recommended when you want more than a facial can offerâ€”especially for long-standing texture, scars, or fine linesâ€”without committing to aggressive lasers.'
     },
     {
       name: 'PRP Skin Rejuvenation',
@@ -1519,7 +1519,7 @@ const collapseAll = () => {
       ],
       recommendFor: ['aging', 'texture', 'pigmentation'],
       whyRecommended:
-        'Ideal when you prefer a regenerative, “from your own body” approach to aging and texture, especially around the eyes and areas that look thin or tired.'
+        'Ideal when you prefer a regenerative, â€œfrom your own bodyâ€ approach to aging and texture, especially around the eyes and areas that look thin or tired.'
     },
     {
       name: 'PRP Hair Restoration',
@@ -1550,11 +1550,11 @@ const collapseAll = () => {
         'Recommended when you want a stronger, more sculpted look in combination with healthy movement, without surgery or downtime.'
     },
     {
-      name: 'Beauty Injectables (Botox®, JUVÉDERM® Fillers, PRP)',
+      name: 'Beauty Injectables (BotoxÂ®, JUVÃ‰DERMÂ® Fillers, PRP)',
       description:
-        'Customized injectable treatments to soften expression lines, restore volume, and enhance facial balance using Botox®, JUVÉDERM® fillers, and/or PRP.',
+        'Customized injectable treatments to soften expression lines, restore volume, and enhance facial balance using BotoxÂ®, JUVÃ‰DERMÂ® fillers, and/or PRP.',
       benefits: [
-        'Softens frown lines and crow’s feet',
+        'Softens frown lines and crowâ€™s feet',
         'Restores or enhances cheek and lip volume',
         'Improves facial harmony and balance',
         'Can look very natural when done conservatively'
@@ -1582,7 +1582,7 @@ const collapseAll = () => {
     return estheticServices.filter((s) => s.recommendFor.includes(concern)).slice(0, 2);
   };
 
-  // ✅ Updated: supports reasonCode + debug metrics (stored but only shown when DEBUG_RETAKE)
+  // âœ… Updated: supports reasonCode + debug metrics (stored but only shown when DEBUG_RETAKE)
   const showSupportiveRetake = (message, reasonCode = "", debug = null) => {
     setCaptureSupportReason(String(reasonCode || ""));
     setCaptureSupportDebug(debug || null);
@@ -1817,7 +1817,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
     });
 
     try {
-      // STEP 1: Vision analysis (concrete “image proof” + checklist15 + fitz/skinType)
+      // STEP 1: Vision analysis (concrete â€œimage proofâ€ + checklist15 + fitz/skinType)
       gaEvent('vision_analyze_start', { primaryConcern, ageRange });
 
       const vision = await callAnalyzeImage({
@@ -1848,7 +1848,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
           photoDataUrl: capturedImage,
           gaClientId,
 
-          // ✅ NEW: pass the vision payload through (additive)
+          // âœ… NEW: pass the vision payload through (additive)
           incomingImageAnalysis: vision
         })
       });
@@ -1888,7 +1888,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
         agingPreviewImages: data.agingPreviewImages || null,
         areasOfFocus: data.areasOfFocus || data.focusAreas || null,
 
-        // ✅ ONE protocol recommendation (server-authoritative)
+        // âœ… ONE protocol recommendation (server-authoritative)
         protocolRecommendation: data.protocolRecommendation || data.protocol_recommendation || data.protocol || null,
         protocolPrimary: (data.protocolRecommendation || data.protocol_recommendation)?.primary || null,
         protocolSecondary: (data.protocolRecommendation || data.protocol_recommendation)?.secondary || null,
@@ -1896,7 +1896,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
         conditionWeighting: data.condition_weighting || data.conditionWeighting || data.canonical_payload?.condition_weighting || null,
         structuredReportSections: data.structured_report_sections || data.structuredReportSections || null,
 
-        // ✅ Server-authoritative visualization payload (clusters + scores)
+        // âœ… Server-authoritative visualization payload (clusters + scores)
         canonical_payload:
           data.canonical_payload ||
           data.visual_payload ||
@@ -1904,7 +1904,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
           data.dermatologyEngine?.visual_payload ||
           null,
 
-        // ✅ Optional meta for debugging / future UI (additive)
+        // âœ… Optional meta for debugging / future UI (additive)
         engine_meta: data.engine_meta || data.dermatologyEngine?.meta || null
       });
 
@@ -1992,7 +1992,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
             role: 'assistant',
             content:
               data.message ||
-              'I’m having trouble connecting right now. Please try again in a moment.'
+              'Iâ€™m having trouble connecting right now. Please try again in a moment.'
           }
         ]);
         setChatLoading(false);
@@ -2031,7 +2031,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
     setCaptureGuidanceSeen(false);
     setCaptureSupportMessage(null);
 
-    // ✅ reset debug-only states too
+    // âœ… reset debug-only states too
     setCaptureSupportReason("");
     setCaptureSupportDebug(null);
 
@@ -2083,7 +2083,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
   const handleShare = async ({ url, label }) => {
     if (!reflectionSeen) {
       gaEvent("share_blocked_before_reflection", { label });
-      showToast("Take your time — sharing becomes available after you’ve read Dr. Lazuk’s note.");
+      showToast("Take your time â€” sharing becomes available after youâ€™ve read Dr. Lazukâ€™s note.");
       return;
     }
 
@@ -2105,7 +2105,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
         if (file && navigator.canShare({ files: [file] })) {
           await navigator.share({
             files: [file],
-            title: "SkinDoctor.ai — Future Story",
+            title: "SkinDoctor.ai â€” Future Story",
             text: shareText
           });
           gaEvent("share_success", { label, mode: "file" });
@@ -2115,7 +2115,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 
       if (navigator?.share) {
         await navigator.share({
-          title: "SkinDoctor.ai — Future Story",
+          title: "SkinDoctor.ai â€” Future Story",
           text: shareText
         });
         gaEvent("share_success", { label, mode: "text" });
@@ -2125,24 +2125,24 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 
     const ok = await safeCopyToClipboard(shareText);
     gaEvent("share_fallback", { label, copied: ok ? 1 : 0 });
-    showToast(ok ? "Share text copied to clipboard." : "Copy failed—please select and copy manually.");
+    showToast(ok ? "Share text copied to clipboard." : "Copy failedâ€”please select and copy manually.");
   };
 
   const handleCopyImageLink = async ({ url, label }) => {
     if (!reflectionSeen) {
       gaEvent("copy_link_blocked_before_reflection", { label });
-      showToast("Take your time — copying becomes available after you’ve read Dr. Lazuk’s note.");
+      showToast("Take your time â€” copying becomes available after youâ€™ve read Dr. Lazukâ€™s note.");
       return;
     }
     const ok = await safeCopyToClipboard(String(url));
     gaEvent("copy_image_link", { label, copied: ok ? 1 : 0 });
-    showToast(ok ? "Image link copied." : "Copy failed—please select and copy manually.");
+    showToast(ok ? "Image link copied." : "Copy failedâ€”please select and copy manually.");
   };
 
   const handleSave = async ({ url, label }) => {
     if (!reflectionSeen) {
       gaEvent("save_blocked_before_reflection", { label });
-      showToast("Take your time — saving becomes available after you’ve read Dr. Lazuk’s note.");
+      showToast("Take your time â€” saving becomes available after youâ€™ve read Dr. Lazukâ€™s note.");
       return;
     }
     gaEvent("save_clicked", { label });
@@ -2167,9 +2167,9 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 
       {identityLockModalOpen && (
         <Modal
-          title="Identity Lock™ Technology Active"
+          title="Identity Lockâ„¢ Technology Active"
           body={
-            "This projection is not a generic filter or a randomized aging overlay.\n\nTo ensure consistency, our AI locks onto key proportional landmarks so your ‘Future Story’ remains anchored to your unique facial architecture and bone structure.\n\nThis represents a personalized cosmetic projection based on your current skin data."
+            "This projection is not a generic filter or a randomized aging overlay.\n\nTo ensure consistency, our AI locks onto key proportional landmarks so your â€˜Future Storyâ€™ remains anchored to your unique facial architecture and bone structure.\n\nThis represents a personalized cosmetic projection based on your current skin data."
           }
           onClose={() => setIdentityLockModalOpen(false)}
         />
@@ -2311,7 +2311,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                           className="mt-5 bg-gray-900 text-white px-6 py-3 font-bold hover:bg-gray-800"
                           type="button"
                         >
-                          I Understand — Continue
+                          I Understand â€” Continue
                         </button>
                       )}
                     </div>
@@ -2320,14 +2320,14 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 
                 {captureSupportMessage && (
                   <div className="bg-white border border-gray-300 p-5 mb-6">
-                    {/* ✅ Debug-only "why" line */}
+                    {/* âœ… Debug-only "why" line */}
                     {DEBUG_RETAKE && captureSupportReason && (
                       <div className="text-[12px] text-gray-600 mb-2">
                         Reason: <span className="font-mono">{captureSupportReason}</span>
                       </div>
                     )}
 
-                    {/* ✅ Debug-only measured metrics */}
+                    {/* âœ… Debug-only measured metrics */}
                     {DEBUG_RETAKE && captureSupportDebug && (
                       <div className="text-[12px] text-gray-600 mb-3 space-y-1">
                         {"meanBrightness" in captureSupportDebug && (
@@ -2597,7 +2597,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                 Overall Skin Health
               </div>
               <div className="mt-2 text-4xl font-extrabold text-gray-900">
-                {visualPayload?.overall_score?.score ?? "—"}%
+                {visualPayload?.overall_score?.score ?? "â€”"}%
               </div>
               <div className="mt-1 text-sm font-semibold">
                 <span className={`${ragColor(visualPayload?.overall_score?.rag)}`}>
@@ -2761,7 +2761,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
             {Array.isArray(analysisReport.protocolRecommendation?.treatments) &&
               analysisReport.protocolRecommendation.treatments.length > 0 && (
                 <div className="mt-6 border-t border-gray-200 pt-6">
-                  <h5 className="text-sm font-extrabold text-gray-900 mb-3">What’s inside</h5>
+                  <h5 className="text-sm font-extrabold text-gray-900 mb-3">Whatâ€™s inside</h5>
                   <div className="grid md:grid-cols-2 gap-4">
                     {analysisReport.protocolRecommendation.treatments.map((t, i) => (
                       <div key={i} className="bg-gray-50 border border-gray-200 p-4">
@@ -2862,7 +2862,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 
                       {!reflectionSeen && (
                         <p className="text-xs text-gray-600 mt-3">
-                          Sharing/saving activates after you read Dr. Lazuk’s note below.
+                          Sharing/saving activates after you read Dr. Lazukâ€™s note below.
                         </p>
                       )}
                     </div>
@@ -2881,7 +2881,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 
         {agencyChoice === 'guidance' && (
           <div className="mt-6 bg-white border-2 border-gray-900 p-8">
-            <h4 className="font-bold text-gray-900 mb-4 text-2xl">Recommended Products (Dr. Lazuk Cosmetics®)</h4>
+            <h4 className="font-bold text-gray-900 mb-4 text-2xl">Recommended Products (Dr. Lazuk CosmeticsÂ®)</h4>
             <div className="grid md:grid-cols-3 gap-4 mb-8">
               {analysisReport.recommendedProducts.map((p, i) => (
                 <div key={i} className="bg-gray-50 border p-4">
@@ -2889,7 +2889,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                   <p className="text-gray-900 font-bold mb-2">${p.price}</p>
                   <ul className="text-sm text-gray-700 mb-3">
                     {p.benefits.map((b, j) => (
-                      <li key={j}>✓ {b}</li>
+                      <li key={j}>âœ“ {b}</li>
                     ))}
                   </ul>
                   <a
@@ -2952,7 +2952,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                     <p className="text-xs font-bold text-blue-900 mb-1">Benefits:</p>
                     <ul className="text-sm text-blue-800">
                       {s.benefits.map((b, j) => (
-                        <li key={j}>✓ {b}</li>
+                        <li key={j}>âœ“ {b}</li>
                       ))}
                     </ul>
                   </div>
@@ -2975,7 +2975,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
         {!agencyChoice && (
           <div className="mt-4 bg-gray-50 border border-gray-200 p-5">
             <p className="text-sm text-gray-700">
-              Choose a path above — nothing is required.
+              Choose a path above â€” nothing is required.
             </p>
           </div>
         )}
@@ -2984,7 +2984,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 
       <AccordionSection
         id="structured_report"
-        title="Structured Report (1–9)"
+        title="Structured Report (1â€“9)"
         subtitle="Server-authored sections required by spec."
         open={!!openSections.structured_report}
         onToggle={toggleSection}
@@ -3015,7 +3015,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
       >
         <div className="bg-white border border-gray-200 p-6">
           <h4 className="text-xl font-bold text-gray-900 mb-2">
-            What I’m Seeing (Cosmetic Education)
+            What Iâ€™m Seeing (Cosmetic Education)
           </h4>
 
           <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
@@ -3090,7 +3090,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 
                   {!reflectionSeen && (
                     <p className="text-xs text-gray-600 mt-3">
-                      Sharing/saving activates after you read Dr. Lazuk’s note below.
+                      Sharing/saving activates after you read Dr. Lazukâ€™s note below.
                     </p>
                   )}
                 </div>
@@ -3114,7 +3114,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
         onToggle={toggleSection}
       >
         <div className="bg-white border-2 border-gray-900 p-8">
-          <h4 className="font-bold text-gray-900 mb-4 text-2xl">Recommended Products (Dr. Lazuk Cosmetics®)</h4>
+          <h4 className="font-bold text-gray-900 mb-4 text-2xl">Recommended Products (Dr. Lazuk CosmeticsÂ®)</h4>
           <div className="grid md:grid-cols-3 gap-4 mb-8">
             {analysisReport.recommendedProducts.map((p, i) => (
               <div key={i} className="bg-gray-50 border p-4">
@@ -3122,7 +3122,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                 <p className="text-gray-900 font-bold mb-2">${p.price}</p>
                 <ul className="text-sm text-gray-700 mb-3">
                   {p.benefits.map((b, j) => (
-                    <li key={j}>✓ {b}</li>
+                    <li key={j}>âœ“ {b}</li>
                   ))}
                 </ul>
                 <a
@@ -3161,7 +3161,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                   <p className="text-xs font-bold text-blue-900 mb-1">Benefits:</p>
                   <ul className="text-sm text-blue-800">
                     {s.benefits.map((b, j) => (
-                      <li key={j}>✓ {b}</li>
+                      <li key={j}>âœ“ {b}</li>
                     ))}
                   </ul>
                 </div>
@@ -3251,7 +3251,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                     <p className="font-bold text-gray-900 mb-2">Benefits:</p>
                     <ul className="text-sm text-gray-700">
                       {s.benefits.map((b, j) => (
-                        <li key={j}>✓ {b}</li>
+                        <li key={j}>âœ“ {b}</li>
                       ))}
                     </ul>
                   </div>
@@ -3272,9 +3272,9 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 
       <div className="bg-gray-900 text-white py-8 mt-12">
         <div className="max-w-6xl mx-auto px-4 text-center">
-          <p className="text-sm text-gray-400">© 2026 by SkinDoctor AI®</p>
+          <p className="text-sm text-gray-400">Â© 2026 by SkinDoctor AIÂ®</p>
           <p className="text-sm text-gray-400 mt-2">
-            Dr. Lazuk Cosmetics® | Lazuk Esthetics® | Contact: contact@skindoctor.ai
+            Dr. Lazuk CosmeticsÂ® | Lazuk EstheticsÂ® | Contact: contact@skindoctor.ai
           </p>
         </div>
     // ... (previous code above)
@@ -3321,9 +3321,9 @@ const DermatologyApp = () => {
       
       <footer className="bg-gray-900 text-white py-12 mt-12">
         <div className="max-w-6xl mx-auto px-4 text-center">
-          <p className="text-sm text-gray-400">© 2026 by SkinDoctor AI®</p>
+          <p className="text-sm text-gray-400">Â© 2026 by SkinDoctor AIÂ®</p>
           <p className="text-[10px] text-gray-600 mt-2 uppercase tracking-widest">
-            Beauty Injections • IV Detox • Candela Laser • Skin Rejuvenation
+            Beauty Injections â€¢ IV Detox â€¢ Candela Laser â€¢ Skin Rejuvenation
           </p>
           <p className="text-[9px] text-gray-500 mt-4 italic">
             Clinical Intelligence Powered by SkinDoctor.ai
