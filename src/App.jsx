@@ -3283,8 +3283,12 @@ ${SUPPORTIVE_FOOTER_LINE}`);
   ); 
 };
 
+// Ensure the code BEFORE this line ends with:
+//   ); 
+// };
+
 /* ---------------------------------------
-   ESTHETICS CONCIERGE APP / SERVICES VIEW
+   SKINDOCTOR.AI REVENUE MACHINE SERVICES
 --------------------------------------- */
 const estheticServices = [
   {
@@ -3312,12 +3316,17 @@ const estheticServices = [
 const DermatologyApp = () => {
   return (
     <div className="min-h-screen bg-white">
-      <App />
+      {/* This renders your main application logic */}
+      <App /> 
+      
       <footer className="bg-gray-900 text-white py-12 mt-12">
         <div className="max-w-6xl mx-auto px-4 text-center">
           <p className="text-sm text-gray-400">© 2026 by SkinDoctor AI®</p>
           <p className="text-[10px] text-gray-600 mt-2 uppercase tracking-widest">
             Beauty Injections • IV Detox • Candela Laser • Skin Rejuvenation
+          </p>
+          <p className="text-[9px] text-gray-500 mt-4 italic">
+            Clinical Intelligence Powered by SkinDoctor.ai
           </p>
         </div>
       </footer>
