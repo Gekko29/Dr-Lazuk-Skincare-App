@@ -2253,6 +2253,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
       </div>
 
       <div className="max-w-6xl mx-auto px-4 py-8">
+        <>
         {activeTab === 'home' && (
           <div className="bg-white border border-gray-200 shadow-sm p-8">
             {step === 'photo' && (
@@ -3267,6 +3268,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
             </div>
           </div>
         )}
+        </>
       </div>
 
       <div className="bg-gray-900 text-white py-8 mt-12">
