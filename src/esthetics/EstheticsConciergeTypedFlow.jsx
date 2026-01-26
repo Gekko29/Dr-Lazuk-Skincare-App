@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { CONCIERGE_COPY, t } from "./lib/conciergeCopy"; // adjust path if needed
 
 function normEmail(v) {
   return String(v || "").trim().toLowerCase();
@@ -26,7 +27,12 @@ export default function EstheticsConciergeTypedFlow({ user, flags }) {
   const [timeNotes, setTimeNotes] = useState("");
   const [questions, setQuestions] = useState("");
 
-  // Basic protocol placeholder (until your service intelligence engine is wired)
+  // Mid-flow reassurance show-once
+  const [showReassurance, setShowReassurance] = useState(false);
+
+  const firstName = String(user?.firstName || "").trim();
+
+  // Locked protocol placeholder (until your service intelligence engine is wired)
   const protocolSummary = useMemo(() => {
     const goals = [primaryGoal, secondaryGoal].filter(Boolean);
     const constraintsText = [];
@@ -147,13 +153,35 @@ export default function EstheticsConciergeTypedFlow({ user, flags }) {
     }
   };
 
+  // Helper: show mid-flow reassurance once the user begins meaningful input
+  const onPrimaryChange = (val) => {
+    setPrimaryGoal(val);
+    if (!showReassurance && String(val || "").trim().length >= 3) setShowReassurance(true);
+  };
+
   if (done) {
     return (
       <div className="mt-6 bg-white border border-gray-200 p-6">
-        <h2 className="text-lg font-bold">Done — we emailed your protocol</h2>
-        <p className="mt-2 text-sm text-gray-700">
+        <h2 className="text-lg font-bold">Your protocol is ready</h2>
+
+        <div className="mt-3 whitespace-pre-wrap text-sm text-gray-800">
+          {t(CONCIERGE_COPY.closing.recapIntro, { firstName })}
+        </div>
+
+        <div className="mt-3 whitespace-pre-wrap text-sm text-gray-800">
+          {CONCIERGE_COPY.closing.consultHandoff}
+        </div>
+
+        <div className="mt-3 whitespace-pre-wrap text-sm text-gray-800">
+          {CONCIERGE_COPY.closing.nextStepQuestion}
+        </div>
+
+        <div className="mt-3 text-sm text-gray-800">
+          {t(CONCIERGE_COPY.closing.finalThanks, { firstName })}
+        </div>
+
+        <p className="mt-4 text-sm text-gray-700">
           Your curated protocol (and the conversation details) have been emailed to you and our team.
-          Next step is a consultation so a provider can confirm the final treatment path.
         </p>
 
         <div className="mt-4 flex gap-3">
@@ -181,8 +209,29 @@ export default function EstheticsConciergeTypedFlow({ user, flags }) {
 
   return (
     <div className="mt-6 bg-white border border-gray-200 p-6">
-      <h2 className="text-lg font-bold">Quick conversation (typed)</h2>
-      <p className="mt-1 text-sm text-gray-700">
+      <div className="text-sm font-semibold text-gray-500">{CONCIERGE_COPY.brand.suiteName}</div>
+      <h2 className="mt-2 text-lg font-bold">Quick conversation (typed)</h2>
+
+      {/* Locked opening narrative + first live question */}
+      <div className="mt-3 bg-gray-50 border border-gray-200 p-4">
+        <div className="whitespace-pre-wrap text-sm text-gray-800">
+          {t(CONCIERGE_COPY.opening.systemIntro, { firstName })}
+        </div>
+        <div className="mt-3 text-sm font-semibold text-gray-900">
+          {CONCIERGE_COPY.opening.firstLiveQuestion}
+        </div>
+      </div>
+
+      {/* Mid-flow reassurance (show once after user starts) */}
+      {showReassurance ? (
+        <div className="mt-4 bg-white border border-gray-200 p-4">
+          <div className="whitespace-pre-wrap text-sm text-gray-800">
+            {CONCIERGE_COPY.midFlow.reassurance}
+          </div>
+        </div>
+      ) : null}
+
+      <p className="mt-4 text-sm text-gray-700">
         This is a typed fallback to validate the email pipeline. Voice will be added in Phase B2.2.
       </p>
 
@@ -191,7 +240,7 @@ export default function EstheticsConciergeTypedFlow({ user, flags }) {
         <input
           className="mt-1 w-full border border-gray-300 p-3"
           value={primaryGoal}
-          onChange={(e) => setPrimaryGoal(e.target.value)}
+          onChange={(e) => onPrimaryChange(e.target.value)}
           placeholder="e.g., look younger, improve texture, reduce redness, body contouring, recovery"
         />
       </div>
@@ -291,8 +340,9 @@ export default function EstheticsConciergeTypedFlow({ user, flags }) {
       </button>
 
       <p className="mt-3 text-xs text-gray-600">
-        Pricing note: final pricing depends on the finalized treatment path after consultation.
+        {CONCIERGE_COPY.disclaimers.short}
       </p>
     </div>
   );
 }
+
