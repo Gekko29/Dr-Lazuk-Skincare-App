@@ -3276,19 +3276,10 @@ ${SUPPORTIVE_FOOTER_LINE}`);
           <p className="text-sm text-gray-400 mt-2">
             Dr. Lazuk CosmeticsÂ® | Lazuk EstheticsÂ® | Contact: contact@skindoctor.ai
           </p>
-        </div>
-    // ... (previous code above)
-
-  // This closes the main <main> container
-  ); 
-};
-
-// ... ensure the end of your App component looks exactly like this:
-      </main> 
+       </main> 
     </div>
   ); 
 }; 
-
 /* ---------------------------------------
    SKINDOCTOR.AI REVENUE MACHINE SERVICES
 --------------------------------------- */
@@ -3318,16 +3309,16 @@ const estheticServices = [
 const DermatologyApp = () => {
   return (
     <div className="min-h-screen bg-white">
-      {/* This renders your main application logic */}
+      {/* Renders your Skindoctor.ai App Logic */}
       <App /> 
       
-      <footer className="bg-gray-900 text-white py-12 mt-12">
+      <footer className="bg-gray-900 text-white py-12 mt-12 border-t border-gray-800">
         <div className="max-w-6xl mx-auto px-4 text-center">
           <p className="text-sm text-gray-400">© 2026 by SkinDoctor AI®</p>
-          <p className="text-[10px] text-gray-600 mt-2 uppercase tracking-widest">
+          <p className="text-[10px] text-gray-500 mt-2 uppercase tracking-[0.2em]">
             Beauty Injections • IV Detox • Candela Laser • Skin Rejuvenation
           </p>
-          <p className="text-[9px] text-gray-500 mt-4 italic">
+          <p className="text-[9px] text-gray-600 mt-4 italic">
             Clinical Intelligence Powered by SkinDoctor.ai
           </p>
         </div>
