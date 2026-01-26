@@ -3269,17 +3269,18 @@ ${SUPPORTIVE_FOOTER_LINE}`);
         )}
       </div>
       )}
+// ... (Your previous code above)
 
-      <div className="bg-gray-900 text-white py-8 mt-12">
-        <div className="max-w-6xl mx-auto px-4 text-center">
-          <p className="text-sm text-gray-400">Â© 2026 by SkinDoctor AIÂ®</p>
-          <p className="text-sm text-gray-400 mt-2">
-            Dr. Lazuk CosmeticsÂ® | Lazuk EstheticsÂ® | Contact: contact@skindoctor.ai
+          {/* Corrected Footer Line inside App */}
+          <p className="text-[10px] text-gray-400 mt-8 pb-4">
+            Dr. Lazuk Cosmetics® | Lazuk Esthetics® | Contact: contact@skindoctor.ai
           </p>
-       </main> 
+        </div>
+      </main> 
     </div>
   ); 
 }; 
+
 /* ---------------------------------------
    SKINDOCTOR.AI REVENUE MACHINE SERVICES
 --------------------------------------- */
@@ -3309,7 +3310,7 @@ const estheticServices = [
 const DermatologyApp = () => {
   return (
     <div className="min-h-screen bg-white">
-      {/* Renders your Skindoctor.ai App Logic */}
+      {/* Renders your main application logic */}
       <App /> 
       
       <footer className="bg-gray-900 text-white py-12 mt-12 border-t border-gray-800">
