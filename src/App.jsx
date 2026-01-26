@@ -2559,8 +2559,16 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 
                     {analysisUiError && (
                       <div className="mt-3 bg-white/10 border border-white/20 p-4">
-                        <p className="text-sm text-white whitespace-pre-wrap">
-       
+                        <p className="text-sm text-white whitespace-pre-wrap">{analysisUiError}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {analysisReport && (
+              <div className="bg-white p-6">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="text-3xl font-extrabold leading-tight text-gray-900">
@@ -2963,8 +2971,6 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                 </div>
               ))}
             </div>
-          </div>
-        )}
 
         {!agencyChoice && (
           <div className="mt-4 bg-gray-50 border border-gray-200 p-5">
@@ -3173,13 +3179,13 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                 </a>
               </div>
             ))}
+          </div>
+        </div>
       </AccordionSection>
 
-    </div>
-  </div>
-)}
-
-<canvas ref={canvasRef} className="hidden" />
+      <canvas ref={canvasRef} className="hidden" />
+              </div>
+            )}
           </div>
         )}
 
