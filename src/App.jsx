@@ -3262,7 +3262,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                   >
                     Learn More
                   </a>
-                  <p className="text-center text-gray-400 mt-8 pb-4">
+               <p className="text-center text-gray-400 mt-8 pb-4">
             Dr. Lazuk Cosmetics | Lazuk Esthetics | contact@skindoctor.ai
           </p>
         </div>
@@ -3301,9 +3301,12 @@ const DermatologyApp = () => {
       <footer className="bg-gray-900 text-white py-12 mt-12 border-t border-gray-800">
         <div className="max-w-6xl mx-auto px-4 text-center">
           <p className="text-sm text-gray-400">Copyright 2026 SkinDoctor AI</p>
-          <p className="text-[10px] text-gray-500 mt-2 uppercase">
-            Injections - IV Detox - Laser - Rejuvenation
-          </p>
+          <div className="flex flex-wrap justify-center gap-4 text-[10px] text-gray-500 mt-2 uppercase tracking-widest">
+            <span>Injections</span>
+            <span>IV Detox</span>
+            <span>Laser</span>
+            <span>Rejuvenation</span>
+          </div>
           <p className="text-[9px] text-gray-600 mt-4 italic">
             Clinical Intelligence Powered by SkinDoctor.ai
           </p>
