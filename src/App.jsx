@@ -2419,7 +2419,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                     </div>
                   </div>
                 )}
-              </>
+              
             )}
 
             {step === 'questions' && capturedImage && (
@@ -2546,7 +2546,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                         <>
                           <Loader className="animate-spin" size={20} />
                           <span>Analyzing...</span>
-                        </>
+                       
                       ) : (
                         'View Results'
                       )}
