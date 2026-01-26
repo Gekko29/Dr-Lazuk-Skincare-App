@@ -7,41 +7,10 @@
 // - Client subject: "Your Curated Esthetics Protocol"
 // - Provider recipient: contact@drlazuk.com (or RESEND_CLINIC_EMAIL)
 // - From: no-reply@drlazuk.com (via RESEND_FROM_EMAIL)
-//
-// Notes:
-// - No server-side storage: in-memory assemble → send → discard
+// - No server-side storage: assemble → send → discard
 
-async function sendEmailWithResend({ to, subject, html }) {
-  const apiKey = process.env.RESEND_API_KEY;
-  const fromEmail =
-    process.env.RESEND_FROM_EMAIL || "Lazuk Esthetics <no-reply@drlazuk.com>";
-
-  if (!apiKey) {
-    console.error("RESEND_API_KEY is not set; skipping email send.");
-    return { ok: false, error: "missing_resend_api_key" };
-  }
-
-  try {
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ from: fromEmail, to, subject, html }),
-    });
-
-    if (!res.ok) {
-      const body = await res.text();
-      console.error("Resend email error:", res.status, body);
-      return { ok: false, status: res.status, body };
-    }
-
-    return { ok: true };
-  } catch (err) {
-    console.error("Resend email exception:", err);
-    return { ok: false, error: "resend_exception" };
-  }
+function normEmail(v) {
+  return String(v || "").trim().toLowerCase();
 }
 
 function escapeHtml(str) {
@@ -72,6 +41,49 @@ function blocksToHtml(blocks) {
     .join("");
 }
 
+async function sendEmailWithResend({ to, subject, html }) {
+  const apiKey = process.env.RESEND_API_KEY;
+
+  // locked defaults
+  const fromEmail =
+    process.env.RESEND_FROM_EMAIL || "Lazuk Esthetics <no-reply@drlazuk.com>";
+  const replyTo =
+    process.env.RESEND_REPLY_TO || process.env.RESEND_CLINIC_EMAIL || "contact@drlazuk.com";
+
+  if (!apiKey) {
+    console.error("RESEND_API_KEY is not set; cannot send email.");
+    return { ok: false, error: "missing_resend_api_key" };
+  }
+
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: fromEmail,
+        to,
+        subject,
+        html,
+        reply_to: replyTo, // so replies go to clinic inbox
+      }),
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      console.error("Resend email error:", res.status, body);
+      return { ok: false, status: res.status, body };
+    }
+
+    return { ok: true };
+  } catch (err) {
+    console.error("Resend email exception:", err);
+    return { ok: false, error: "resend_exception" };
+  }
+}
+
 function buildClientEmailHtml(payload) {
   const user = payload.user || {};
   const firstName = user.firstName || "there";
@@ -81,16 +93,18 @@ function buildClientEmailHtml(payload) {
 
   const narrative =
     payload.protocolSummary?.narrative ||
-    `Based on what you shared, this protocol was designed specifically for you to support your goals while prioritizing long-term skin and body health.`;
+    "Based on what you shared, this protocol was designed specifically for you to support your goals while prioritizing long-term skin and body health.";
 
   const nextSteps =
-    payload.nextSteps || [
-      "Schedule a consultation so a provider can confirm the best treatment path for you.",
-      "Complete the medical questionnaire we’ll send prior to your appointment (required).",
-      "Bring up any additional concerns during your consultation—your plan can be refined in real time.",
-    ];
+    Array.isArray(payload.nextSteps) && payload.nextSteps.length
+      ? payload.nextSteps
+      : [
+          "Schedule a consultation so a provider can confirm the best treatment path for you.",
+          "Complete the medical questionnaire we’ll send prior to your appointment (required).",
+          "Bring up any additional concerns during your consultation—your plan can be refined in real time.",
+        ];
 
-  const deferred = payload.deferredQuestions || [];
+  const deferred = Array.isArray(payload.deferredQuestions) ? payload.deferredQuestions : [];
 
   return `
   <div style="font-family: Arial, sans-serif; line-height: 1.45; color: #111;">
@@ -177,10 +191,6 @@ function buildProviderEmailHtml(payload) {
   `;
 }
 
-function normEmail(v) {
-  return String(v || "").trim().toLowerCase();
-}
-
 module.exports = async (req, res) => {
   if (req.method !== "POST") {
     return res.status(405).json({ ok: false, error: "method_not_allowed" });
@@ -189,29 +199,29 @@ module.exports = async (req, res) => {
   try {
     const body = req.body || {};
     const user = body.user || {};
+
+    const firstName = String(user.firstName || "").trim();
+    const lastName = String(user.lastName || "").trim();
     const email = normEmail(user.email);
 
-    if (!user.firstName || !user.lastName || !email.includes("@")) {
+    if (!firstName || !lastName || !email.includes("@")) {
       return res.status(400).json({ ok: false, error: "invalid_user" });
     }
 
-    const providerTo =
-      process.env.RESEND_CLINIC_EMAIL || "contact@drlazuk.com";
+    const providerTo = process.env.RESEND_CLINIC_EMAIL || "contact@drlazuk.com";
 
     const clientSubject = "Your Curated Esthetics Protocol";
-    const providerSubject = `New Esthetics Protocol – ${user.firstName} ${user.lastName}`;
+    const providerSubject = `New Esthetics Protocol – ${firstName} ${lastName}`;
 
     const payload = {
       user: {
-        firstName: String(user.firstName || "").trim(),
-        lastName: String(user.lastName || "").trim(),
+        firstName,
+        lastName,
         email,
         phone: user.phone ? String(user.phone).trim() : null,
       },
       goals: Array.isArray(body.goals) ? body.goals.map(String) : [],
-      constraints: Array.isArray(body.constraints)
-        ? body.constraints.map(String)
-        : [],
+      constraints: Array.isArray(body.constraints) ? body.constraints.map(String) : [],
       deferredQuestions: Array.isArray(body.deferredQuestions)
         ? body.deferredQuestions.map(String)
         : [],
@@ -226,24 +236,37 @@ module.exports = async (req, res) => {
     const providerHtml = buildProviderEmailHtml(payload);
 
     // Send provider + client
-    const p1 = await sendEmailWithResend({
+    const providerSend = await sendEmailWithResend({
       to: providerTo,
       subject: providerSubject,
       html: providerHtml,
     });
 
-    const p2 = await sendEmailWithResend({
+    const clientSend = await sendEmailWithResend({
       to: email,
       subject: clientSubject,
       html: clientHtml,
     });
 
+    // If either fails, return a non-200 so the UI can show a real error
+    if (!providerSend.ok || !clientSend.ok) {
+      return res.status(502).json({
+        ok: false,
+        error: "email_send_failed",
+        sent: {
+          provider: providerSend.ok === true,
+          client: clientSend.ok === true,
+        },
+        details: {
+          provider: providerSend,
+          client: clientSend,
+        },
+      });
+    }
+
     return res.status(200).json({
       ok: true,
-      sent: {
-        provider: p1?.ok === true,
-        client: p2?.ok === true,
-      },
+      sent: { provider: true, client: true },
     });
   } catch (err) {
     console.error("esthetics/complete error:", err);
