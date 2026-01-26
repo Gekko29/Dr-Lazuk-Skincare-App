@@ -3283,10 +3283,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
   ); 
 };
 
-// Ensure the code BEFORE this line ends with:
-//   ); 
-// };
-// ... (Scroll to the very bottom of your App component)
+// ... ensure the end of your App component looks exactly like this:
       </main> 
     </div>
   ); 
@@ -3321,7 +3318,7 @@ const estheticServices = [
 const DermatologyApp = () => {
   return (
     <div className="min-h-screen bg-white">
-      {/* Renders your main application logic */}
+      {/* This renders your main application logic */}
       <App /> 
       
       <footer className="bg-gray-900 text-white py-12 mt-12">
