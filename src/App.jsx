@@ -2253,11 +2253,11 @@ ${SUPPORTIVE_FOOTER_LINE}`);
       </div>
 
       <div className="max-w-6xl mx-auto px-4 py-8">
-        <>
+        
         {activeTab === 'home' && (
           <div className="bg-white border border-gray-200 shadow-sm p-8">
             {step === 'photo' && (
-              <>
+              
                 <div className="flex items-center gap-3 mb-6">
                   <Sparkles className="text-gray-900" size={28} />
                   <h2 className="text-2xl font-bold text-gray-900">Virtual Skin Analysis</h2>
@@ -2543,7 +2543,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                       type="button"
                     >
                       {emailSubmitting ? (
-                        <>
+                        
                           <Loader className="animate-spin" size={20} />
                           <span>Analyzing...</span>
                        
@@ -3268,7 +3268,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
             </div>
           </div>
         )}
-        </>
+        
       </div>
 
       <div className="bg-gray-900 text-white py-8 mt-12">
