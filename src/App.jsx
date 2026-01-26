@@ -3277,10 +3277,52 @@ ${SUPPORTIVE_FOOTER_LINE}`);
             Dr. Lazuk Cosmetics® | Lazuk Esthetics® | Contact: contact@skindoctor.ai
           </p>
         </div>
-      </div>
+    // ... (previous code above)
+
+  // This closes the main <main> container
+  ); 
+};
+
+/* ---------------------------------------
+   ESTHETICS CONCIERGE APP / SERVICES VIEW
+--------------------------------------- */
+const estheticServices = [
+  {
+    name: "IV Detox & Nutrient Therapy",
+    description: "Medical-grade infusions to flush toxins and replenish essential skin nutrients.",
+    benefits: ["Internal Hydration", "Cellular Detox", "Radiance Boost"]
+  },
+  {
+    name: "Candela Laser Hair Removal",
+    description: "Permanent hair reduction using industry-leading Candela technology for all skin types.",
+    benefits: ["Permanent Results", "Safe for All Tones", "Precision Targeted"]
+  },
+  {
+    name: "Beauty Injections & Fillers",
+    description: "Neuromodulators and fillers to soften lines and restore facial volume.",
+    benefits: ["Natural Aesthetics", "Volume Restoration", "Structural Support"]
+  },
+  {
+    name: "Skin Rejuvenation Treatments",
+    description: "Advanced RF microneedling and chemical peels to stimulate collagen.",
+    benefits: ["Pore Refinement", "Scar Reduction", "Texture Smoothing"]
+  }
+];
+
+const DermatologyApp = () => {
+  return (
+    <div className="min-h-screen bg-white">
+      <App />
+      <footer className="bg-gray-900 text-white py-12 mt-12">
+        <div className="max-w-6xl mx-auto px-4 text-center">
+          <p className="text-sm text-gray-400">© 2026 by SkinDoctor AI®</p>
+          <p className="text-[10px] text-gray-600 mt-2 uppercase tracking-widest">
+            Beauty Injections • IV Detox • Candela Laser • Skin Rejuvenation
+          </p>
+        </div>
+      </footer>
     </div>
   );
-
 };
 
 export default DermatologyApp;
