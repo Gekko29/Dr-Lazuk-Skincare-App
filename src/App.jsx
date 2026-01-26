@@ -2487,7 +2487,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 
                   <div className="flex gap-3">
                     <button
-                      onClick={resetAnalysis}
+                      onClick={() => window.print()}
                       className="px-6 py-3 bg-gray-300 text-gray-900 font-bold hover:bg-gray-400"
                       type="button"
                     >
@@ -2573,22 +2573,54 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 {step === 'results' && analysisReport && (
   <div className="space-y-6">
     <div className="flex justify-between items-center">
-      <h3 className="text-2xl font-bold text-gray-900">Your Results</h3>
+      <div>
+        <h3 className="text-2xl font-bold text-gray-900">{firstName ? `${firstName}, Your Personal Roadmap To Skin Health` : "Your Personal Roadmap To Skin Health"}</h3>
+        <p className="text-sm text-gray-600">provided by skindoctor.ai</p>
+      </div>
       <button
-        onClick={resetAnalysis}
+        onClick={() => window.print()}
         className="px-4 py-2 bg-gray-300 text-gray-900 font-bold hover:bg-gray-400 text-sm"
         type="button"
       >
-        New Analysis
+        Print / Save
       </button>
     </div>
 
-    {/* ✅ Default summary view (always visible) */}
-    <SummaryCard
-      ageRange={ageRange}
-      primaryConcern={primaryConcern}
-      analysisReport={analysisReport}
-    />
+    {/* Overall Skin Health (Hero) */}
+    <div className="border border-gray-200 bg-white p-5">
+      {(() => {
+        const raw =
+          analysisReport?.overallScore ??
+          analysisReport?.dermEngine?.overallScore ??
+          analysisReport?.scores?.overall;
+        const score = Math.round(Number(raw ?? 0));
+        const clamped = Number.isFinite(score)
+          ? Math.min(100, Math.max(0, score))
+          : 0;
+
+        return (
+          <>
+            <div className="text-xs font-bold text-gray-600 uppercase tracking-wider">
+              Overall Skin Health
+            </div>
+
+            <div className="mt-2 flex items-end gap-3">
+              <div className="text-5xl font-extrabold tracking-tight text-gray-900">
+                {clamped}
+              </div>
+              <div className="pb-1 text-sm text-gray-600">/ 100</div>
+            </div>
+
+            <div className="mt-4 h-3 w-full bg-gray-200 overflow-hidden">
+              <div
+                className="h-3 bg-gray-900"
+                style={{ width: `${clamped}%` }}
+              />
+            </div>
+          </>
+        );
+      })()}
+    </div>
 
     <div className="flex flex-wrap gap-2 items-center">
       <button
@@ -2621,7 +2653,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 
       <AccordionSection
         id="protocol"
-        title="Your Recommended Protocol"
+        title={`${firstName || "Client"}, Your Curated Protocol`}
         subtitle="Exactly one curated set based on your analysis."
         open={!!openSections.protocol}
         onToggle={toggleSection}
@@ -2630,7 +2662,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
           <div className="bg-white border-2 border-gray-900 p-8">
             <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
               <div className="min-w-0">
-                <div className="text-sm font-semibold text-gray-500">Your Recommended Protocol</div>
+                <div className="text-sm font-semibold text-gray-500">{firstName ? `${firstName}, Your Curated Protocol` : "Your Curated Protocol"}</div>
                 <div className="mt-1 text-2xl font-extrabold text-gray-900">
                   {(analysisReport.protocolPrimary?.name || analysisReport.protocolRecommendation?.name) || "Your Curated Protocol"}
                 </div>
@@ -3034,84 +3066,6 @@ ${SUPPORTIVE_FOOTER_LINE}`);
           </div>
         )}
       </AccordionSection>
-
-      <AccordionSection
-        id="guidance"
-        title="Recommended Products and Treatments"
-        subtitle="Personalized guidance mapped to your primary concern."
-        open={!!openSections.guidance}
-        onToggle={toggleSection}
-      >
-        <div className="bg-white border-2 border-gray-900 p-8">
-          <h4 className="font-bold text-gray-900 mb-4 text-2xl">Recommended Products (Dr. Lazuk Cosmetics®)</h4>
-          <div className="grid md:grid-cols-3 gap-4 mb-8">
-            {analysisReport.recommendedProducts.map((p, i) => (
-              <div key={i} className="bg-gray-50 border p-4">
-                <h5 className="font-bold text-gray-900 mb-1">{p.name}</h5>
-                <p className="text-gray-900 font-bold mb-2">${p.price}</p>
-                <ul className="text-sm text-gray-700 mb-3">
-                  {p.benefits.map((b, j) => (
-                    <li key={j}>✓ {b}</li>
-                  ))}
-                </ul>
-                <a
-                  href={p.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={() =>
-                    gaEvent('product_click', {
-                      productName: p.name,
-                      category: p.category,
-                      price: p.price,
-                      primaryConcern
-                    })
-                  }
-                  className="block text-center bg-gray-900 text-white py-2 font-bold hover:bg-gray-800"
-                >
-                  View
-                </a>
-              </div>
-            ))}
-          </div>
-
-          <h4 className="font-bold text-gray-900 mb-4 text-2xl">
-            Recommended Treatments
-          </h4>
-          <div className={`grid gap-4 ${hasAgingTile ? "" : "md:grid-cols-2"}`}>
-            {analysisReport.recommendedServices.map((s, i) => (
-              <div key={i} className="bg-blue-50 border-2 border-blue-200 p-5">
-                <h5 className="font-bold text-blue-900 mb-2 text-lg">{s.name}</h5>
-                <p className="text-sm text-blue-800 mb-3">{s.description}</p>
-                <p className="text-sm text-blue-900 font-semibold mb-2">
-                  Why We Recommend This:
-                </p>
-                <p className="text-sm text-blue-800 mb-3">{s.whyRecommended}</p>
-                <div className="mb-4">
-                  <p className="text-xs font-bold text-blue-900 mb-1">Benefits:</p>
-                  <ul className="text-sm text-blue-800">
-                    {s.benefits.map((b, j) => (
-                      <li key={j}>✓ {b}</li>
-                    ))}
-                  </ul>
-                </div>
-                <a
-                  href="mailto:contact@skindoctor.ai"
-                  onClick={() =>
-                    gaEvent('book_appointment_click', {
-                      serviceName: s.name,
-                      primaryConcern
-                    })
-                  }
-                  className="block text-center bg-blue-600 text-white py-3 font-bold hover:bg-blue-700"
-                >
-                  Book Appointment
-                </a>
-              </div>
-            ))}
-          </div>
-        </div>
-      </AccordionSection>
-
       <AccordionSection
         id="message"
         title="A Message from Dr. Lazuk"
