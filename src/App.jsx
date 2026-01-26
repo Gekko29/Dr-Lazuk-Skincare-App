@@ -3287,11 +3287,6 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 //   ); 
 // };
 
-// ... (Your existing App logic should end like this)
-      </div>
-    ); 
-};
-
 /* ---------------------------------------
    SKINDOCTOR.AI REVENUE MACHINE SERVICES
 --------------------------------------- */
@@ -3321,7 +3316,7 @@ const estheticServices = [
 const DermatologyApp = () => {
   return (
     <div className="min-h-screen bg-white">
-      {/* Renders your main application logic */}
+      {/* This renders your main application logic */}
       <App /> 
       
       <footer className="bg-gray-900 text-white py-12 mt-12">
