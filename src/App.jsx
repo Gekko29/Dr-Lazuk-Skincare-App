@@ -2560,37 +2560,77 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                     {analysisUiError && (
                       <div className="mt-3 bg-white/10 border border-white/20 p-4">
                         <p className="text-sm text-white whitespace-pre-wrap">
-                          {analysisUiError}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
+       
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="text-3xl font-extrabold leading-tight text-gray-900">
+              {(analysisReport?.client?.firstName || firstName || "Your")}, Your Personal Roadmap To Skin Health
+            </div>
+            <div className="mt-2 text-sm font-semibold text-gray-500">
+              provided by skindoctor.ai
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 print:hidden">
+            <button
+              onClick={() => window.print()}
+              className="px-4 py-2 bg-white border text-sm font-semibold hover:bg-gray-50"
+            >
+              Print / Save
+            </button>
+          </div>
+        </div>
+
+        {/* Overall Skin Health (Hero) */}
+        <div className="mt-5 border-2 border-black bg-white p-6">
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <div className="text-xs font-bold tracking-widest text-gray-600 uppercase">
+                Overall Skin Health
               </div>
-            )}
+              <div className="mt-2 text-4xl font-extrabold text-gray-900">
+                {visualPayload?.overall_score?.score ?? "—"}%
+              </div>
+              <div className="mt-1 text-sm font-semibold">
+                <span className={`${ragColor(visualPayload?.overall_score?.rag)}`}>
+                  {String(visualPayload?.overall_score?.rag || "unknown").toUpperCase()}
+                </span>
+              </div>
+            </div>
 
-            
-{step === 'results' && analysisReport && (
-  <div className="space-y-6">
-    <div className="flex justify-between items-center">
-      <h3 className="text-2xl font-bold text-gray-900">Your Results</h3>
-      <button
-        onClick={resetAnalysis}
-        className="px-4 py-2 bg-gray-300 text-gray-900 font-bold hover:bg-gray-400 text-sm"
-        type="button"
-      >
-        New Analysis
-      </button>
-    </div>
+            {/* Ring */}
+            <div className="shrink-0" aria-hidden="true">
+              {(() => {
+                const score = typeof visualPayload?.overall_score?.score === "number" ? visualPayload.overall_score.score : null;
+                const rag = visualPayload?.overall_score?.rag || "unknown";
+                const size = 120;
+                const ringRadius = 46;
+                const circumference = 2 * Math.PI * ringRadius;
+                const pct = score === null ? 0 : Math.max(0, Math.min(100, score));
+                const dash = (pct / 100) * circumference;
+                const gap = circumference - dash;
+                const color = rag === "green" ? "#16a34a" : rag === "amber" ? "#f59e0b" : "#ef4444";
 
-    {/* ✅ Default summary view (always visible) */}
-    <SummaryCard
-      ageRange={ageRange}
-      primaryConcern={primaryConcern}
-      analysisReport={analysisReport}
-    />
-
-    <div className="flex flex-wrap gap-2 items-center">
+                return (
+                  <svg width={size} height={size} viewBox="0 0 120 120">
+                    <circle cx="60" cy="60" r={ringRadius} fill="none" stroke="#e5e7eb" strokeWidth="12" />
+                    <circle
+                      cx="60"
+                      cy="60"
+                      r={ringRadius}
+                      fill="none"
+                      stroke={color}
+                      strokeWidth="12"
+                      strokeLinecap="round"
+                      strokeDasharray={`${dash} ${gap}`}
+                      transform="rotate(-90 60 60)"
+                    />
+                  </svg>
+                );
+              })()}
+            </div>
+          </div>
+        </div>iv className="flex flex-wrap gap-2 items-center">
       <button
         onClick={openKeySections}
         className="px-4 py-2 bg-gray-900 text-white font-bold hover:bg-gray-800 text-sm"
@@ -2621,7 +2661,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 
       <AccordionSection
         id="protocol"
-        title="Your Recommended Protocol"
+        title={`${(analysisReport?.client?.firstName || firstName || "Your")}, Your Curated Protocol`}
         subtitle="Exactly one curated set based on your analysis."
         open={!!openSections.protocol}
         onToggle={toggleSection}
@@ -2630,7 +2670,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
           <div className="bg-white border-2 border-gray-900 p-8">
             <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
               <div className="min-w-0">
-                <div className="text-sm font-semibold text-gray-500">Your Recommended Protocol</div>
+                <div className="text-sm font-semibold text-gray-500">Your Curated Protocol</div>
                 <div className="mt-1 text-2xl font-extrabold text-gray-900">
                   {(analysisReport.protocolPrimary?.name || analysisReport.protocolRecommendation?.name) || "Your Curated Protocol"}
                 </div>
@@ -2691,7 +2731,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
               {(analysisReport.protocolPrimary?.url || analysisReport.protocolRecommendation?.url) && (
                 <div className="shrink-0">
                   <a
-                    href={analysisReport.protocolRecommendation.url}
+                    href={analysisReport?.protocolRecommendation?.url || "https://www.skindoctor.ai/category/all-products"}
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={() =>
@@ -2863,7 +2903,31 @@ ${SUPPORTIVE_FOOTER_LINE}`);
               ))}
             </div>
 
-            <h4 className="font-bold text-gray-900 mb-4 text-2xl">
+            
+
+          </div>
+        </div>
+      </AccordionSection>
+
+      <AccordionSection
+        id="message"
+        title="A Message from Dr. Lazuk"
+        subtitle="Reading this activates sharing/saving on Future Story images."
+        open={!!openSections.message}
+        onToggle={toggleSection}
+      >
+        <PostImageReflection
+          onSeen={() => {
+            if (!reflectionSeen) {
+              setReflectionSeen(true);
+              gaEvent('reflection_seen', { step: 'results' });
+              showToast("Thank you. Sharing and saving are now available.");
+            }
+          }}
+        />
+      </AccordionSection>
+      <AccordionSection id="treatments" title="Treatments">
+        <h4 className="font-bold text-gray-900 mb-4 text-2xl">
               Recommended Treatments
             </h4>
             <div className={`grid gap-4 ${hasAgingTile ? "" : "md:grid-cols-2"}`}>
@@ -3037,7 +3101,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 
       <AccordionSection
         id="guidance"
-        title="Recommended Products and Treatments"
+        title="Possible Paths Forward"
         subtitle="Personalized guidance mapped to your primary concern."
         open={!!openSections.guidance}
         onToggle={toggleSection}
@@ -3108,27 +3172,8 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                 </a>
               </div>
             ))}
-          </div>
-        </div>
       </AccordionSection>
 
-      <AccordionSection
-        id="message"
-        title="A Message from Dr. Lazuk"
-        subtitle="Reading this activates sharing/saving on Future Story images."
-        open={!!openSections.message}
-        onToggle={toggleSection}
-      >
-        <PostImageReflection
-          onSeen={() => {
-            if (!reflectionSeen) {
-              setReflectionSeen(true);
-              gaEvent('reflection_seen', { step: 'results' });
-              showToast("Thank you. Sharing and saving are now available.");
-            }
-          }}
-        />
-      </AccordionSection>
     </div>
   </div>
 )}
