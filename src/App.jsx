@@ -3267,7 +3267,6 @@ ${SUPPORTIVE_FOOTER_LINE}`);
             </div>
           </div>
         )}
-      )
       </div>
 
       <div className="bg-gray-900 text-white py-8 mt-12">
