@@ -2060,6 +2060,16 @@ ${SUPPORTIVE_FOOTER_LINE}`);
       ? (agingPreviewImages.tile || agingPreviewImages.agingTile || null)
       : null;
 
+  // Build visual payload for Overall Skin Health display
+  const visualPayload = useMemo(() => {
+    const serverPayload =
+      (analysisReport && typeof analysisReport === "object"
+        ? (analysisReport.canonical_payload || analysisReport.visual_payload || null)
+        : null);
+
+    return buildVisualPayload({ serverPayload });
+  }, [analysisReport]);
+
   const agingImages = useMemo(() => {
     const p = (agingPreviewImages && typeof agingPreviewImages === "object") ? agingPreviewImages : {};
 
