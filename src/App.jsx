@@ -2573,22 +2573,51 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 {step === 'results' && analysisReport && (
   <div className="space-y-6">
     <div className="flex justify-between items-center">
-      <h3 className="text-2xl font-bold text-gray-900">Your Results</h3>
+      <div>
+        <h3 className="text-3xl font-bold text-gray-900">
+          {(analysisReport?.client?.firstName || firstName || "Your")}, Your Personal Roadmap To Skin Health
+        </h3>
+        <p className="text-sm text-gray-600 mt-1">provided by skindoctor.ai</p>
+      </div>
       <button
-        onClick={resetAnalysis}
-        className="px-4 py-2 bg-gray-300 text-gray-900 font-bold hover:bg-gray-400 text-sm"
+        onClick={() => window.print()}
+        className="px-4 py-2 bg-gray-900 text-white font-bold hover:bg-gray-800 text-sm"
         type="button"
       >
-        New Analysis
+        Print / Save
       </button>
     </div>
 
-    {/* ✅ Default summary view (always visible) */}
-    <SummaryCard
-      ageRange={ageRange}
-      primaryConcern={primaryConcern}
-      analysisReport={analysisReport}
-    />
+    {/* Overall Skin Health - Prominent Display */}
+    <div className="bg-gradient-to-br from-gray-900 to-gray-800 text-white p-8 rounded-lg shadow-lg">
+      <div className="flex items-center justify-between">
+        <div className="flex-1">
+          <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wide mb-2">Overall Skin Health</h2>
+          <div className="flex items-baseline gap-3">
+            <span className="text-7xl font-extrabold">{visualPayload?.overall_score?.score ?? "—"}</span>
+            <span className="text-3xl text-gray-400">/100</span>
+            <span 
+              className="w-6 h-6 rounded-full ml-2" 
+              style={{ backgroundColor: ragColor(visualPayload?.overall_score?.rag || "unknown") }}
+            />
+          </div>
+        </div>
+        <div className="flex flex-col gap-3 text-sm">
+          <div className="flex items-center gap-2">
+            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: ragColor("green") }} />
+            <span className="text-gray-300">Green = Strong</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: ragColor("amber") }} />
+            <span className="text-gray-300">Amber = Moderate opportunity</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: ragColor("red") }} />
+            <span className="text-gray-300">Red = Priority focus</span>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <div className="flex flex-wrap gap-2 items-center">
       <button
