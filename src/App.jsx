@@ -2572,22 +2572,22 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <div className="text-3xl font-extrabold leading-tight text-gray-900">
-              {(analysisReport?.client?.firstName || firstName || "Your")}, Your Personal Roadmap To Skin Health
-            </div>
-            <div className="mt-2 text-sm font-semibold text-gray-500">
-              provided by skindoctor.ai
-            </div>
-          </div>
+                      {(analysisReport?.client?.firstName || firstName || "Your")}, Your Personal Roadmap To Skin Health
+                    </div>
+                    <div className="mt-2 text-sm font-semibold text-gray-500">
+                      provided by skindoctor.ai
+                    </div>
+                  </div>
 
-          <div className="flex items-center gap-2 print:hidden">
-            <button
-              onClick={() => window.print()}
-              className="px-4 py-2 bg-white border text-sm font-semibold hover:bg-gray-50"
-            >
-              Print / Save
-            </button>
-          </div>
-        </div>
+                  <div className="flex items-center gap-2 print:hidden">
+                    <button
+                      onClick={() => window.print()}
+                      className="px-4 py-2 bg-white border text-sm font-semibold hover:bg-gray-50"
+                    >
+                      Print / Save
+                    </button>
+                  </div>
+                </div>
 
         {/* Overall Skin Health (Hero) */}
         <div className="mt-5 border-2 border-black bg-white p-6">
@@ -3267,6 +3267,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
             </div>
           </div>
         )}
+      )
       </div>
 
       <div className="bg-gray-900 text-white py-8 mt-12">
