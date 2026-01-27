@@ -3183,8 +3183,9 @@ ${SUPPORTIVE_FOOTER_LINE}`);
         </div>
       </AccordionSection>
 
-            </div>
-          )}
+              </div>
+            )}
+          </div>
         )}
 
         {activeTab === 'chat' && (
