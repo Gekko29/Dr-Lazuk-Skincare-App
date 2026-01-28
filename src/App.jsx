@@ -2575,11 +2575,11 @@ ${SUPPORTIVE_FOOTER_LINE}`);
     <div className="flex justify-between items-center">
       <h3 className="text-2xl font-bold text-gray-900">Your Results</h3>
       <button
-        onClick={() => window.print()}
-        className="px-4 py-2 bg-gray-900 text-white font-bold hover:bg-gray-800 text-sm"
+        onClick={resetAnalysis}
+        className="px-4 py-2 bg-gray-300 text-gray-900 font-bold hover:bg-gray-400 text-sm"
         type="button"
       >
-        Print / Save
+        New Analysis
       </button>
     </div>
 
