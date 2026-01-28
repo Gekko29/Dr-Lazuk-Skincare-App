@@ -14,6 +14,7 @@ import {
 
 // ✅ Google Analytics helpers
 import { gaEvent, gaPageView, getGaClientId } from "./lib/ga";
+import EstheticsConciergeApp from "./esthetics/EstheticsConciergeApp";
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -729,7 +730,8 @@ const Modal = ({ title, body, onClose }) => {
       <div className="max-w-lg w-full bg-white border border-gray-200 shadow-lg p-6">
         <div className="flex justify-between items-start gap-4">
           <h3 className="text-lg font-bold text-gray-900">{title}</h3>
-          <button onClick={onClose} className="text-gray-700 hover:text-gray-900 font-bold" type="button">
+      <div className="text-sm text-gray-500">provided by skindoctor.ai</div>
+      <button onClick={onClose} className="text-gray-700 hover:text-gray-900 font-bold" type="button">
             ✕
           </button>
         </div>
@@ -1001,8 +1003,6 @@ const SummaryCard = ({ ageRange, primaryConcern, analysisReport }) => {
                 </div>
               </div>
 
-
-
               <div style={{ display:"grid", gridTemplateColumns:"1fr", gap:14, marginTop:14 }}>
                 {(visualPayload?.clusters || []).map((c) => (
                   <div key={c.cluster_id} style={{ border:"1px solid #e5e7eb", borderRadius:10, padding:12, background:"#fff" }}>
@@ -1196,7 +1196,7 @@ const AgencyLayer = ({ onChoose }) => {
         Nothing here is required. Choose what feels supportive.
       </p>
 
-      <div className="grid md:grid-cols-2 gap-3">
+      <div className="grid md:grid-cols-3 gap-3">
         <button
           onClick={() => onChoose?.("understand")}
           className="border-2 border-gray-300 hover:border-gray-900 hover:bg-gray-50 p-5 text-left"
@@ -1216,6 +1216,16 @@ const AgencyLayer = ({ onChoose }) => {
           <p className="font-bold text-gray-900">Guidance</p>
           <p className="text-sm text-gray-700 mt-1">
             Explore products and treatments tailored to your concern.
+          </p>
+        </button>
+        <button
+          onClick={() => onChoose?.("esthetics")}
+          className="border-2 border-gray-300 hover:border-gray-900 hover:bg-gray-50 p-5 text-left"
+          type="button"
+        >
+          <p className="font-bold text-gray-900">Esthetics</p>
+          <p className="text-sm text-gray-700 mt-1">
+            Explore esthetic treatments curated to your goals.
           </p>
         </button>
       </div>
@@ -1287,6 +1297,11 @@ SkinDoctor.ai`;
 };
 
 const DermatologyApp = () => {
+  // SPA mode switch: Esthetics Concierge
+  if (typeof window !== "undefined" && window.location.pathname === "/esthetics-concierge") {
+    return <EstheticsConciergeApp />;
+  }
+
   const [activeTab, setActiveTab] = useState('home');
   const [step, setStep] = useState('photo');
 
@@ -1998,7 +2013,15 @@ ${SUPPORTIVE_FOOTER_LINE}`);
     setChatLoading(false);
   };
 
-  const resetAnalysis = () => {
+    const handlePrint = () => {
+    try {
+      window.print();
+    } catch (e) {
+      // no-op
+    }
+  };
+
+const resetAnalysis = () => {
     gaEvent('analysis_reset', { fromStep: step });
 
     setCapturedImage(null);
@@ -2469,7 +2492,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 
                   <div className="flex gap-3">
                     <button
-                      onClick={resetAnalysis}
+                      onClick={handlePrint}
                       className="px-6 py-3 bg-gray-300 text-gray-900 font-bold hover:bg-gray-400"
                       type="button"
                     >
@@ -2555,13 +2578,16 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 {step === 'results' && analysisReport && (
   <div className="space-y-6">
     <div className="flex justify-between items-center">
-      <h3 className="text-2xl font-bold text-gray-900">Your Results</h3>
+      <div>
+        <h3 className="text-2xl font-bold text-gray-900">{(firstName || "Your") + ", Your Personal Roadmap To Skin Health"}</h3>
+        <p className="text-sm text-gray-500 mt-1">Provided by SkinDoctor.ai®</p>
+      </div>
       <button
-        onClick={resetAnalysis}
+        onClick={handlePrint}
         className="px-4 py-2 bg-gray-300 text-gray-900 font-bold hover:bg-gray-400 text-sm"
         type="button"
       >
-        New Analysis
+        Print / Save
       </button>
     </div>
 
@@ -2638,7 +2664,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
           {Array.isArray(analysisReport?.protocolRecommendation?.products) &&
           analysisReport.protocolRecommendation.products.length > 0 ? (
             <div className="mt-4">
-              <div className="text-sm font-semibold text-gray-900">What’s included</div>
+              <div className="text-sm font-semibold text-gray-900">What's included</div>
               <div className="mt-2 grid grid-cols-1 gap-2">
                 {analysisReport.protocolRecommendation.products.map((p, idx) => (
                   <div key={p?.name || idx} className="text-sm text-gray-700">
@@ -2663,6 +2689,10 @@ ${SUPPORTIVE_FOOTER_LINE}`);
           onChoose={(choice) => {
             setAgencyChoice(choice);
             gaEvent('agency_choice', { choice });
+
+            if (choice === "esthetics") {
+              window.location.assign("/esthetics-concierge");
+            }
           }}
         />
 
@@ -2746,54 +2776,6 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 
         {agencyChoice === 'guidance' && (
           <div className="mt-6 bg-white border-2 border-gray-900 p-8">
-            <h4 className="font-bold text-gray-900 mb-4 text-2xl">Recommended Protocol</h4>
-
-            {analysisReport?.protocolRecommendation ? (
-              <div className="border rounded-2xl p-5 bg-white">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <div className="text-sm font-semibold text-gray-500">Your Curated Protocol</div>
-                    <div className="mt-1 text-xl font-extrabold text-gray-900">
-                      {analysisReport.protocolRecommendation?.name || "Your Curated Protocol"}
-                    </div>
-                    {analysisReport.protocolRecommendation?.summary ? (
-                      <div className="mt-2 text-sm text-gray-700">
-                        {analysisReport.protocolRecommendation.summary}
-                      </div>
-                    ) : (
-                      <div className="mt-2 text-sm text-gray-500">
-                        Your protocol details will appear here after a successful analysis.
-                      </div>
-                    )}
-                  </div>
-
-                  {analysisReport.protocolRecommendation?.url ? (
-                    <a
-                      href={analysisReport.protocolRecommendation.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="shrink-0 inline-flex items-center justify-center rounded-xl bg-gray-900 text-white px-4 py-2 text-sm font-semibold hover:bg-black"
-                      onClick={() =>
-                        gaEvent('protocol_view_click', {
-                          protocolName: analysisReport.protocolRecommendation?.name || 'curated_protocol',
-                        })
-                      }
-                    >
-                      View Protocol
-                    </a>
-                  ) : null}
-                </div>
-              </div>
-            ) : (
-              <div className="text-sm text-gray-600">
-                Your recommended protocol will appear here once your analysis is complete.
-              </div>
-            )}
-          </div>
-        )}
-
-        {agencyChoice === 'guidance' && (
-          <div className="mt-6 bg-white border-2 border-gray-900 p-8">
             <h4 className="font-bold text-gray-900 mb-4 text-2xl">Recommended Products (Dr. Lazuk Cosmetics®)</h4>
             <div className="grid md:grid-cols-3 gap-4 mb-8">
               {analysisReport.recommendedProducts.map((p, i) => (
@@ -2853,7 +2835,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
                         primaryConcern
                       })
                     }
-                    className="block text-center bg-blue-600 text-white py-3 font-bold hover:bg-gray-700"
+                    className="block text-center bg-blue-600 text-white py-3 font-bold hover:bg-blue-700"
                   >
                     Book Appointment
                   </a>
@@ -2996,6 +2978,24 @@ ${SUPPORTIVE_FOOTER_LINE}`);
           </div>
         )}
       </AccordionSection>
+      <AccordionSection
+        id="message"
+        title="A Message from Dr. Lazuk"
+        subtitle="Reading this activates sharing/saving on Future Story images."
+        open={!!openSections.message}
+        onToggle={toggleSection}
+      >
+        <PostImageReflection
+          onSeen={() => {
+            if (!reflectionSeen) {
+              setReflectionSeen(true);
+              gaEvent('reflection_seen', { step: 'results' });
+              showToast("Thank you. Sharing and saving are now available.");
+            }
+          }}
+        />
+      </AccordionSection>
+
 
       <AccordionSection
         id="guidance"
@@ -3073,29 +3073,10 @@ ${SUPPORTIVE_FOOTER_LINE}`);
           </div>
         </div>
       </AccordionSection>
-
-      <AccordionSection
-        id="message"
-        title="A Message from Dr. Lazuk"
-        subtitle="Reading this activates sharing/saving on Future Story images."
-        open={!!openSections.message}
-        onToggle={toggleSection}
-      >
-        <PostImageReflection
-          onSeen={() => {
-            if (!reflectionSeen) {
-              setReflectionSeen(true);
-              gaEvent('reflection_seen', { step: 'results' });
-              showToast("Thank you. Sharing and saving are now available.");
-            }
-          }}
-        />
-      </AccordionSection>
     </div>
   </div>
 )}
 
-<canvas ref={canvasRef} className="hidden" />
           </div>
         )}
 
@@ -3180,11 +3161,12 @@ ${SUPPORTIVE_FOOTER_LINE}`);
         )}
       </div>
 
+        <canvas ref={canvasRef} className="hidden" />
       <div className="bg-gray-900 text-white py-8 mt-12">
         <div className="max-w-6xl mx-auto px-4 text-center">
           <p className="text-sm text-gray-400">© 2026 by SkinDoctor AI®</p>
           <p className="text-sm text-gray-400 mt-2">
-            Dr. Lazuk Cosmetics® | Dr. Lazuk Esthetics® | Contact: contact@skindoctor.ai
+            Dr. Lazuk Cosmetics® | Lazuk Esthetics® | Contact: contact@skindoctor.ai
           </p>
         </div>
       </div>
