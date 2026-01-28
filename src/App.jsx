@@ -970,53 +970,124 @@ const SummaryCard = ({ ageRange, primaryConcern, analysisReport }) => {
   }, [analysisReport]);
 
   return (
-    <div className="bg-white border-2 border-gray-900 p-6">
-      <div className="flex items-start justify-between gap-6">
-        <div className="flex-1">
-          <p className="text-[11px] tracking-wider text-gray-500 font-bold">DEFAULT SUMMARY VIEW</p>
-          <h4 className="text-2xl font-bold text-gray-900 mt-1">
-            What This Analysis Flagged — At a Glance
-          </h4>
-          <p className="text-sm text-gray-700 mt-2">
-            Everything below is optional. Expand only what you want to read.
-          </p>
+    <div className="bg-white border border-gray-200 shadow-lg rounded-xl overflow-hidden">
+      {/* Main header section - removed DEFAULT SUMMARY VIEW and Your AI Facial labels */}
+      <div className="bg-gradient-to-br from-slate-50 to-blue-50 px-8 py-6 border-b border-gray-200">
+        <div className="flex items-start justify-between gap-6">
+          <div className="flex-1">
+            <h4 className="text-3xl font-bold text-gray-900 leading-tight">
+              What This Analysis Flagged — At a Glance
+            </h4>
+            <p className="text-sm text-gray-600 mt-3">
+              Everything below is optional. Expand only what you want to read.
+            </p>
+          </div>
         </div>
-              <div style={{ display:"flex", justifyContent:"space-between", gap:16, alignItems:"flex-start", marginTop:14, paddingTop:12, borderTop:"1px solid #e5e7eb" }}>
-                <div>
-                  <div style={{ fontSize:24, fontWeight:700, lineHeight:1.15 }}>Your AI Facial Skin Analysis, by Dr. Lazuk</div>
-                  <div style={{ fontSize:15, marginTop:4, color:"#334155" }}>Your Personal Roadmap To Skin Health</div>
-                  <div style={{ fontSize:11, marginTop:2, color:"#64748b" }}>skindoctor.ai</div>
-                </div>
+      </div>
 
-                <div style={{ minWidth:280, textAlign:"right" }}>
-                  <div style={{ fontSize:12, color:"#64748b" }}>Overall Skin Health</div>
-                  <div style={{ display:"flex", justifyContent:"flex-end", alignItems:"baseline", gap:8, marginTop:6 }}>
-                    <span style={{ fontSize:56, fontWeight:800, lineHeight:1 }}>{visualPayload?.overall_score?.score ?? "—"}</span>
-                    <span style={{ fontSize:18, color:"#64748b" }}>/100</span>
-                    <span style={{ width:14, height:14, borderRadius:999, display:"inline-block", backgroundColor: ragColor(visualPayload?.overall_score?.rag || "unknown") }} />
-                  </div>
-                  <div style={{ display:"flex", flexDirection:"column", gap:6, marginTop:10, fontSize:11, color:"#475569", alignItems:"flex-end" }}>
-                    <span><span style={{ width:10, height:10, borderRadius:999, display:"inline-block", marginRight:6, backgroundColor: ragColor("green") }} /> Green = Strong</span>
-                    <span><span style={{ width:10, height:10, borderRadius:999, display:"inline-block", marginRight:6, backgroundColor: ragColor("amber") }} /> Amber = Moderate opportunity</span>
-                    <span><span style={{ width:10, height:10, borderRadius:999, display:"inline-block", marginRight:6, backgroundColor: ragColor("red") }} /> Red = Priority focus</span>
-                  </div>
+      {/* Score display section with premium card design */}
+      <div className="px-8 py-8">
+        <div className="flex items-center justify-between gap-8 mb-8">
+          {/* Overall Score - Make it dramatic */}
+          <div className="flex-1">
+            <div className="inline-flex items-center gap-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-2 rounded-full shadow-md mb-4">
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/>
+                <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clipRule="evenodd"/>
+              </svg>
+              <span className="text-sm font-semibold tracking-wide">OVERALL SKIN HEALTH SCORE</span>
+            </div>
+            
+            <div className="relative inline-block">
+              {/* Circular progress ring background */}
+              <svg className="transform -rotate-90" width="160" height="160">
+                <circle
+                  cx="80"
+                  cy="80"
+                  r="70"
+                  stroke="#e5e7eb"
+                  strokeWidth="12"
+                  fill="none"
+                />
+                <circle
+                  cx="80"
+                  cy="80"
+                  r="70"
+                  stroke={`url(#scoreGradient-${visualPayload?.overall_score?.rag || 'unknown'})`}
+                  strokeWidth="12"
+                  fill="none"
+                  strokeDasharray={`${2 * Math.PI * 70}`}
+                  strokeDashoffset={`${2 * Math.PI * 70 * (1 - ((visualPayload?.overall_score?.score ?? 0) / 100))}`}
+                  strokeLinecap="round"
+                  className="transition-all duration-1000"
+                />
+                <defs>
+                  <linearGradient id="scoreGradient-green" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#10b981" />
+                    <stop offset="100%" stopColor="#059669" />
+                  </linearGradient>
+                  <linearGradient id="scoreGradient-amber" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#f59e0b" />
+                    <stop offset="100%" stopColor="#d97706" />
+                  </linearGradient>
+                  <linearGradient id="scoreGradient-red" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#ef4444" />
+                    <stop offset="100%" stopColor="#dc2626" />
+                  </linearGradient>
+                  <linearGradient id="scoreGradient-unknown" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#6b7280" />
+                    <stop offset="100%" stopColor="#4b5563" />
+                  </linearGradient>
+                </defs>
+              </svg>
+              
+              {/* Score number in center */}
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="text-5xl font-extrabold text-gray-900">{visualPayload?.overall_score?.score ?? "—"}</div>
+                  <div className="text-lg text-gray-500 font-medium">/100</div>
                 </div>
               </div>
+            </div>
 
-              <div style={{ display:"grid", gridTemplateColumns:"1fr", gap:14, marginTop:14 }}>
+            {/* RAG Legend */}
+            <div className="mt-6 space-y-2">
+              <div className="flex items-center gap-3 text-sm">
+                <div className="w-4 h-4 rounded-full bg-gradient-to-br from-green-500 to-green-600 shadow-sm"></div>
+                <span className="text-gray-700 font-medium">Green = Strong</span>
+              </div>
+              <div className="flex items-center gap-3 text-sm">
+                <div className="w-4 h-4 rounded-full bg-gradient-to-br from-amber-500 to-amber-600 shadow-sm"></div>
+                <span className="text-gray-700 font-medium">Amber = Moderate opportunity</span>
+              </div>
+              <div className="flex items-center gap-3 text-sm">
+                <div className="w-4 h-4 rounded-full bg-gradient-to-br from-red-500 to-red-600 shadow-sm"></div>
+                <span className="text-gray-700 font-medium">Red = Priority focus</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Cluster breakdown section */}
+        <div className="space-y-4 mt-8">
                 {(visualPayload?.clusters || []).map((c) => (
-                  <div key={c.cluster_id} style={{ border:"1px solid #e5e7eb", borderRadius:10, padding:12, background:"#fff" }}>
-                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, marginBottom:8 }}>
-                      <div style={{ fontSize:14, fontWeight:700 }}>{c.display_name}</div>
-                      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                        <span style={{ width:8, height:8, borderRadius:999, background: ragColor(c.rag) }} />
-                        <span style={{ fontSize:12, fontWeight:700, color:"#111827" }}>{Math.round(c.score)}/100</span>
+                  <div key={c.cluster_id} className="bg-gradient-to-br from-white to-gray-50 border border-gray-200 rounded-xl p-5 shadow-md hover:shadow-lg transition-shadow duration-200">
+                    <div className="flex items-center justify-between gap-4 mb-4">
+                      <h5 className="text-lg font-bold text-gray-900">{c.display_name}</h5>
+                      <div className="flex items-center gap-3 bg-white px-3 py-1.5 rounded-full border border-gray-200 shadow-sm">
+                        <span className={`w-2.5 h-2.5 rounded-full ${
+                          c.rag === 'green' ? 'bg-green-500' : 
+                          c.rag === 'amber' ? 'bg-amber-500' : 
+                          c.rag === 'red' ? 'bg-red-500' : 'bg-gray-400'
+                        }`} />
+                        <span className="text-sm font-bold text-gray-900">{Math.round(c.score)}/100</span>
                       </div>
                     </div>
-                    <div style={{ display:"flex", gap:12, alignItems:"flex-start" }}>
-                      <div style={{ flex:"0 0 auto" }}>
-                    {/* radial cluster */}
-                    <svg width="140" height="140" viewBox="0 0 140 140" style={{ display:"block", margin:"0 auto" }}>
+                    <div className="flex gap-6 items-start">
+                      <div className="flex-shrink-0">
+                    {/* radial cluster with enhanced styling */}
+                    <div className="bg-white rounded-lg p-2 shadow-sm">
+                    <svg width="140" height="140" viewBox="0 0 140 140" style={{ display:"block" }}>
                       {c.metrics.map((m, i) => {
                         const r = ringRadius - i * ringGap;
                         const circ = 2 * Math.PI * r;
@@ -1041,18 +1112,23 @@ const SummaryCard = ({ ageRange, primaryConcern, analysisReport }) => {
                           </g>
                         );
                       })}
-                      <text x="70" y="74" textAnchor="middle" fontSize="22" fontWeight="800" fill="#111827">{Math.round(c.score)}</text>
-                      <text x="70" y="94" textAnchor="middle" fontSize="12" fontWeight="600" fill="#6B7280">/100</text>
+                      <text x="70" y="74" textAnchor="middle" fontSize="24" fontWeight="800" fill="#111827">{Math.round(c.score)}</text>
+                      <text x="70" y="94" textAnchor="middle" fontSize="13" fontWeight="600" fill="#6B7280">/100</text>
                     </svg>
+                    </div>
                       </div>
 
-                      <div style={{ flex:1, display:"flex", flexDirection:"column", gap:8 }}>
+                      <div className="flex-1 space-y-2.5">
                         {(c.metrics || []).map((m) => (
-                          <div key={m.metric_id} style={{ display:"flex", justifyContent:"space-between", gap:12, alignItems:"center" }}>
-                            <div style={{ fontSize:12, color:"#0f172a" }}>{m.display_name}</div>
-                            <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-                              <span style={{ fontSize:16, fontWeight:700, minWidth:28, textAlign:"right" }}>{m.score}</span>
-                              <span style={{ width:10, height:10, borderRadius:999, display:"inline-block", backgroundColor: ragColor(m.rag) }} />
+                          <div key={m.metric_id} className="flex justify-between items-center gap-4 py-1.5 px-2 hover:bg-white/60 rounded-md transition-colors">
+                            <div className="text-sm font-medium text-gray-700">{m.display_name}</div>
+                            <div className="flex gap-3 items-center">
+                              <span className="text-base font-bold text-gray-900 min-w-[36px] text-right">{m.score}</span>
+                              <div className={`w-2.5 h-2.5 rounded-full ${
+                                m.rag === 'green' ? 'bg-green-500' : 
+                                m.rag === 'amber' ? 'bg-amber-500' : 
+                                m.rag === 'red' ? 'bg-red-500' : 'bg-gray-400'
+                              }`} />
                             </div>
                           </div>
                         ))}
@@ -1063,29 +1139,42 @@ const SummaryCard = ({ ageRange, primaryConcern, analysisReport }) => {
               </div>
 </div>
 
-      <div className="grid md:grid-cols-2 gap-4 mt-6">
-        <div className="border border-gray-200 bg-gray-50 p-4">
-          <p className="text-[11px] tracking-wider text-gray-500 font-bold mb-2">CONTEXT</p>
-          <p className="text-sm text-gray-800">
-            <span className="font-bold text-gray-900">Age Range:</span> {ageRange || "—"}
-          </p>
-          <p className="text-sm text-gray-800 mt-1">
-            <span className="font-bold text-gray-900">Primary Concern:</span> {primaryConcern || "—"}
-          </p>
-          {analysisReport?.fitzpatrickType && (
-            <p className="text-sm text-gray-800 mt-1">
-              <span className="font-bold text-gray-900">Fitzpatrick:</span> {analysisReport.fitzpatrickType}
+      {/* Bottom info cards */}
+      <div className="grid md:grid-cols-2 gap-5 mt-8 px-8 pb-8">
+        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5 shadow-sm">
+          <div className="flex items-center gap-2 mb-3">
+            <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd"/>
+            </svg>
+            <p className="text-xs tracking-wider text-blue-900 font-bold uppercase">Context</p>
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm text-gray-800">
+              <span className="font-bold text-blue-900">Age Range:</span> <span className="text-gray-900">{ageRange || "—"}</span>
             </p>
-          )}
+            <p className="text-sm text-gray-800">
+              <span className="font-bold text-blue-900">Primary Concern:</span> <span className="text-gray-900">{primaryConcern || "—"}</span>
+            </p>
+            {analysisReport?.fitzpatrickType && (
+              <p className="text-sm text-gray-800">
+                <span className="font-bold text-blue-900">Fitzpatrick:</span> <span className="text-gray-900">{analysisReport.fitzpatrickType}</span>
+              </p>
+            )}
+          </div>
         </div>
 
-        <div className="border border-gray-200 bg-gray-50 p-4">
-          <p className="text-[11px] tracking-wider text-gray-500 font-bold mb-2">TOP SIGNALS</p>
+        <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-5 shadow-sm">
+          <div className="flex items-center gap-2 mb-3">
+            <svg className="w-4 h-4 text-amber-600" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+            </svg>
+            <p className="text-xs tracking-wider text-amber-900 font-bold uppercase">Top Signals</p>
+          </div>
           {top.length ? (
-            <ul className="text-sm text-gray-800 space-y-2">
+            <ul className="space-y-2.5">
               {top.slice(0, 3).map((s, i) => (
-                <li key={i} className="flex items-center justify-between gap-3">
-                  <span className="font-semibold">{s.title}</span>
+                <li key={i} className="flex items-center justify-between gap-3 bg-white/60 px-3 py-2 rounded-lg">
+                  <span className="font-semibold text-sm text-gray-900">{s.title}</span>
                   <RagPill score={typeof s.score === "number" ? s.score : NaN} />
                 </li>
               ))}
@@ -1096,9 +1185,15 @@ const SummaryCard = ({ ageRange, primaryConcern, analysisReport }) => {
         </div>
       </div>
 
-      <div className="border border-gray-200 bg-white p-4 mt-4">
-        <p className="text-[11px] tracking-wider text-gray-500 font-bold mb-2">SHORT EXCERPT</p>
-        <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+      {/* Excerpt section */}
+      <div className="bg-gradient-to-r from-gray-50 to-slate-50 border-t border-gray-200 px-8 py-6">
+        <div className="flex items-center gap-2 mb-3">
+          <svg className="w-4 h-4 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd"/>
+          </svg>
+          <p className="text-xs tracking-wider text-gray-600 font-bold uppercase">Short Excerpt</p>
+        </div>
+        <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
           {excerpt || "Your short excerpt will appear here when the report loads."}
         </p>
       </div>
