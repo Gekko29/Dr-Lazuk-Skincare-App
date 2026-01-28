@@ -2578,7 +2578,10 @@ const resetAnalysis = () => {
 {step === 'results' && analysisReport && (
   <div className="space-y-6">
     <div className="flex justify-between items-center">
-      <h3 className="text-2xl font-bold text-gray-900">{(firstName || "Your") + ", Your Personal Roadmap To Skin Health"}</h3>
+      <div>
+        <h3 className="text-2xl font-bold text-gray-900">{(firstName || "Your") + ", Your Personal Roadmap To Skin Health"}</h3>
+        <p className="text-sm text-gray-500 mt-1">Provided by SkinDoctor.ai®</p>
+      </div>
       <button
         onClick={handlePrint}
         className="px-4 py-2 bg-gray-300 text-gray-900 font-bold hover:bg-gray-400 text-sm"
