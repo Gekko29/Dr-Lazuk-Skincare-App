@@ -2628,118 +2628,69 @@ const resetAnalysis = () => {
       </AccordionSection>
 
       <AccordionSection
-        id="protocol"
-        title="Your Recommended Protocol"
-        subtitle="Exactly one curated set based on your analysis."
-        open={!!openSections.protocol}
-        onToggle={toggleSection}
-      >
-        {analysisReport?.protocolRecommendation ? (
-          <div className="bg-white border-2 border-gray-900 p-8">
-            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-              <div className="min-w-0">
-                <div className="text-sm font-semibold text-gray-500">Your Recommended Protocol</div>
-                <div className="mt-1 text-2xl font-extrabold text-gray-900">
-                  {(analysisReport.protocolPrimary?.name || analysisReport.protocolRecommendation?.name) || "Your Curated Protocol"}
-                </div>
-
-                {(analysisReport.protocolPrimary?.tier || analysisReport.protocolRecommendation?.tier) && (
-                  <div className="mt-2 inline-flex items-center px-3 py-1 text-xs font-bold border border-gray-300 bg-gray-50 text-gray-900">
-                    {(analysisReport.protocolPrimary?.tier || analysisReport.protocolRecommendation?.tier)}
-                  </div>
-                )}
-
-                {(analysisReport.protocolPrimary?.summary || analysisReport.protocolRecommendation?.summary) && (
-                  <p className="mt-4 text-sm text-gray-700">
-                    {(analysisReport.protocolPrimary?.summary || analysisReport.protocolRecommendation?.summary)}
-                  </p>
-                )}
-
-
-                {analysisReport.protocolSecondary?.name && (
-                  <div className="mt-6 border-t pt-4">
-                    <div className="text-sm font-semibold text-gray-500">Secondary Protocol (Optional)</div>
-                    <div className="mt-1 text-lg font-extrabold text-gray-900">
-                      {analysisReport.protocolSecondary.name}
-                    </div>
-                    {analysisReport.protocolSecondary.tier && (
-                      <div className="mt-2 inline-flex items-center px-3 py-1 text-xs font-bold border border-gray-300 bg-gray-50 text-gray-900">
-                        {analysisReport.protocolSecondary.tier}
-                      </div>
-                    )}
-                    {analysisReport.protocolSecondary.url && (
-                      <div className="mt-3">
-                        <a
-                          className="text-sm font-semibold underline text-gray-900"
-                          href={analysisReport.protocolSecondary.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          View Secondary Protocol
-                        </a>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {analysisReport.protocolNonExclusivityClause && (
-                  <div className="mt-6 p-4 bg-gray-50 border border-gray-200 text-sm text-gray-700">
-                    {analysisReport.protocolNonExclusivityClause}
-                  </div>
-                )}
-
-
-                {analysisReport.protocolRecommendation?.reasoning && (
-                  <p className="mt-3 text-sm text-gray-700">
-                    <span className="font-semibold text-gray-900">Why this was chosen:</span> {analysisReport.protocolRecommendation.reasoning}
-                  </p>
-                )}
-              </div>
-
-              {(analysisReport.protocolPrimary?.url || analysisReport.protocolRecommendation?.url) && (
-                <div className="shrink-0">
-                  <a
-                    href={analysisReport.protocolRecommendation.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() =>
-                      gaEvent('protocol_click', {
-                        name: (analysisReport.protocolPrimary?.name || analysisReport.protocolRecommendation?.name) || 'unknown',
-                        tier: (analysisReport.protocolPrimary?.tier || analysisReport.protocolRecommendation?.tier) || 'unknown',
-                        primaryConcern
-                      })
-                    }
-                    className="block text-center bg-gray-900 text-white px-6 py-3 font-bold hover:bg-gray-800"
-                  >
-                    View Protocol
-                  </a>
-                </div>
-              )}
-            </div>
-
-            {Array.isArray(analysisReport.protocolRecommendation?.treatments) &&
-              analysisReport.protocolRecommendation.treatments.length > 0 && (
-                <div className="mt-6 border-t border-gray-200 pt-6">
-                  <h5 className="text-sm font-extrabold text-gray-900 mb-3">What’s inside</h5>
-                  <div className="grid md:grid-cols-2 gap-4">
-                    {analysisReport.protocolRecommendation.treatments.map((t, i) => (
-                      <div key={i} className="bg-gray-50 border border-gray-200 p-4">
-                        <div className="font-bold text-gray-900">{t?.name || "Item"}</div>
-                        {t?.why && <div className="text-sm text-gray-700 mt-1">{t.why}</div>}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+  id="protocol"
+  title={`${firstName}, Your Curated Protocol`}
+  defaultOpen
+>
+  {analysisReport?.protocolPrimary || analysisReport?.protocolRecommendation ? (
+    <div className="bg-white border-2 border-gray-900 p-8">
+      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
+        <div className="min-w-0">
+          <div className="text-sm font-semibold text-gray-500">Your Curated Protocol</div>
+          <div className="mt-1 text-2xl font-extrabold text-gray-900">
+            {analysisReport?.protocolPrimary?.name ||
+              analysisReport?.protocolRecommendation?.name ||
+              `${firstName}, Your Curated Protocol`}
           </div>
-        ) : (
-          <div className="bg-gray-50 border border-gray-200 p-6">
-            <p className="text-sm text-gray-700">
-              A protocol recommendation was not provided for this result.
-            </p>
+
+          {(analysisReport?.protocolPrimary?.tier ||
+            analysisReport?.protocolRecommendation?.tier) && (
+            <div className="mt-2 text-sm text-gray-700">
+              Tier: {analysisReport?.protocolPrimary?.tier || analysisReport?.protocolRecommendation?.tier}
+            </div>
+          )}
+
+          {(analysisReport?.protocolPrimary?.summary ||
+            analysisReport?.protocolRecommendation?.summary) && (
+            <div className="mt-3 text-sm text-gray-700">
+              {analysisReport?.protocolPrimary?.summary || analysisReport?.protocolRecommendation?.summary}
+            </div>
+          )}
+
+          {analysisReport?.protocolRecommendation?.reasoning && (
+            <div className="mt-4 text-sm text-gray-700">
+              <div className="font-semibold text-gray-900">Why this protocol was chosen</div>
+              <div className="mt-1">{analysisReport.protocolRecommendation.reasoning}</div>
+            </div>
+          )}
+
+          {analysisReport?.protocolNonExclusivityClause && (
+            <div className="mt-4 text-xs text-gray-500">{analysisReport.protocolNonExclusivityClause}</div>
+          )}
+        </div>
+
+        {(analysisReport?.protocolPrimary?.url || analysisReport?.protocolRecommendation?.url) && (
+          <div className="shrink-0">
+            <a
+              href={
+                analysisReport?.protocolPrimary?.url ||
+                analysisReport?.protocolRecommendation?.url ||
+                "#"
+              }
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center justify-center rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800"
+            >
+              View Protocol
+            </a>
           </div>
         )}
-      </AccordionSection>
+      </div>
+    </div>
+  ) : (
+    <div className="text-sm text-gray-600">Protocol recommendation not available.</div>
+  )}
+</AccordionSection>
 
 
       <AccordionSection
@@ -3042,6 +2993,24 @@ const resetAnalysis = () => {
           </div>
         )}
       </AccordionSection>
+      <AccordionSection
+        id="message"
+        title="A Message from Dr. Lazuk"
+        subtitle="Reading this activates sharing/saving on Future Story images."
+        open={!!openSections.message}
+        onToggle={toggleSection}
+      >
+        <PostImageReflection
+          onSeen={() => {
+            if (!reflectionSeen) {
+              setReflectionSeen(true);
+              gaEvent('reflection_seen', { step: 'results' });
+              showToast("Thank you. Sharing and saving are now available.");
+            }
+          }}
+        />
+      </AccordionSection>
+
 
       <AccordionSection
         id="guidance"
@@ -3118,24 +3087,6 @@ const resetAnalysis = () => {
             ))}
           </div>
         </div>
-      </AccordionSection>
-
-      <AccordionSection
-        id="message"
-        title="A Message from Dr. Lazuk"
-        subtitle="Reading this activates sharing/saving on Future Story images."
-        open={!!openSections.message}
-        onToggle={toggleSection}
-      >
-        <PostImageReflection
-          onSeen={() => {
-            if (!reflectionSeen) {
-              setReflectionSeen(true);
-              gaEvent('reflection_seen', { step: 'results' });
-              showToast("Thank you. Sharing and saving are now available.");
-            }
-          }}
-        />
       </AccordionSection>
     </div>
   </div>
