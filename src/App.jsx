@@ -1202,25 +1202,101 @@ const SummaryCard = ({ ageRange, primaryConcern, analysisReport }) => {
 };
 
 /* ---------------------------------------
-   Accordion (multi-open)
+   Accordion (multi-open) - ENHANCED
 --------------------------------------- */
 const AccordionSection = ({ id, title, subtitle, open, onToggle, children }) => {
+  // Icon mapping for each section
+  const getIcon = () => {
+    switch(id) {
+      case 'focus':
+        return (
+          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/>
+            <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm9.707 5.707a1 1 0 00-1.414-1.414L9 12.586l-1.293-1.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/>
+          </svg>
+        );
+      case 'protocol':
+        return (
+          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/>
+            <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clipRule="evenodd"/>
+          </svg>
+        );
+      case 'paths':
+        return (
+          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M7 2a1 1 0 00-.707 1.707L7 4.414v3.758a1 1 0 01-.293.707l-4 4C.817 14.769 2.156 18 4.828 18h10.343c2.673 0 4.012-3.231 2.122-5.121l-4-4A1 1 0 0113 8.172V4.414l.707-.707A1 1 0 0013 2H7zm2 6.172V4h2v4.172a3 3 0 00.879 2.12l1.027 1.028a4 4 0 00-2.171.102l-.47.156a4 4 0 01-2.53 0l-.563-.187a1.993 1.993 0 00-.114-.035l1.063-1.063A3 3 0 009 8.172z" clipRule="evenodd"/>
+          </svg>
+        );
+      case 'structured_report':
+        return (
+          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd"/>
+          </svg>
+        );
+      case 'report':
+        return (
+          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M2 5a2 2 0 012-2h8a2 2 0 012 2v10a2 2 0 002 2H4a2 2 0 01-2-2V5zm3 1h6v4H5V6zm6 6H5v2h6v-2z" clipRule="evenodd"/>
+            <path d="M15 7h1a2 2 0 012 2v5.5a1.5 1.5 0 01-3 0V7z"/>
+          </svg>
+        );
+      case 'future':
+        return (
+          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd"/>
+          </svg>
+        );
+      case 'message':
+        return (
+          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clipRule="evenodd"/>
+          </svg>
+        );
+      case 'guidance':
+        return (
+          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3zM3.31 9.397L5 10.12v4.102a8.969 8.969 0 00-1.05-.174 1 1 0 01-.89-.89 11.115 11.115 0 01.25-3.762zM9.3 16.573A9.026 9.026 0 007 14.935v-3.957l1.818.78a3 3 0 002.364 0l5.508-2.361a11.026 11.026 0 01.25 3.762 1 1 0 01-.89.89 8.968 8.968 0 00-5.35 2.524 1 1 0 01-1.4 0zM6 18a1 1 0 001-1v-2.065a8.935 8.935 0 00-2-.712V17a1 1 0 001 1z"/>
+          </svg>
+        );
+      default:
+        return (
+          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd"/>
+          </svg>
+        );
+    }
+  };
+
   return (
-    <div className="border border-gray-200 bg-white">
+    <div className={`border border-gray-200 bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 ${open ? 'ring-2 ring-blue-100' : ''}`}>
       <button
         onClick={() => onToggle?.(id)}
-        className="w-full flex items-center justify-between gap-4 px-6 py-5 text-left hover:bg-gray-50"
+        className="w-full flex items-center justify-between gap-4 px-6 py-5 text-left hover:bg-gradient-to-r hover:from-gray-50 hover:to-blue-50 transition-all duration-200 group"
         type="button"
         aria-expanded={open ? "true" : "false"}
       >
-        <div>
-          <p className="text-base font-bold text-gray-900">{title}</p>
-          {subtitle && <p className="text-sm text-gray-700 mt-1">{subtitle}</p>}
+        <div className="flex items-center gap-3 flex-1">
+          <div className={`${open ? 'text-blue-600' : 'text-gray-500'} group-hover:text-blue-600 transition-colors`}>
+            {getIcon()}
+          </div>
+          <div>
+            <p className="text-base font-bold text-gray-900 group-hover:text-blue-900 transition-colors">{title}</p>
+            {subtitle && <p className="text-sm text-gray-600 mt-1">{subtitle}</p>}
+          </div>
         </div>
-        <div className="text-gray-700 font-bold text-xl">{open ? "−" : "+"}</div>
+        <div className={`${open ? 'text-blue-600 rotate-180' : 'text-gray-400'} group-hover:text-blue-600 font-bold text-2xl transition-all duration-200`}>
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7"/>
+          </svg>
+        </div>
       </button>
 
-      {open && <div className="px-6 pb-6">{children}</div>}
+      {open && (
+        <div className="px-6 pb-6 transition-all duration-300 ease-in-out">
+          {children}
+        </div>
+      )}
     </div>
   );
 };
@@ -2724,22 +2800,31 @@ const resetAnalysis = () => {
       analysisReport={analysisReport}
     />
 
-    <div className="flex flex-wrap gap-2 items-center">
+    <div className="flex flex-wrap gap-3 items-center mb-4">
       <button
         onClick={openKeySections}
-        className="px-4 py-2 bg-gray-900 text-white font-bold hover:bg-gray-800 text-sm"
+        className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold hover:from-blue-700 hover:to-blue-800 shadow-sm hover:shadow-md transition-all duration-200 rounded-lg text-sm"
         type="button"
       >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>
+        </svg>
         Expand Key Sections
       </button>
       <button
         onClick={collapseAll}
-        className="px-4 py-2 bg-white text-gray-900 font-bold hover:bg-gray-50 text-sm border border-gray-300"
+        className="flex items-center gap-2 px-5 py-2.5 bg-white text-gray-700 font-semibold hover:bg-gray-50 shadow-sm hover:shadow-md transition-all duration-200 rounded-lg text-sm border-2 border-gray-200"
         type="button"
       >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/>
+        </svg>
         Collapse All
       </button>
-      <p className="text-xs text-gray-600 ml-1">Multi-open is enabled.</p>
+      <div className="flex items-center gap-2 ml-2">
+        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+        <p className="text-xs text-gray-600 font-medium">Multi-open enabled</p>
+      </div>
     </div>
 
     <div className="space-y-3">
