@@ -2443,6 +2443,24 @@ const resetAnalysis = () => {
               <BookOpen size={20} strokeWidth={2.5} />
               <span>Services</span>
             </button>
+            <button
+              onClick={() => {
+                setActiveTab('concierge');
+                gaEvent('tab_changed', { tab: 'concierge' });
+              }}
+              className={`flex items-center gap-2 px-6 py-4 font-semibold transition-all duration-200 relative ${
+                activeTab === 'concierge'
+                  ? 'text-blue-900 bg-blue-50'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              }`}
+              type="button"
+            >
+              {activeTab === 'concierge' && (
+                <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-600 to-blue-400"></div>
+              )}
+              <Sparkles size={20} strokeWidth={2.5} />
+              <span>Esthetics Concierge</span>
+            </button>
           </div>
         </div>
       </div>
@@ -3074,18 +3092,29 @@ const resetAnalysis = () => {
         onToggle={toggleSection}
       >
         {analysisReport?.structuredReportSections?.length ? (
-          <div className="bg-white border-2 border-gray-900 p-6">
-            {analysisReport.structuredReportSections.map((s) => (
-              <div key={s.n} className="mb-6">
-                <div className="text-sm font-semibold text-gray-500">{s.n}. {s.title}</div>
-                <div className="mt-2 text-sm text-gray-800 whitespace-pre-line">
-                  {(s.text || s.body || s.plain || "").toString()}
+          <div className="space-y-4">
+            {analysisReport.structuredReportSections.map((s, index) => (
+              <div key={s.n} className="bg-gradient-to-br from-white to-gray-50 border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">
+                <div className="flex items-start gap-4">
+                  <div className="flex-shrink-0">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-lg shadow-md">
+                      {s.n}
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="text-lg font-bold text-gray-900 mb-3">{s.title}</h4>
+                    <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+                      {(s.text || s.body || s.plain || "").toString()}
+                    </div>
+                  </div>
                 </div>
               </div>
             ))}
           </div>
         ) : (
-          <div className="text-sm text-gray-600">Structured sections not available.</div>
+          <div className="text-sm text-gray-600 bg-gray-50 p-6 rounded-lg border border-gray-200">
+            Structured sections not available.
+          </div>
         )}
       </AccordionSection>
 
@@ -3097,14 +3126,35 @@ const resetAnalysis = () => {
         open={!!openSections.report}
         onToggle={toggleSection}
       >
-        <div className="bg-white border border-gray-200 p-6">
-          <h4 className="text-xl font-bold text-gray-900 mb-2">
-            What I’m Seeing (Cosmetic Education)
-          </h4>
+        <div className="bg-gradient-to-br from-white via-blue-50/30 to-white border-2 border-blue-100 rounded-xl p-8 shadow-md">
+          <div className="flex items-center gap-3 mb-6 pb-4 border-b-2 border-blue-100">
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-lg">
+              <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M9 4.804A7.968 7.968 0 005.5 4c-1.255 0-2.443.29-3.5.804v10A7.969 7.969 0 015.5 14c1.669 0 3.218.51 4.5 1.385A7.962 7.962 0 0114.5 14c1.255 0 2.443.29 3.5.804v-10A7.968 7.968 0 0014.5 4c-1.255 0-2.443.29-3.5.804V12a1 1 0 11-2 0V4.804z"/>
+              </svg>
+            </div>
+            <div>
+              <h4 className="text-2xl font-extrabold text-gray-900">
+                What I'm Seeing
+              </h4>
+              <p className="text-sm text-gray-600 font-medium mt-1">Cosmetic Education & Analysis</p>
+            </div>
+          </div>
 
-          <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-            {analysisReport?.report || "Your report is loading."}
-          </p>
+          <div className="prose prose-sm max-w-none">
+            <div className="text-base text-gray-800 leading-relaxed whitespace-pre-wrap" style={{ lineHeight: '1.8' }}>
+              {analysisReport?.report || "Your comprehensive report is loading..."}
+            </div>
+          </div>
+          
+          <div className="mt-8 pt-6 border-t border-blue-100">
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd"/>
+              </svg>
+              <span className="italic">This analysis is for cosmetic education purposes only and does not constitute medical advice.</span>
+            </div>
+          </div>
         </div>
       </AccordionSection>
 
@@ -3369,6 +3419,17 @@ const resetAnalysis = () => {
               ))}
             </div>
           </div>
+        )}
+
+        {activeTab === 'concierge' && (
+          <EstheticsConciergeApp 
+            analysisReport={analysisReport}
+            userContext={{
+              firstName: firstName || null,
+              ageRange: ageRange || null,
+              primaryConcern: primaryConcern || null
+            }}
+          />
         )}
       </div>
 
