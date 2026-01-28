@@ -730,7 +730,8 @@ const Modal = ({ title, body, onClose }) => {
       <div className="max-w-lg w-full bg-white border border-gray-200 shadow-lg p-6">
         <div className="flex justify-between items-start gap-4">
           <h3 className="text-lg font-bold text-gray-900">{title}</h3>
-          <button onClick={onClose} className="text-gray-700 hover:text-gray-900 font-bold" type="button">
+      <div className="text-sm text-gray-500">provided by skindoctor.ai</div>
+      <button onClick={onClose} className="text-gray-700 hover:text-gray-900 font-bold" type="button">
             ✕
           </button>
         </div>
@@ -1060,11 +1061,7 @@ const SummaryCard = ({ ageRange, primaryConcern, analysisReport }) => {
                   </div>
                 ))}
               </div>
-
-        <div className="text-gray-700">
-          <StaticMapPreview clusters={visualPayload?.clusters || []} />
-        </div>
-      </div>
+</div>
 
       <div className="grid md:grid-cols-2 gap-4 mt-6">
         <div className="border border-gray-200 bg-gray-50 p-4">
@@ -2016,7 +2013,15 @@ ${SUPPORTIVE_FOOTER_LINE}`);
     setChatLoading(false);
   };
 
-  const resetAnalysis = () => {
+    const handlePrint = () => {
+    try {
+      window.print();
+    } catch (e) {
+      // no-op
+    }
+  };
+
+const resetAnalysis = () => {
     gaEvent('analysis_reset', { fromStep: step });
 
     setCapturedImage(null);
@@ -2487,7 +2492,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 
                   <div className="flex gap-3">
                     <button
-                      onClick={resetAnalysis}
+                      onClick={handlePrint}
                       className="px-6 py-3 bg-gray-300 text-gray-900 font-bold hover:bg-gray-400"
                       type="button"
                     >
@@ -2573,13 +2578,13 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 {step === 'results' && analysisReport && (
   <div className="space-y-6">
     <div className="flex justify-between items-center">
-      <h3 className="text-2xl font-bold text-gray-900">Your Results</h3>
+      <h3 className="text-2xl font-bold text-gray-900">{(firstName || "Your") + ", Your Personal Roadmap To Skin Health"}</h3>
       <button
-        onClick={resetAnalysis}
+        onClick={handlePrint}
         className="px-4 py-2 bg-gray-300 text-gray-900 font-bold hover:bg-gray-400 text-sm"
         type="button"
       >
-        New Analysis
+        Print / Save
       </button>
     </div>
 
@@ -3133,7 +3138,6 @@ ${SUPPORTIVE_FOOTER_LINE}`);
   </div>
 )}
 
-<canvas ref={canvasRef} className="hidden" />
           </div>
         )}
 
@@ -3218,6 +3222,7 @@ ${SUPPORTIVE_FOOTER_LINE}`);
         )}
       </div>
 
+        <canvas ref={canvasRef} className="hidden" />
       <div className="bg-gray-900 text-white py-8 mt-12">
         <div className="max-w-6xl mx-auto px-4 text-center">
           <p className="text-sm text-gray-400">© 2026 by SkinDoctor AI®</p>
