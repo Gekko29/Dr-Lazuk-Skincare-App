@@ -3277,11 +3277,13 @@ const letterHtmlBody =
         const name = escapeHtml(c?.display_name || c?.cluster_id || "");
         const score = (typeof c?.score === "number") ? String(c.score) : "";
         const rag = escapeHtml(c?.rag || "");
+        const scoreNum = (typeof c?.score === "number") ? c.score : null;
+        const bgColor = scoreNum !== null && scoreNum < 60 ? '#FEE2E2' : scoreNum !== null && scoreNum < 70 ? '#FEF3C7' : '#D1FAE5';
         return `
-          <tr>
-            <td style="padding: 8px 10px; border-bottom: 1px solid #E5E7EB; font-size: 12px; color:#111827;">${name}</td>
-            <td style="padding: 8px 10px; border-bottom: 1px solid #E5E7EB; font-size: 12px; color:#111827; width: 72px; text-align:right;">${score}</td>
-            <td style="padding: 8px 10px; border-bottom: 1px solid #E5E7EB; font-size: 12px; color:#6B7280; width: 70px; text-align:right;">${rag}</td>
+          <tr style="background: ${bgColor};">
+            <td style="padding: 14px 16px; border-bottom: 1px solid #E5E7EB; font-size: 13px; color: #111827; font-weight: 600;">${name}</td>
+            <td style="padding: 14px 16px; border-bottom: 1px solid #E5E7EB; font-size: 16px; color: #111827; font-weight: 700; text-align: center;">${score}</td>
+            <td style="padding: 14px 16px; border-bottom: 1px solid #E5E7EB; font-size: 12px; color: #6B7280; font-weight: 600; text-align: center; text-transform: uppercase;">${rag}</td>
           </tr>
         `;
       })
@@ -3327,56 +3329,127 @@ const protocolRecommendation = protocol_recommendation?.primary || null;
     // Visitor email HTML — selfie image ALWAYS included (mandatory)
     // NOTE: Fitzpatrick results are NOT rendered to the visitor.
     const visitorHtml = `
-      <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111827; line-height: 1.5; background-color: #F9FAFB; padding: 20px;">
-        <div style="max-width: 680px; margin: 0 auto; background-color: #FFFFFF; border-radius: 12px; border: 1px solid #E5E7EB; padding: 20px 24px;">
-          <h1 style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">Your Dr. Lazuk Virtual Skin Analysis</h1>
-          <p style="font-size: 13px; color: #4B5563; margin-bottom: 14px;">
-            Thank you for trusting us with this cosmetic, education-only look at your skin.
-            This is not medical advice, and no medical conditions are being evaluated or treated.
-          </p>
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Your Dr. Lazuk Skin Analysis</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; background-color: #F3F4F6;">
+  
+  <div style="max-width: 680px; margin: 0 auto; padding: 20px;">
+    
+    <div style="background: linear-gradient(135deg, #3B82F6 0%, #6366F1 100%); border-radius: 16px 16px 0 0; padding: 32px 24px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+      <h1 style="color: white; font-size: 28px; font-weight: 800; margin: 0 0 8px 0; letter-spacing: -0.5px;">
+        Your Dr. Lazuk Virtual Skin Analysis
+      </h1>
+      <p style="color: rgba(255, 255, 255, 0.9); font-size: 14px; margin: 0; line-height: 1.5;">
+        Thank you for trusting us with this cosmetic, education-only look at your skin.<br/>This is not medical advice, and no medical conditions are being evaluated or treated.
+      </p>
+    </div>
 
-          <div style="margin: 12px 0 18px 0; text-align: left;">
-            <p style="font-size: 12px; color: #6B7280; margin: 0 0 6px 0;">The photo you shared:</p>
-            <img
-              src="${emailSafeSelfieUrl || photoDataUrl}"
-              alt="Your uploaded skin photo"
-              style="max-width: 240px; width: 100%; border-radius: 10px; border: 1px solid #E5E7EB; display: block;"
-            />
-          </div>
-
-    ${snapshotHtml}
-        ${structuredSectionsHtml}
-
-
-
-          <p style="font-size: 11px; color: #92400E; margin: 0 0 10px 0;">
-            This is a visual, cosmetic estimate only and is not a medical diagnosis.
-          </p>
-
-          <div style="margin-top: 10px;">
-            ${structuredSectionsHtml}
-            ${letterHtmlBody}
-          </div>
-          <div style="margin: 18px 0; padding: 12px 14px; border: 1px solid #E5E7EB; border-radius: 12px; background: #F9FAFB;">
-            <p style="margin:0 0 6px 0; font-size: 12px; color: #374151;"><strong>30-day protocol check-in</strong></p>
-            <p style="margin:0; font-size: 12px; color: #4B5563;">Your results are most useful as a baseline. Please revisit this analysis on or after <strong>${revisitAfterLabel}</strong> (30+ days) to track progress as part of your skincare protocol.</p>
-          </div>
-
-          <div style="margin: 0 0 18px; padding: 12px 14px; border: 1px solid #E5E7EB; border-radius: 12px; background: #FFFFFF;">
-            <p style="margin:0 0 6px 0; font-size: 12px; color: #374151;"><strong>How we handle your photo &amp; info</strong></p>
-            <p style="margin:0; font-size: 12px; color: #4B5563;">We use your photo only to generate this cosmetic, education-only analysis and the visuals shown in this report. We do not sell your information. We retain analysis artifacts only as needed for delivery, troubleshooting, and your 30-day re-check, and you can request deletion at any time by replying to this email.</p>
-          </div>
-
-          <hr style="border-top: 1px solid #E5E7EB; margin: 24px 0;" />
-          <p style="font-size: 12px; color: #6B7280; margin-bottom: 4px;">If you have any medical concerns or skin conditions, please see a qualified in-person professional.</p>
-          <p style="font-size: 12px; color: #6B7280; margin-bottom: 8px;">If you’d like in-person, customized care, our team at Dr. Lazuk Esthetics® in Georgia would be honored to see you.</p>
-          <p style="font-size: 12px; color: #6B7280;">
-            With care,<br/>
-            Dr. Lazuk Esthetics® &amp; Dr. Lazuk Cosmetics®<br/>
-            <a href="mailto:contact@drlazuk.com" style="color: #111827; text-decoration: underline;">contact@drlazuk.com</a>
-          </p>
-        </div>
+    <div style="background: white; padding: 32px 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
+      
+      <div style="text-align: center; margin-bottom: 32px;">
+        <p style="font-size: 13px; color: #6B7280; margin: 0 0 12px 0; font-weight: 600;">THE PHOTO YOU SHARED:</p>
+        <img src="${emailSafeSelfieUrl || photoDataUrl}" alt="Your uploaded skin photo" style="max-width: 280px; width: 100%; border-radius: 16px; border: 3px solid #E5E7EB; display: inline-block; box-shadow: 0 8px 24px rgba(0,0,0,0.12);" />
       </div>
+
+      ${snapshotOverallScore !== null ? `
+      <div style="background: linear-gradient(135deg, #DBEAFE 0%, #E0E7FF 100%); padding: 40px 20px; border-radius: 16px; text-align: center; margin-bottom: 32px; border: 2px solid #93C5FD; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);">
+        <div style="display: inline-block; width: 160px; height: 160px; border-radius: 50%; background: white; box-shadow: 0 8px 32px rgba(0,0,0,0.12); margin-bottom: 20px; position: relative;">
+          <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; width: 100%;">
+            <div style="font-size: 64px; font-weight: 900; color: #111827; line-height: 1; margin-bottom: 4px;">${snapshotOverallScore}</div>
+            <div style="font-size: 20px; color: #6B7280; font-weight: 600;">/100</div>
+          </div>
+        </div>
+        ${snapshotOverallRag ? `<div style="display: inline-block; background: ${snapshotOverallRag === 'green' ? '#10B981' : snapshotOverallRag === 'amber' ? '#F59E0B' : '#EF4444'}; color: white; padding: 10px 24px; border-radius: 24px; font-weight: 700; font-size: 14px; margin-bottom: 16px; letter-spacing: 0.5px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">${snapshotOverallRag === 'green' ? '✓ STRONG FOUNDATION' : snapshotOverallRag === 'amber' ? '◆ GOOD FOUNDATION' : '● PRIORITY FOCUS'}</div>` : ''}
+        <div style="color: #1E40AF; font-size: 16px; font-weight: 500; max-width: 480px; margin: 0 auto; line-height: 1.6;">${snapshotOverallScore >= 75 ? 'Your skin shows strong foundations with opportunities for targeted enhancement.' : snapshotOverallScore >= 60 ? 'Your skin has a solid baseline with clear opportunities for improvement.' : 'Your analysis reveals specific areas where focused care can make meaningful impact.'}</div>
+      </div>` : ''}
+
+      ${snapshotProtocolName ? `
+      <div style="background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%); padding: 32px 24px; border-radius: 16px; margin-bottom: 32px; border: 2px solid #3B82F6; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.12);">
+        <div style="text-align: center; margin-bottom: 24px;">
+          <div style="display: inline-block; background: linear-gradient(135deg, #3B82F6 0%, #6366F1 100%); color: white; width: 72px; height: 72px; border-radius: 50%; line-height: 72px; font-size: 36px; margin-bottom: 12px; box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);">📦</div>
+          <div style="font-size: 26px; font-weight: 800; color: #111827; margin-bottom: 8px; letter-spacing: -0.5px;">Your Prescribed Protocol</div>
+          <div style="font-size: 14px; color: #6B7280; font-weight: 500;">Based on your comprehensive skin analysis</div>
+        </div>
+        <div style="background: white; padding: 28px; border-radius: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); margin-bottom: 20px;">
+          <div style="font-size: 32px; font-weight: 900; color: #3B82F6; margin-bottom: 12px; text-align: center; letter-spacing: -0.5px;">✨ ${escapeHtml(snapshotProtocolName)}</div>
+          ${snapshotProtocolUrl ? `<div style="text-align: center; margin-top: 24px;"><a href="${snapshotProtocolUrl}" style="display: inline-block; background: linear-gradient(135deg, #3B82F6 0%, #6366F1 100%); color: white; padding: 18px 48px; border-radius: 12px; text-decoration: none; font-weight: 700; font-size: 17px; box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4); letter-spacing: 0.3px;">SEE FULL DETAILS →</a></div>` : ''}
+        </div>
+        <div style="background: rgba(255, 255, 255, 0.8); padding: 18px; border-radius: 10px; font-size: 14px; color: #374151; line-height: 1.7; border-left: 4px solid #3B82F6;"><strong style="color: #1E40AF; display: block; margin-bottom: 6px; font-size: 15px;">Why this protocol is right for you:</strong>This protocol is specifically formulated for your skin's needs based on today's analysis. It addresses your primary concerns while supporting your skin's natural functions.</div>
+      </div>` : ''}
+
+      ${snapshotClusterRows ? `
+      <div style="margin-bottom: 32px; padding: 24px; background: #F9FAFB; border-radius: 14px; border: 1px solid #E5E7EB;">
+        <div style="font-size: 20px; font-weight: 800; color: #111827; margin-bottom: 16px; text-align: center;">📊 Your Skin Health Breakdown</div>
+        <table style="width: 100%; border-collapse: collapse; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+          <thead><tr style="background: linear-gradient(135deg, #F3F4F6 0%, #E5E7EB 100%);">
+            <th style="text-align: left; padding: 14px 16px; font-size: 12px; color: #374151; font-weight: 700; border-bottom: 2px solid #D1D5DB;">CLUSTER</th>
+            <th style="text-align: center; padding: 14px 16px; font-size: 12px; color: #374151; font-weight: 700; border-bottom: 2px solid #D1D5DB;">SCORE</th>
+            <th style="text-align: center; padding: 14px 16px; font-size: 12px; color: #374151; font-weight: 700; border-bottom: 2px solid #D1D5DB;">STATUS</th>
+          </tr></thead>
+          <tbody>${snapshotClusterRows}</tbody>
+        </table>
+      </div>` : ''}
+
+    </div>
+
+    <div style="background: white; padding: 32px 24px; margin-top: 2px; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
+      ${structuredSectionsHtml}
+      <div style="margin-top: 32px;">${letterHtmlBody}</div>
+
+      <div style="margin: 32px 0; padding: 20px 24px; border: 2px solid #3B82F6; border-radius: 14px; background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1);">
+        <div style="font-size: 16px; font-weight: 800; color: #1E40AF; margin-bottom: 8px;">📅 30-Day Protocol Check-In</div>
+        <p style="margin: 0; font-size: 14px; color: #1E3A8A; line-height: 1.6;">Your results are most useful as a baseline. Please revisit this analysis on or after <strong>${revisitAfterLabel}</strong> (30+ days) to track progress as part of your skincare protocol.</p>
+      </div>
+
+      <div style="margin: 32px 0; padding: 32px 24px; background: linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%); border-radius: 16px; border: 2px solid #10B981; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);">
+        <div style="text-align: center; margin-bottom: 24px;">
+          <div style="font-size: 24px; font-weight: 800; color: #065F46; margin-bottom: 8px;">🎯 Ready to Take Action?</div>
+          <p style="font-size: 14px; color: #047857; margin: 0;">Choose your path forward:</p>
+        </div>
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 16px;"><tr>
+          ${snapshotProtocolUrl ? `<td style="padding: 0 8px 0 0; width: 50%; vertical-align: top;">
+            <div style="background: white; padding: 20px; border-radius: 12px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.08); height: 100%;">
+              <div style="font-size: 32px; margin-bottom: 12px;">📦</div>
+              <div style="font-size: 16px; font-weight: 700; color: #111827; margin-bottom: 8px;">At-Home Protocol</div>
+              <p style="font-size: 13px; color: #6B7280; margin: 0 0 16px 0; line-height: 1.5;">Get your prescribed protocol delivered</p>
+              <a href="${snapshotProtocolUrl}" style="display: inline-block; background: linear-gradient(135deg, #3B82F6 0%, #6366F1 100%); color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 14px; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);">Buy Protocol</a>
+            </div>
+          </td>` : ''}
+          <td style="padding: 0 0 0 8px; ${snapshotProtocolUrl ? 'width: 50%;' : 'width: 100%;'} vertical-align: top;">
+            <div style="background: white; padding: 20px; border-radius: 12px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.08); height: 100%;">
+              <div style="font-size: 32px; margin-bottom: 12px;">💆‍♀️</div>
+              <div style="font-size: 16px; font-weight: 700; color: #111827; margin-bottom: 8px;">In-Person Services</div>
+              <p style="font-size: 13px; color: #6B7280; margin: 0 0 16px 0; line-height: 1.5;">Book an esthetics consultation</p>
+              <a href="mailto:contact@skindoctor.ai?subject=Esthetics Consultation Request" style="display: inline-block; background: linear-gradient(135deg, #8B5CF6 0%, #A855F7 100%); color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 14px; box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);">Contact Us</a>
+            </div>
+          </td>
+        </tr></table>
+        <div style="text-align: center; margin-top: 16px;"><p style="font-size: 12px; color: #047857; margin: 0;">Questions? Reply to this email or contact us at <a href="mailto:contact@skindoctor.ai" style="color: #065F46; font-weight: 600;">contact@skindoctor.ai</a></p></div>
+      </div>
+
+      <div style="margin: 24px 0; padding: 18px 20px; border: 1px solid #E5E7EB; border-radius: 12px; background: #F9FAFB;">
+        <div style="font-size: 13px; font-weight: 700; color: #374151; margin-bottom: 6px;">🔒 How we handle your photo & info</div>
+        <p style="margin: 0; font-size: 12px; color: #6B7280; line-height: 1.6;">We use your photo only to generate this cosmetic, education-only analysis and the visuals shown in this report. We do not sell your information. We retain analysis artifacts only as needed for delivery, troubleshooting, and your 30-day re-check, and you can request deletion at any time by replying to this email.</p>
+      </div>
+    </div>
+
+    <div style="background: #111827; border-radius: 0 0 16px 16px; padding: 32px 24px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+      <p style="font-size: 13px; color: #9CA3AF; margin: 0 0 12px 0; line-height: 1.6;">If you have any medical concerns or skin conditions, please see a qualified in-person professional.</p>
+      <p style="font-size: 13px; color: #9CA3AF; margin: 0 0 16px 0; line-height: 1.6;">If you'd like in-person, customized care, our team at Dr. Lazuk Esthetics® in Georgia would be honored to see you.</p>
+      <div style="font-size: 14px; color: white; font-weight: 600; margin-bottom: 8px;">With care,</div>
+      <div style="font-size: 14px; color: #D1D5DB; margin-bottom: 16px;">Dr. Lazuk Esthetics® & Dr. Lazuk Cosmetics®</div>
+      <a href="mailto:contact@skindoctor.ai" style="display: inline-block; color: #60A5FA; text-decoration: none; font-weight: 600; font-size: 14px; padding: 8px 16px; border: 2px solid #60A5FA; border-radius: 8px;">contact@skindoctor.ai</a>
+      <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid #374151;"><p style="font-size: 11px; color: #6B7280; margin: 0;">© 2026 SkinDoctor AI® | Dr. Lazuk Cosmetics® | Lazuk Esthetics®</p></div>
+    </div>
+
+  </div>
+</body>
+</html>
     `;
 
     // Clinic email HTML
