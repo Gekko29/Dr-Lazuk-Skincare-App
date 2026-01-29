@@ -1072,10 +1072,10 @@ const SummaryCard = ({ ageRange, primaryConcern, analysisReport }) => {
         {/* Cluster breakdown section */}
         <div className="space-y-4 mt-8">
                 {(visualPayload?.clusters || []).map((c) => (
-                  <div key={c.cluster_id} className="bg-gradient-to-br from-white to-gray-50 border border-gray-200 rounded-xl p-5 shadow-md hover:shadow-lg transition-shadow duration-200">
+                  <div key={c.cluster_id} className="bg-gradient-to-br from-white to-gray-50 border border-gray-200 rounded-xl p-4 sm:p-5 shadow-md hover:shadow-lg transition-shadow duration-200">
                     <div className="flex items-center justify-between gap-4 mb-4">
-                      <h5 className="text-lg font-bold text-gray-900">{c.display_name}</h5>
-                      <div className="flex items-center gap-3 bg-white px-3 py-1.5 rounded-full border border-gray-200 shadow-sm">
+                      <h5 className="text-base sm:text-lg font-bold text-gray-900">{c.display_name}</h5>
+                      <div className="flex items-center gap-2 sm:gap-3 bg-white px-2 sm:px-3 py-1.5 rounded-full border border-gray-200 shadow-sm">
                         <span className={`w-2.5 h-2.5 rounded-full ${
                           c.rag === 'green' ? 'bg-green-500' : 
                           c.rag === 'amber' ? 'bg-amber-500' : 
@@ -1084,7 +1084,10 @@ const SummaryCard = ({ ageRange, primaryConcern, analysisReport }) => {
                         <span className="text-sm font-bold text-gray-900">{Math.round(c.score)}/100</span>
                       </div>
                     </div>
-                    <div className="flex gap-6 items-start">
+                    
+                    {/* Desktop: Side-by-side SVG + metrics */}
+                    {/* Mobile: Stacked mini progress bars */}
+                    <div className="hidden sm:flex gap-6 items-start">
                       <div className="flex-shrink-0">
                     {/* radial cluster with enhanced styling */}
                     <div className="bg-white rounded-lg p-2 shadow-sm">
@@ -1134,6 +1137,35 @@ const SummaryCard = ({ ageRange, primaryConcern, analysisReport }) => {
                           </div>
                         ))}
                       </div>
+                    </div>
+                    
+                    {/* Mobile: Progress bars with RAG indicators */}
+                    <div className="sm:hidden space-y-3">
+                      {(c.metrics || []).map((m) => (
+                        <div key={m.metric_id} className="bg-white rounded-lg p-3 shadow-sm">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <div className={`w-2.5 h-2.5 rounded-full ${
+                                m.rag === 'green' ? 'bg-green-500' : 
+                                m.rag === 'amber' ? 'bg-amber-500' : 
+                                m.rag === 'red' ? 'bg-red-500' : 'bg-gray-400'
+                              }`} />
+                              <span className="text-sm font-semibold text-gray-900">{m.display_name}</span>
+                            </div>
+                            <span className="text-sm font-bold text-gray-900">{m.score}</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div 
+                              className={`h-2 rounded-full ${
+                                m.rag === 'green' ? 'bg-gradient-to-r from-green-500 to-green-600' : 
+                                m.rag === 'amber' ? 'bg-gradient-to-r from-amber-500 to-amber-600' : 
+                                m.rag === 'red' ? 'bg-gradient-to-r from-red-500 to-red-600' : 'bg-gray-400'
+                              }`}
+                              style={{ width: `${Math.max(0, Math.min(100, m.score))}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 ))}
@@ -1471,7 +1503,7 @@ SkinDoctor.ai`;
 const DermatologyApp = () => {
   // SPA mode switch: Esthetics Concierge
   if (typeof window !== "undefined" && window.location.pathname === "/esthetics-concierge") {
-    return <EstheticsConciergeApp />;
+    return <ConversationalConcierge />;
   }
 
   const [activeTab, setActiveTab] = useState('home');
@@ -2865,7 +2897,7 @@ const resetAnalysis = () => {
           <h3 className="text-3xl font-extrabold text-gray-900">
             <span className="text-blue-600">{firstName || "Your"}</span>, Your Personal Roadmap To Skin Health
           </h3>
-          <p className="text-sm text-gray-600 mt-2 flex items-center gap-2">
+          <p className="text-xs sm:text-sm text-gray-600 mt-2 flex items-center gap-2">
             <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
             </svg>
@@ -2874,13 +2906,14 @@ const resetAnalysis = () => {
         </div>
         <button
           onClick={handlePrint}
-          className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold hover:from-blue-700 hover:to-blue-800 shadow-md hover:shadow-lg transition-all duration-200 rounded-lg"
+          className="flex items-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white text-sm sm:text-base font-semibold hover:from-blue-700 hover:to-blue-800 shadow-md hover:shadow-lg transition-all duration-200 rounded-lg whitespace-nowrap"
           type="button"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
           </svg>
-          <span>Print / Save</span>
+          <span className="hidden sm:inline">Print / Save</span>
+          <span className="sm:hidden">Print</span>
         </button>
       </div>
     </div>
@@ -3371,19 +3404,30 @@ const resetAnalysis = () => {
       <AccordionSection
         id="message"
         title="A Message from Dr. Lazuk"
-        subtitle="Reading this activates sharing/saving on Future Story images."
+        subtitle="Personal insights about your skin's journey."
         open={!!openSections.message}
         onToggle={toggleSection}
       >
-        <PostImageReflection
-          onSeen={() => {
-            if (!reflectionSeen) {
-              setReflectionSeen(true);
-              gaEvent('reflection_seen', { step: 'results' });
-              showToast("Thank you. Sharing and saving are now available.");
-            }
-          }}
-        />
+        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-2xl p-8">
+          <div className="flex items-start gap-4 mb-6">
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center flex-shrink-0">
+              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <h4 className="text-2xl font-bold text-gray-900 mb-3">📧 Extended Analysis Available</h4>
+              <p className="text-gray-700 leading-relaxed mb-4">
+                Dr. Lazuk has prepared a personal message about your skin's journey and specific insights based on your photo.
+              </p>
+              <div className="bg-white rounded-xl p-4 border-2 border-blue-300">
+                <p className="text-blue-900 font-semibold">
+                  ✉️ View the complete message in your emailed comprehensive skincare analysis report.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
       </AccordionSection>
 
 
