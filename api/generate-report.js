@@ -1155,7 +1155,14 @@ async function sendEmailWithResend({ to, subject, html }) {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ from: fromEmail, to, subject, html }),
+      body: JSON.stringify({ 
+        from: fromEmail, 
+        to, 
+        subject, 
+        html
+        // Note: Click tracking is typically controlled in Resend dashboard Settings
+        // To disable: Go to Resend Dashboard → Settings → Click Tracking → Disable
+      }),
     });
 
     if (!res.ok) {
@@ -2272,15 +2279,18 @@ async function generateAgingTile512(openai, selfiePublicUrl) {
   const selfieBuf = Buffer.isBuffer(selfieBytes) ? selfieBytes : Buffer.from(selfieBytes);
 
   // Single-call 2x2 tile (512x512) to avoid Vercel timeouts.
+  // NOTE: Removed text label request due to OpenAI text rendering corruption issues.
+  // Labels should be added programmatically post-generation if needed.
   const prompt = [
     "Create a single 2x2 grid collage (one image) showing realistic age-progressions of the SAME person from the input selfie.",
-    "Top-left: 10 Years — No Change (minimal skincare).",
-    "Top-right: 20 Years — No Change (minimal skincare).",
-    "Bottom-left: 10 Years — With Care (consistent SPF + quality skincare).",
-    "Bottom-right: 20 Years — With Care (consistent SPF + quality skincare).",
-    "Keep facial identity identical across all quadrants.",
-    "Do NOT exaggerate, do NOT add makeup, do NOT stylize, keep neutral background and natural lighting.",
-    "Render as ONE image containing the four labeled quadrants; labels should be subtle and readable."
+    "Top-left quadrant: natural aging progression 10 years forward with minimal skincare (sun damage, fine lines, loss of elasticity).",
+    "Top-right quadrant: natural aging progression 20 years forward with minimal skincare (deeper wrinkles, significant sun damage, sagging).",
+    "Bottom-left quadrant: aging progression 10 years forward WITH consistent SPF and quality skincare (healthier, more resilient skin).",
+    "Bottom-right quadrant: aging progression 20 years forward WITH consistent SPF and quality skincare (well-maintained, youthful appearance).",
+    "Keep facial identity, expression, and pose identical across all four quadrants.",
+    "Use consistent neutral background and natural lighting across all quadrants.",
+    "Do NOT exaggerate aging, do NOT add makeup, do NOT stylize.",
+    "Do NOT add any text, labels, captions, or typography to the image - render ONLY the four face progressions in a 2x2 grid."
   ].join(" ");
 
   // Use direct REST call to avoid SDK version mismatches (e.g., openai.images.edits not available)
