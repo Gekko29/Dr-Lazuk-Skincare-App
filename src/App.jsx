@@ -15,7 +15,7 @@ import {
 // ✅ Google Analytics helpers
 import { gaEvent, gaPageView, getGaClientId } from "./lib/ga";
 import EstheticsConciergeApp from "./esthetics/EstheticsConciergeApp";
-import ConversationalConcierge from "./ConversationalConcierge.jsx";
+import ConversationalConcierge from "./ConversationalConcierge";
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -1487,6 +1487,8 @@ const DermatologyApp = () => {
   const [visitorQuestion, setVisitorQuestion] = useState('');
   const [analysisReport, setAnalysisReport] = useState(null);
   const [emailSubmitting, setEmailSubmitting] = useState(false);
+  const [emailingReport, setEmailingReport] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
 
   const [captureGuidanceSeen, setCaptureGuidanceSeen] = useState(false);
   const [captureSupportMessage, setCaptureSupportMessage] = useState(null);
@@ -2127,6 +2129,74 @@ ${SUPPORTIVE_FOOTER_LINE}`);
 
     gaEvent('email_step_submitted', { hasFirstName: true, hasEmail: true });
     await performAnalysis();
+  };
+
+  // Helper to format long text into readable paragraphs
+  const formatLongText = (text) => {
+    if (!text) return [];
+    
+    // Split on double newlines first (if they exist)
+    let paragraphs = text.split('\n\n');
+    
+    // If no double newlines, split long text intelligently
+    if (paragraphs.length === 1 && text.length > 500) {
+      // Split on sentence endings followed by space and capital letter
+      const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+      paragraphs = [];
+      let currentParagraph = '';
+      
+      sentences.forEach((sentence, idx) => {
+        currentParagraph += sentence;
+        
+        // Create new paragraph every 3-4 sentences or ~300 chars
+        if ((idx + 1) % 3 === 0 || currentParagraph.length > 300) {
+          paragraphs.push(currentParagraph.trim());
+          currentParagraph = '';
+        }
+      });
+      
+      if (currentParagraph) {
+        paragraphs.push(currentParagraph.trim());
+      }
+    }
+    
+    return paragraphs.filter(p => p.trim());
+  };
+
+  // Handle email report request
+  const handleEmailReport = async () => {
+    if (!analysisReport || !userEmail) {
+      showToast('Please provide your email address first.');
+      return;
+    }
+    
+    setEmailingReport(true);
+    
+    try {
+      const response = await fetch('/api/send-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          firstName,
+          email: userEmail,
+          analysisReport,
+          futureStoryImages
+        })
+      });
+      
+      if (response.ok) {
+        setEmailSent(true);
+        showToast('Report sent! Check your email.');
+        gaEvent('email_report_sent', { firstName });
+      } else {
+        showToast('Failed to send email. Please try again.');
+      }
+    } catch (error) {
+      console.error('Email error:', error);
+      showToast('Failed to send email. Please try again.');
+    }
+    
+    setEmailingReport(false);
   };
 
   const sendMessage = async () => {
@@ -2819,6 +2889,57 @@ const resetAnalysis = () => {
       analysisReport={analysisReport}
     />
 
+    {/* 📧 Email Report Button - TOP */}
+    {!emailSent && (
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-2xl p-6 shadow-md">
+        <div className="flex items-center justify-between gap-6">
+          <div>
+            <h3 className="text-xl font-bold text-gray-900 mb-2 flex items-center gap-2">
+              <Mail className="text-blue-600" size={24} />
+              Get Your Complete Report via Email
+            </h3>
+            <p className="text-gray-600">
+              Includes your full analysis, aging projections, and personalized recommendations
+            </p>
+          </div>
+          <button
+            onClick={handleEmailReport}
+            disabled={emailingReport}
+            className="px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-all disabled:opacity-50 flex items-center gap-2 whitespace-nowrap"
+            type="button"
+          >
+            {emailingReport ? (
+              <>
+                <Loader className="animate-spin" size={20} />
+                <span>Sending...</span>
+              </>
+            ) : (
+              <>
+                <Mail size={20} />
+                <span>Email My Report</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    )}
+
+    {emailSent && (
+      <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-6 shadow-md">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0">
+            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <div>
+            <h3 className="text-xl font-bold text-green-900">Report Sent!</h3>
+            <p className="text-green-700">Check your email for your complete analysis</p>
+          </div>
+        </div>
+      </div>
+    )}
+
     <div className="flex flex-wrap gap-3 items-center mb-4">
       <button
         onClick={openKeySections}
@@ -3143,8 +3264,12 @@ const resetAnalysis = () => {
           </div>
 
           <div className="prose prose-sm max-w-none">
-            <div className="text-base text-gray-800 leading-relaxed whitespace-pre-wrap" style={{ lineHeight: '1.8' }}>
-              {analysisReport?.report || "Your comprehensive report is loading..."}
+            <div className="space-y-4">
+              {formatLongText(analysisReport?.report || "Your comprehensive report is loading...").map((paragraph, idx) => (
+                <p key={idx} className="text-base text-gray-800 leading-relaxed">
+                  {paragraph}
+                </p>
+              ))}
             </div>
           </div>
           
@@ -3336,6 +3461,57 @@ const resetAnalysis = () => {
         </div>
       </AccordionSection>
     </div>
+
+    {/* 📧 Email Report Button - BOTTOM (after reading everything) */}
+    {!emailSent && (
+      <div className="mt-8 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-2xl p-8 shadow-md">
+        <div className="text-center mb-6">
+          <h3 className="text-2xl font-bold text-gray-900 mb-3 flex items-center justify-center gap-2">
+            <Mail className="text-blue-600" size={28} />
+            Want This Complete Report in Your Inbox?
+          </h3>
+          <p className="text-gray-700 text-lg max-w-2xl mx-auto">
+            Get your full analysis, aging projections, and all recommendations delivered to your email. Perfect for sharing with your provider or keeping for future reference.
+          </p>
+        </div>
+        <div className="flex justify-center">
+          <button
+            onClick={handleEmailReport}
+            disabled={emailingReport}
+            className="px-10 py-5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-lg font-bold rounded-xl shadow-xl hover:shadow-2xl transition-all disabled:opacity-50 flex items-center gap-3"
+            type="button"
+          >
+            {emailingReport ? (
+              <>
+                <Loader className="animate-spin" size={24} />
+                <span>Sending Your Report...</span>
+              </>
+            ) : (
+              <>
+                <Mail size={24} />
+                <span>Email Me My Complete Report</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    )}
+
+    {emailSent && (
+      <div className="mt-8 bg-green-50 border-2 border-green-200 rounded-2xl p-8 shadow-md">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <div className="w-16 h-16 rounded-full bg-green-500 flex items-center justify-center">
+            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <div>
+            <h3 className="text-2xl font-bold text-green-900 mb-2">Report Successfully Sent!</h3>
+            <p className="text-green-700 text-lg">Check your email for your complete skincare analysis with all images and recommendations.</p>
+          </div>
+        </div>
+      </div>
+    )}
   </div>
 )}
 
@@ -3343,46 +3519,122 @@ const resetAnalysis = () => {
         )}
 
         {activeTab === 'chat' && (
-          <div className="bg-white border shadow-sm overflow-hidden" style={{ height: '600px' }}>
+          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl shadow-xl overflow-hidden" style={{ height: '700px' }}>
             <div className="flex flex-col h-full">
-              <div className="bg-gray-900 text-white p-6">
-                <h2 className="text-2xl font-bold">Ask Dr. Lazuk</h2>
-                <p className="text-xs text-gray-300 mt-1">
-                  Educational and cosmetic discussion only. This chat is not medical advice.
-                </p>
+              {/* Header - Premium */}
+              <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white px-8 py-8">
+                <div className="flex items-center gap-4 mb-3">
+                  <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-xl">
+                    <MessageCircle size={32} strokeWidth={2.5} />
+                  </div>
+                  <div>
+                    <h2 className="text-3xl font-extrabold">Ask Dr. Lazuk</h2>
+                    <p className="text-blue-100 text-sm mt-1 font-medium">
+                      Your Personal Skincare Advisor
+                    </p>
+                  </div>
+                </div>
+                <div className="bg-white/10 backdrop-blur-sm rounded-lg px-4 py-3 border border-white/20">
+                  <p className="text-sm text-white">
+                    💡 <strong>Educational & cosmetic discussion only.</strong> This chat is not medical advice.
+                  </p>
+                </div>
               </div>
-              <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50">
+
+              {/* Messages Area - Enhanced */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                {chatMessages.length === 0 && (
+                  <div className="flex flex-col items-center justify-center h-full text-center px-4">
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center mb-6">
+                      <MessageCircle className="text-blue-600" size={40} />
+                    </div>
+                    <h3 className="text-2xl font-bold text-gray-900 mb-3">
+                      Hello! I'm Dr. Lazuk's AI Assistant
+                    </h3>
+                    <p className="text-gray-600 max-w-md leading-relaxed mb-8">
+                      I can help you think through your skincare in a cosmetic, educational way. Ask me about routines, ingredients, concerns, or anything skincare-related!
+                    </p>
+                    
+                    {/* Starter Prompts */}
+                    <div className="grid grid-cols-2 gap-3 max-w-lg">
+                      <button
+                        onClick={() => {
+                          setInputMessage("What's a good routine for aging skin?");
+                        }}
+                        className="text-sm text-left px-4 py-3 bg-white border-2 border-blue-200 rounded-xl hover:border-blue-500 hover:shadow-md transition-all"
+                        type="button"
+                      >
+                        💆‍♀️ Aging skin routine?
+                      </button>
+                      <button
+                        onClick={() => {
+                          setInputMessage("How do I reduce dark spots?");
+                        }}
+                        className="text-sm text-left px-4 py-3 bg-white border-2 border-blue-200 rounded-xl hover:border-blue-500 hover:shadow-md transition-all"
+                        type="button"
+                      >
+                        ✨ Reduce dark spots?
+                      </button>
+                      <button
+                        onClick={() => {
+                          setInputMessage("What's the best moisturizer for dry skin?");
+                        }}
+                        className="text-sm text-left px-4 py-3 bg-white border-2 border-blue-200 rounded-xl hover:border-blue-500 hover:shadow-md transition-all"
+                        type="button"
+                      >
+                        💧 Best moisturizer?
+                      </button>
+                      <button
+                        onClick={() => {
+                          setInputMessage("How do I build a simple routine?");
+                        }}
+                        className="text-sm text-left px-4 py-3 bg-white border-2 border-blue-200 rounded-xl hover:border-blue-500 hover:shadow-md transition-all"
+                        type="button"
+                      >
+                        📋 Simple routine help?
+                      </button>
+                    </div>
+                  </div>
+                )}
+                
                 {chatMessages.map((msg, i) => (
                   <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[80%] p-4 ${
-                      msg.role === 'user' ? 'bg-gray-900 text-white' : 'bg-white border text-gray-900'
+                    <div className={`max-w-[80%] rounded-2xl px-6 py-4 shadow-sm ${
+                      msg.role === 'user' 
+                        ? 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white' 
+                        : 'bg-white border-2 border-gray-200 text-gray-900'
                     }`}>
-                      <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                      <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
                     </div>
                   </div>
                 ))}
                 {chatLoading && (
                   <div className="flex justify-start">
-                    <div className="bg-white border p-4">
-                      <Loader className="animate-spin" size={20} />
+                    <div className="bg-white border-2 border-gray-200 rounded-2xl px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <Loader className="animate-spin text-blue-600" size={20} />
+                        <span className="text-sm text-gray-600">Dr. Lazuk is thinking...</span>
+                      </div>
                     </div>
                   </div>
                 )}
               </div>
-              <div className="border-t p-4 bg-white">
-                <div className="flex gap-2">
+
+              {/* Input Area - Premium */}
+              <div className="border-t-2 border-gray-200 p-6 bg-white">
+                <div className="flex gap-3">
                   <input
                     type="text"
                     value={inputMessage}
                     onChange={(e) => setInputMessage(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-                    placeholder="Ask a cosmetic skincare question..."
-                    className="flex-1 px-4 py-3 border-2 focus:outline-none focus:border-gray-900"
+                    onKeyDown={(e) => e.key === 'Enter' && !chatLoading && sendMessage()}
+                    placeholder="Ask about skincare, routines, ingredients..."
+                    className="flex-1 px-6 py-4 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 text-base shadow-sm"
                   />
                   <button
                     onClick={sendMessage}
-                    disabled={chatLoading}
-                    className="px-8 py-3 bg-gray-900 text-white font-bold hover:bg-gray-800 disabled:bg-gray-400"
+                    disabled={chatLoading || !inputMessage.trim()}
+                    className="px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-md transition-all flex items-center gap-2"
                     type="button"
                   >
                     <Send size={20} />
@@ -3394,27 +3646,52 @@ const resetAnalysis = () => {
         )}
 
         {activeTab === 'education' && (
-          <div className="bg-white border shadow-sm p-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Our Esthetic Services</h2>
-            <div className="grid md:grid-cols-1 gap-6">
+          <div className="py-4">
+            <div className="text-center mb-10">
+              <h2 className="text-4xl font-extrabold text-gray-900 mb-3">Our Esthetic Services</h2>
+              <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+                Professional treatments designed to enhance your natural beauty
+              </p>
+            </div>
+            
+            <div className="grid md:grid-cols-1 gap-8">
               {estheticServices.map((s, i) => (
-                <div key={i} className="border-2 p-6">
-                  <h3 className="font-bold text-xl text-gray-900 mb-2">{s.name}</h3>
-                  <p className="text-gray-700 mb-4">{s.description}</p>
-                  <div className="mb-4">
-                    <p className="font-bold text-gray-900 mb-2">Benefits:</p>
-                    <ul className="text-sm text-gray-700">
+                <div 
+                  key={i} 
+                  className="group bg-white rounded-2xl border-2 border-gray-200 hover:border-blue-500 p-8 transition-all duration-300 hover:shadow-2xl"
+                >
+                  {/* Service Icon */}
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 group-hover:from-blue-500 group-hover:to-indigo-500 flex items-center justify-center mb-6 transition-all duration-300">
+                    <span className="text-3xl group-hover:scale-110 transition-transform">
+                      {i === 0 ? '✨' : i === 1 ? '💆‍♀️' : '🌟'}
+                    </span>
+                  </div>
+                  
+                  <h3 className="font-extrabold text-2xl text-gray-900 mb-3 group-hover:text-blue-600 transition-colors">
+                    {s.name}
+                  </h3>
+                  <p className="text-gray-700 mb-6 leading-relaxed">{s.description}</p>
+                  
+                  <div className="mb-6 bg-blue-50 rounded-xl p-6 border border-blue-100">
+                    <p className="font-bold text-gray-900 mb-3 flex items-center gap-2">
+                      <span className="text-blue-600">✓</span> Benefits:
+                    </p>
+                    <ul className="space-y-2">
                       {s.benefits.map((b, j) => (
-                        <li key={j}>✓ {b}</li>
+                        <li key={j} className="flex items-start gap-3 text-gray-700">
+                          <span className="text-green-500 font-bold mt-0.5">✓</span>
+                          <span>{b}</span>
+                        </li>
                       ))}
                     </ul>
                   </div>
+                  
                   <a
                     href="mailto:contact@skindoctor.ai"
                     onClick={() => gaEvent('services_learn_more_click', { serviceName: s.name })}
-                    className="block text-center bg-gray-900 text-white py-3 font-bold hover:bg-gray-800"
+                    className="block text-center bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white py-4 px-6 font-bold rounded-xl transition-all duration-300 transform group-hover:scale-105 shadow-lg hover:shadow-xl"
                   >
-                    Learn More
+                    Learn More About This Service →
                   </a>
                 </div>
               ))}
