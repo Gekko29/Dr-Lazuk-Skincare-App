@@ -2091,11 +2091,8 @@ ${SUPPORTIVE_FOOTER_LINE}`);
         agingPreviewImages: data.agingPreviewImages || null,
         areasOfFocus: data.areasOfFocus || data.focusAreas || null,
 
-        // ✅ ONE protocol recommendation (server-authoritative)
-        protocolRecommendation: data.protocolRecommendation || data.protocol_recommendation || data.protocol || null,
-        protocolPrimary: (data.protocolRecommendation || data.protocol_recommendation)?.primary || null,
-        protocolSecondary: (data.protocolRecommendation || data.protocol_recommendation)?.secondary || null,
-        protocolNonExclusivityClause: (data.protocolRecommendation || data.protocol_recommendation)?.clause || null,
+        // ✅ ONE protocol recommendation (server-authoritative) - Extract primary only
+        protocolRecommendation: (data.protocolRecommendation || data.protocol_recommendation || data.protocol)?.primary || null,
         conditionWeighting: data.condition_weighting || data.conditionWeighting || data.canonical_payload?.condition_weighting || null,
         structuredReportSections: data.structured_report_sections || data.structuredReportSections || null,
 
@@ -2976,6 +2973,265 @@ const resetAnalysis = () => {
       </div>
     )}
 
+    {/* 🎯 YOUR PATH TO RESULTS - Hero Section */}
+    {analysisReport && (
+      <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 border-2 border-blue-200 rounded-2xl p-6 sm:p-8 shadow-xl mb-8">
+        <div className="text-center mb-6">
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900 mb-2">Your Path to Results</h2>
+          <p className="text-sm sm:text-base text-gray-600">Choose how you'd like to proceed based on your analysis</p>
+        </div>
+
+        {/* Desktop: Side-by-side */}
+        <div className="hidden sm:grid sm:grid-cols-2 gap-6">
+          {/* CARD 1: PROTOCOL */}
+          <div className="bg-white rounded-2xl p-6 shadow-lg border-2 border-gray-200 hover:border-blue-500 hover:shadow-2xl transition-all duration-300">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center">
+                <span className="text-2xl">📦</span>
+              </div>
+              <h3 className="text-xl font-bold text-gray-900">AT-HOME PROTOCOL</h3>
+            </div>
+            <div className="mb-4">
+              <p className="text-sm font-semibold text-gray-500 mb-1">Your Prescribed Protocol:</p>
+              <p className="text-2xl font-extrabold text-blue-600 mb-3">
+                {analysisReport?.protocolRecommendation?.name || "Custom Protocol"}
+              </p>
+            </div>
+            {Array.isArray(analysisReport?.protocolRecommendation?.products) && analysisReport.protocolRecommendation.products.length > 0 && (
+              <div className="mb-6">
+                <p className="text-sm font-semibold text-gray-700 mb-2">What's included:</p>
+                <div className="space-y-1.5">
+                  {analysisReport.protocolRecommendation.products.map((p, idx) => (
+                    <div key={idx} className="text-sm text-gray-600 flex items-center gap-2">
+                      <span className="text-blue-500">•</span>
+                      <span>{p?.name || p}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {analysisReport?.protocolRecommendation?.url && (
+              <a
+                href={analysisReport.protocolRecommendation.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl text-center shadow-md hover:shadow-lg transition-all"
+                onClick={() => gaEvent('protocol_cta_click', { from: 'path_to_results' })}
+              >
+                See Full Details →
+              </a>
+            )}
+          </div>
+
+          {/* CARD 2: ESTHETICS */}
+          <div className="bg-white rounded-2xl p-6 shadow-lg border-2 border-gray-200 hover:border-purple-500 hover:shadow-2xl transition-all duration-300">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center">
+                <span className="text-2xl">💆‍♀️</span>
+              </div>
+              <h3 className="text-xl font-bold text-gray-900">IN-PERSON SERVICES</h3>
+            </div>
+            <div className="mb-4">
+              <p className="text-lg font-bold text-purple-600 mb-3">Professional Treatments</p>
+              <p className="text-sm text-gray-600 mb-4">
+                Enhance your results with in-person treatments at our Atlanta location.
+              </p>
+            </div>
+            <div className="mb-6">
+              <div className="space-y-2">
+                <div className="text-sm text-gray-700 flex items-center gap-2">
+                  <span className="text-purple-500">•</span>
+                  <span>Custom Facials</span>
+                </div>
+                <div className="text-sm text-gray-700 flex items-center gap-2">
+                  <span className="text-purple-500">•</span>
+                  <span>Body Sculpting & Massage</span>
+                </div>
+                <div className="text-sm text-gray-700 flex items-center gap-2">
+                  <span className="text-purple-500">•</span>
+                  <span>Advanced Treatments</span>
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                setActiveTab('concierge');
+                gaEvent('esthetics_cta_click', { from: 'path_to_results' });
+              }}
+              className="block w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold rounded-xl text-center shadow-md hover:shadow-lg transition-all"
+              type="button"
+            >
+              View Our Services →
+            </button>
+          </div>
+        </div>
+
+        {/* Mobile: Carousel */}
+        <div className="sm:hidden">
+          <div className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide gap-4 pb-4">
+            <div className="min-w-[85vw] snap-center bg-white rounded-2xl p-5 shadow-lg border-2 border-gray-200">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center">
+                  <span className="text-xl">📦</span>
+                </div>
+                <h3 className="text-lg font-bold text-gray-900">AT-HOME PROTOCOL</h3>
+              </div>
+              <div className="mb-4">
+                <p className="text-xs font-semibold text-gray-500 mb-1">Your Prescribed Protocol:</p>
+                <p className="text-xl font-extrabold text-blue-600 mb-3">
+                  {analysisReport?.protocolRecommendation?.name || "Custom Protocol"}
+                </p>
+              </div>
+              {Array.isArray(analysisReport?.protocolRecommendation?.products) && analysisReport.protocolRecommendation.products.length > 0 && (
+                <div className="mb-5">
+                  <p className="text-sm font-semibold text-gray-700 mb-2">What's included:</p>
+                  <div className="space-y-1">
+                    {analysisReport.protocolRecommendation.products.slice(0, 5).map((p, idx) => (
+                      <div key={idx} className="text-sm text-gray-600 flex items-center gap-2">
+                        <span className="text-blue-500">•</span>
+                        <span>{p?.name || p}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {analysisReport?.protocolRecommendation?.url && (
+                <a
+                  href={analysisReport.protocolRecommendation.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-xl text-center shadow-md text-sm"
+                  onClick={() => gaEvent('protocol_cta_click', { from: 'path_to_results_mobile' })}
+                >
+                  See Full Details →
+                </a>
+              )}
+            </div>
+            <div className="min-w-[85vw] snap-center bg-white rounded-2xl p-5 shadow-lg border-2 border-gray-200">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center">
+                  <span className="text-xl">💆‍♀️</span>
+                </div>
+                <h3 className="text-lg font-bold text-gray-900">IN-PERSON SERVICES</h3>
+              </div>
+              <div className="mb-4">
+                <p className="text-base font-bold text-purple-600 mb-2">Professional Treatments</p>
+                <p className="text-sm text-gray-600 mb-3">
+                  Enhance your results with in-person treatments at our Atlanta location.
+                </p>
+              </div>
+              <div className="mb-5">
+                <div className="space-y-1.5">
+                  <div className="text-sm text-gray-700 flex items-center gap-2">
+                    <span className="text-purple-500">•</span>
+                    <span>Custom Facials</span>
+                  </div>
+                  <div className="text-sm text-gray-700 flex items-center gap-2">
+                    <span className="text-purple-500">•</span>
+                    <span>Body Sculpting & Massage</span>
+                  </div>
+                  <div className="text-sm text-gray-700 flex items-center gap-2">
+                    <span className="text-purple-500">•</span>
+                    <span>Advanced Treatments</span>
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setActiveTab('concierge');
+                  gaEvent('esthetics_cta_click', { from: 'path_to_results_mobile' });
+                }}
+                className="block w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-xl text-center shadow-md text-sm"
+                type="button"
+              >
+                View Our Services →
+              </button>
+            </div>
+          </div>
+          <div className="flex justify-center gap-2 mt-4">
+            <div className="w-2 h-2 rounded-full bg-blue-600"></div>
+            <div className="w-2 h-2 rounded-full bg-gray-300"></div>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* 💡 PRIMARY SHARE SECTION */}
+    {analysisReport && (
+      <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-2xl p-6 sm:p-8 shadow-lg mb-8">
+        <div className="text-center mb-6">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-green-500 mb-3">
+            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+            </svg>
+          </div>
+          <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">
+            💡 Love This Analysis Tool?
+          </h3>
+          <p className="text-sm sm:text-base text-gray-600 max-w-2xl mx-auto">
+            Share Dr. Lazuk's AI Skin Analysis with someone who could benefit from a personalized skincare evaluation
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-3 justify-center">
+          <a
+            href="https://facebook.com/sharer/sharer.php?u=https://drlazuk.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => gaEvent('share_clicked', { platform: 'facebook', location: 'primary' })}
+            className="px-4 sm:px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all shadow-md hover:shadow-lg flex items-center gap-2 font-semibold text-sm sm:text-base"
+          >
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+            </svg>
+            <span>Share on Facebook</span>
+          </a>
+          <a
+            href="https://twitter.com/intent/tweet?text=I%20just%20got%20my%20AI%20skin%20analysis%20from%20Dr.%20Lazuk%20-%20it%27s%20incredible!%20Try%20it%20yourself&url=https://drlazuk.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => gaEvent('share_clicked', { platform: 'twitter', location: 'primary' })}
+            className="px-4 sm:px-6 py-3 bg-sky-500 text-white rounded-xl hover:bg-sky-600 transition-all shadow-md hover:shadow-lg flex items-center gap-2 font-semibold text-sm sm:text-base"
+          >
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z"/>
+            </svg>
+            <span className="hidden sm:inline">Tweet This</span>
+            <span className="sm:hidden">Tweet</span>
+          </a>
+          <a
+            href="mailto:?subject=Try%20this%20AI%20Skin%20Analysis&body=I%20just%20tried%20Dr.%20Lazuk's%20AI%20Skin%20Analysis%20tool%20and%20it%27s%20amazing!%20Check%20it%20out:%20https://drlazuk.com"
+            onClick={() => gaEvent('share_clicked', { platform: 'email', location: 'primary' })}
+            className="px-4 sm:px-6 py-3 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-all shadow-md hover:shadow-lg flex items-center gap-2 font-semibold text-sm sm:text-base"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+            <span className="hidden sm:inline">Email to Friend</span>
+            <span className="sm:hidden">Email</span>
+          </a>
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText('https://drlazuk.com');
+              gaEvent('share_clicked', { platform: 'copy_link', location: 'primary' });
+              alert('Link copied to clipboard!');
+            }}
+            className="px-4 sm:px-6 py-3 bg-gray-700 text-white rounded-xl hover:bg-gray-800 transition-all shadow-md hover:shadow-lg flex items-center gap-2 font-semibold text-sm sm:text-base"
+            type="button"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+            </svg>
+            <span>Copy Link</span>
+          </button>
+        </div>
+        <div className="mt-4 text-center">
+          <p className="text-xs text-gray-500">
+            Help others discover the power of AI-driven skincare analysis
+          </p>
+        </div>
+      </div>
+    )}
+
     <div className="flex flex-wrap gap-3 items-center mb-4">
       <button
         onClick={openKeySections}
@@ -3014,232 +3270,6 @@ const resetAnalysis = () => {
         <AreasOfFocusCard areas={analysisReport?.areasOfFocus} />
       </AccordionSection>
 
-      <AccordionSection
-        id="protocol"
-        title={`${(analysisReport?.clientName || "Your")}, Your Curated Protocol`}
-      >
-        <div className="mt-4 border rounded-2xl p-5 bg-white">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="text-sm font-semibold text-gray-500">Your Recommended Protocol</div>
-              <div className="mt-1 text-lg font-extrabold text-gray-900">
-                {analysisReport?.protocolRecommendation?.name || "Your Curated Protocol"}
-              </div>
-              <div className="mt-2 text-sm text-gray-700">
-                {analysisReport?.protocolRecommendation?.summary ||
-                  "Your protocol details will populate here after a successful analysis."}
-              </div>
-            </div>
-
-            {analysisReport?.protocolRecommendation?.url ? (
-              <a
-                href={analysisReport.protocolRecommendation.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="shrink-0 inline-flex items-center justify-center rounded-xl bg-gray-900 text-white px-4 py-2 text-sm font-semibold hover:bg-black"
-                onClick={() =>
-                  gaEvent('protocol_view_click', {
-                    protocolName: analysisReport.protocolRecommendation?.name || 'curated_protocol',
-                  })
-                }
-              >
-                View Protocol
-              </a>
-            ) : null}
-          </div>
-
-          {Array.isArray(analysisReport?.protocolRecommendation?.products) &&
-          analysisReport.protocolRecommendation.products.length > 0 ? (
-            <div className="mt-4">
-              <div className="text-sm font-semibold text-gray-900">What's included</div>
-              <div className="mt-2 grid grid-cols-1 gap-2">
-                {analysisReport.protocolRecommendation.products.map((p, idx) => (
-                  <div key={p?.name || idx} className="text-sm text-gray-700">
-                    • {p?.name || p}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-        </div>
-      </AccordionSection>
-
-
-      <AccordionSection
-        id="paths"
-        title="Possible Paths Forward"
-        subtitle="Optional. Choose a lens (Understand / Guidance)."
-        open={!!openSections.paths}
-        onToggle={toggleSection}
-      >
-        <AgencyLayer
-          onChoose={(choice) => {
-            setAgencyChoice(choice);
-            gaEvent('agency_choice', { choice });
-
-            if (choice === "esthetics") {
-              window.location.assign("/esthetics-concierge");
-            }
-          }}
-        />
-
-        {agencyChoice === 'understand' && (
-          <div className="mt-6">
-            {agingImages.length > 0 ? (
-              <div className="bg-white border border-gray-200 p-6">
-                <h4 className="text-xl font-bold text-gray-900 mb-2">
-                  Your Future Story (Cosmetic Projection)
-                </h4>
-                <p className="text-sm text-gray-700 mb-6">
-                  These are visual projections anchored to your selfie.
-                </p>
-
-                <div className={`grid gap-4 ${hasAgingTile ? "" : "md:grid-cols-2"}`}>
-                  {agingImages.map((img) => (
-                    <div key={img.key} className="relative border border-gray-200 bg-gray-50 p-3">
-                      <IdentityLockBadge
-                        placement="top-left"
-                        onClick={() => {
-                          gaEvent('identity_lock_badge_clicked', { key: img.key });
-                          setIdentityLockModalOpen(true);
-                        }}
-                      />
-
-                      <WatermarkOverlay />
-
-                      <img
-                        src={img.url}
-                        alt={img.label}
-                        className="w-full border border-gray-200"
-                        onLoad={() => gaEvent('aging_image_loaded', { key: img.key })}
-                      />
-
-                      <p className="text-sm font-bold text-gray-900 mt-3">{img.label}</p>
-
-                      <div className="mt-3 grid grid-cols-3 gap-2">
-                        <button
-                          onClick={() => handleShare({ url: img.url, label: img.label })}
-                          className="py-2 text-sm font-bold border bg-gray-900 text-white hover:bg-gray-800 border-gray-900"
-                          type="button"
-                        >
-                          Share
-                        </button>
-
-                        <button
-                          onClick={() => handleSave({ url: img.url, label: img.label })}
-                          className="py-2 text-sm font-bold border bg-white text-gray-900 hover:bg-gray-50 border-gray-300"
-                          type="button"
-                        >
-                          Save
-                        </button>
-
-                        <button
-                          onClick={() => handleCopyImageLink({ url: img.url, label: img.label })}
-                          className="py-2 text-sm font-bold border bg-white text-gray-900 hover:bg-gray-50 border-gray-300"
-                          type="button"
-                        >
-                          Copy
-                        </button>
-                      </div>
-
-                      {!reflectionSeen && (
-                        <p className="text-xs text-gray-600 mt-3">
-                          Sharing/saving activates after you read Dr. Lazuk’s note below.
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="bg-gray-50 border border-gray-200 p-6">
-                <p className="text-sm text-gray-700">
-                  Your Future Story images are not available for this result.
-                </p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {agencyChoice === 'guidance' && (
-          <div className="mt-6 bg-white border-2 border-gray-900 p-8">
-            <h4 className="font-bold text-gray-900 mb-4 text-2xl">Recommended Products (Dr. Lazuk Cosmetics®)</h4>
-            <div className="grid md:grid-cols-3 gap-4 mb-8">
-              {analysisReport.recommendedProducts.map((p, i) => (
-                <div key={i} className="bg-gray-50 border p-4">
-                  <h5 className="font-bold text-gray-900 mb-1">{p.name}</h5>
-                  <p className="text-gray-900 font-bold mb-2">${p.price}</p>
-                  <ul className="text-sm text-gray-700 mb-3">
-                    {p.benefits.map((b, j) => (
-                      <li key={j}>✓ {b}</li>
-                    ))}
-                  </ul>
-                  <a
-                    href={p.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() =>
-                      gaEvent('product_click', {
-                        productName: p.name,
-                        category: p.category,
-                        price: p.price,
-                        primaryConcern
-                      })
-                    }
-                    className="block text-center bg-gray-900 text-white py-2 font-bold hover:bg-gray-800"
-                  >
-                    View
-                  </a>
-                </div>
-              ))}
-            </div>
-
-            <h4 className="font-bold text-gray-900 mb-4 text-2xl">
-              Recommended Treatments
-            </h4>
-            <div className={`grid gap-4 ${hasAgingTile ? "" : "md:grid-cols-2"}`}>
-              {analysisReport.recommendedServices.map((s, i) => (
-                <div key={i} className="bg-blue-50 border-2 border-blue-200 p-5">
-                  <h5 className="font-bold text-blue-900 mb-2 text-lg">{s.name}</h5>
-                  <p className="text-sm text-blue-800 mb-3">{s.description}</p>
-                  <p className="text-sm text-blue-900 font-semibold mb-2">
-                    Why We Recommend This:
-                  </p>
-                  <p className="text-sm text-blue-800 mb-3">{s.whyRecommended}</p>
-                  <div className="mb-4">
-                    <p className="text-xs font-bold text-blue-900 mb-1">Benefits:</p>
-                    <ul className="text-sm text-blue-800">
-                      {s.benefits.map((b, j) => (
-                        <li key={j}>✓ {b}</li>
-                      ))}
-                    </ul>
-                  </div>
-                  <a
-                    href="mailto:contact@skindoctor.ai"
-                    onClick={() =>
-                      gaEvent('book_appointment_click', {
-                        serviceName: s.name,
-                        primaryConcern
-                      })
-                    }
-                    className="block text-center bg-blue-600 text-white py-3 font-bold hover:bg-blue-700"
-                  >
-                    Book Appointment
-                  </a>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {!agencyChoice && (
-          <div className="mt-4 bg-gray-50 border border-gray-200 p-5">
-            <p className="text-sm text-gray-700">
-              Choose a path above — nothing is required.
-            </p>
-          </div>
-        )}
-      </AccordionSection>
 
 
       <AccordionSection
@@ -3560,6 +3590,77 @@ const resetAnalysis = () => {
         </div>
       </div>
     )}
+  </div>
+)}
+
+{/* 📤 SECONDARY SHARE SECTION - Bottom of Report */}
+{analysisReport && activeTab === 'analysis' && (
+  <div className="bg-white border-2 border-gray-200 rounded-2xl p-6 sm:p-8 mt-8 mb-8">
+    <div className="max-w-3xl mx-auto">
+      <div className="text-center mb-6">
+        <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-3">
+          📤 Found This Helpful?
+        </h3>
+        <p className="text-sm sm:text-base text-gray-600">
+          Share Dr. Lazuk's AI Skin Analysis with friends and family who care about their skin health
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-3 justify-center mb-4">
+        <a
+          href="https://facebook.com/sharer/sharer.php?u=https://drlazuk.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => gaEvent('share_clicked', { platform: 'facebook', location: 'bottom' })}
+          className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all flex items-center gap-2 text-sm font-semibold"
+        >
+          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+          </svg>
+          <span>Facebook</span>
+        </a>
+        <a
+          href="https://twitter.com/intent/tweet?text=I%20just%20got%20my%20AI%20skin%20analysis%20from%20Dr.%20Lazuk%20-%20it%27s%20incredible!%20Try%20it%20yourself&url=https://drlazuk.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => gaEvent('share_clicked', { platform: 'twitter', location: 'bottom' })}
+          className="px-5 py-2.5 bg-sky-500 text-white rounded-lg hover:bg-sky-600 transition-all flex items-center gap-2 text-sm font-semibold"
+        >
+          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z"/>
+          </svg>
+          <span>Twitter</span>
+        </a>
+        <a
+          href="mailto:?subject=Try%20this%20AI%20Skin%20Analysis&body=I%20just%20tried%20Dr.%20Lazuk's%20AI%20Skin%20Analysis%20tool%20and%20it%27s%20amazing!%0A%0ACheck%20it%20out:%20https://drlazuk.com"
+          onClick={() => gaEvent('share_clicked', { platform: 'email', location: 'bottom' })}
+          className="px-5 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-all flex items-center gap-2 text-sm font-semibold"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          </svg>
+          <span>Email</span>
+        </a>
+        <button
+          onClick={() => {
+            navigator.clipboard.writeText('https://drlazuk.com');
+            gaEvent('share_clicked', { platform: 'copy_link', location: 'bottom' });
+            alert('Link copied to clipboard!');
+          }}
+          className="px-5 py-2.5 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-all flex items-center gap-2 text-sm font-semibold"
+          type="button"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+          </svg>
+          <span>Copy</span>
+        </button>
+      </div>
+      <div className="text-center">
+        <p className="text-xs text-gray-400">
+          Sharing is caring - help someone discover better skin health
+        </p>
+      </div>
+    </div>
   </div>
 )}
 
