@@ -2435,37 +2435,37 @@ const resetAnalysis = () => {
           backgroundSize: '32px 32px'
         }}></div>
         
-        <div className="max-w-6xl mx-auto px-4 py-8 relative z-10">
-          <div className="flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-4 py-6 sm:py-8 relative z-10">
+          <div className="flex flex-col sm:flex-row items-center sm:items-center sm:justify-between gap-4 sm:gap-0 text-center sm:text-left">
             <div>
-              <h1 className="text-4xl font-extrabold tracking-tight mb-2 bg-gradient-to-r from-white to-blue-100 bg-clip-text text-transparent" style={{ WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
+              <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-2 bg-gradient-to-r from-white to-blue-100 bg-clip-text text-transparent" style={{ WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
                 DR. LAZUK
               </h1>
-              <p className="text-sm mt-1 text-blue-200 tracking-widest font-light">
+              <p className="text-xs sm:text-sm mt-1 text-blue-200 tracking-widest font-light">
                 ESTHETICS | COSMETICS | BIOTICS | NUTRITION
               </p>
             </div>
-            <div className="text-right">
-              <div className="inline-block bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full border border-white/20">
+            <div className="text-center sm:text-right">
+              <div className="inline-block bg-white/10 backdrop-blur-sm px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/20">
                 <p className="text-xs text-blue-100 uppercase tracking-wider font-semibold">
                   Virtual Skincare Analysis
                 </p>
               </div>
-              <p className="text-sm text-blue-100 mt-3 italic">Enhancing the Beautiful You, Naturally</p>
+              <p className="text-xs sm:text-sm text-blue-100 mt-2 sm:mt-3 italic">Enhancing the Beautiful You, Naturally</p>
             </div>
           </div>
         </div>
       </div>
 
       <div className="bg-white border-b-2 border-gray-100 shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 py-1">
-          <div className="flex gap-1">
+        <div className="max-w-6xl mx-auto px-2 sm:px-4 py-1">
+          <div className="flex gap-0.5 sm:gap-1 overflow-x-auto scrollbar-hide">
             <button
               onClick={() => {
                 setActiveTab('home');
                 gaEvent('tab_changed', { tab: 'home' });
               }}
-              className={`flex items-center gap-2 px-6 py-4 font-semibold transition-all duration-200 relative ${
+              className={`flex items-center gap-1 sm:gap-2 px-3 sm:px-6 py-3 sm:py-4 font-semibold transition-all duration-200 relative whitespace-nowrap text-sm sm:text-base ${
                 activeTab === 'home'
                   ? 'text-blue-900 bg-blue-50'
                   : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
@@ -2475,15 +2475,16 @@ const resetAnalysis = () => {
               {activeTab === 'home' && (
                 <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-600 to-blue-400"></div>
               )}
-              <Camera size={20} strokeWidth={2.5} />
-              <span>Skin Analysis</span>
+              <Camera size={18} strokeWidth={2.5} className="sm:w-5 sm:h-5" />
+              <span className="hidden sm:inline">Skin Analysis</span>
+              <span className="sm:hidden">Analysis</span>
             </button>
             <button
               onClick={() => {
                 setActiveTab('chat');
                 gaEvent('tab_changed', { tab: 'chat' });
               }}
-              className={`flex items-center gap-2 px-6 py-4 font-semibold transition-all duration-200 relative ${
+              className={`flex items-center gap-1 sm:gap-2 px-3 sm:px-6 py-3 sm:py-4 font-semibold transition-all duration-200 relative whitespace-nowrap text-sm sm:text-base ${
                 activeTab === 'chat'
                   ? 'text-blue-900 bg-blue-50'
                   : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
@@ -2493,15 +2494,16 @@ const resetAnalysis = () => {
               {activeTab === 'chat' && (
                 <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-600 to-blue-400"></div>
               )}
-              <MessageCircle size={20} strokeWidth={2.5} />
-              <span>Ask Dr. Lazuk</span>
+              <MessageCircle size={18} strokeWidth={2.5} className="sm:w-5 sm:h-5" />
+              <span className="hidden sm:inline">Ask Dr. Lazuk</span>
+              <span className="sm:hidden">Ask Dr. L</span>
             </button>
             <button
               onClick={() => {
                 setActiveTab('education');
                 gaEvent('tab_changed', { tab: 'education' });
               }}
-              className={`flex items-center gap-2 px-6 py-4 font-semibold transition-all duration-200 relative ${
+              className={`flex items-center gap-1 sm:gap-2 px-3 sm:px-6 py-3 sm:py-4 font-semibold transition-all duration-200 relative whitespace-nowrap text-sm sm:text-base ${
                 activeTab === 'education'
                   ? 'text-blue-900 bg-blue-50'
                   : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
@@ -2511,7 +2513,7 @@ const resetAnalysis = () => {
               {activeTab === 'education' && (
                 <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-600 to-blue-400"></div>
               )}
-              <BookOpen size={20} strokeWidth={2.5} />
+              <BookOpen size={18} strokeWidth={2.5} className="sm:w-5 sm:h-5" />
               <span>Services</span>
             </button>
             <button
@@ -2519,7 +2521,7 @@ const resetAnalysis = () => {
                 setActiveTab('concierge');
                 gaEvent('tab_changed', { tab: 'concierge' });
               }}
-              className={`flex items-center gap-2 px-6 py-4 font-semibold transition-all duration-200 relative ${
+              className={`flex items-center gap-1 sm:gap-2 px-3 sm:px-6 py-3 sm:py-4 font-semibold transition-all duration-200 relative whitespace-nowrap text-sm sm:text-base ${
                 activeTab === 'concierge'
                   ? 'text-blue-900 bg-blue-50'
                   : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
@@ -2529,8 +2531,9 @@ const resetAnalysis = () => {
               {activeTab === 'concierge' && (
                 <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-600 to-blue-400"></div>
               )}
-              <Sparkles size={20} strokeWidth={2.5} />
-              <span>Esthetics Concierge</span>
+              <Sparkles size={18} strokeWidth={2.5} className="sm:w-5 sm:h-5" />
+              <span className="hidden sm:inline">Esthetics Concierge</span>
+              <span className="sm:hidden">Concierge</span>
             </button>
           </div>
         </div>
@@ -2891,31 +2894,31 @@ const resetAnalysis = () => {
 
     {/* 📧 Email Report Button - TOP */}
     {!emailSent && (
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-2xl p-6 shadow-md">
-        <div className="flex items-center justify-between gap-6">
-          <div>
-            <h3 className="text-xl font-bold text-gray-900 mb-2 flex items-center gap-2">
-              <Mail className="text-blue-600" size={24} />
-              Get Your Complete Report via Email
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-2xl p-4 sm:p-6 shadow-md">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-6">
+          <div className="flex-1">
+            <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2 flex items-center gap-2">
+              <Mail className="text-blue-600 flex-shrink-0" size={20} />
+              <span className="leading-tight">Get Your Complete Report via Email</span>
             </h3>
-            <p className="text-gray-600">
+            <p className="text-sm sm:text-base text-gray-600">
               Includes your full analysis, aging projections, and personalized recommendations
             </p>
           </div>
           <button
             onClick={handleEmailReport}
             disabled={emailingReport}
-            className="px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-all disabled:opacity-50 flex items-center gap-2 whitespace-nowrap"
+            className="w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2 whitespace-nowrap text-sm sm:text-base"
             type="button"
           >
             {emailingReport ? (
               <>
-                <Loader className="animate-spin" size={20} />
+                <Loader className="animate-spin" size={18} />
                 <span>Sending...</span>
               </>
             ) : (
               <>
-                <Mail size={20} />
+                <Mail size={18} />
                 <span>Email My Report</span>
               </>
             )}
@@ -2925,16 +2928,16 @@ const resetAnalysis = () => {
     )}
 
     {emailSent && (
-      <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-6 shadow-md">
+      <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-4 sm:p-6 shadow-md">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0">
-            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0">
+            <svg className="w-5 h-5 sm:w-6 sm:h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
           <div>
-            <h3 className="text-xl font-bold text-green-900">Report Sent!</h3>
-            <p className="text-green-700">Check your email for your complete analysis</p>
+            <h3 className="text-lg sm:text-xl font-bold text-green-900">Report Sent!</h3>
+            <p className="text-sm sm:text-base text-green-700">Check your email for your complete analysis</p>
           </div>
         </div>
       </div>
@@ -3464,13 +3467,13 @@ const resetAnalysis = () => {
 
     {/* 📧 Email Report Button - BOTTOM (after reading everything) */}
     {!emailSent && (
-      <div className="mt-8 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-2xl p-8 shadow-md">
-        <div className="text-center mb-6">
-          <h3 className="text-2xl font-bold text-gray-900 mb-3 flex items-center justify-center gap-2">
-            <Mail className="text-blue-600" size={28} />
-            Want This Complete Report in Your Inbox?
+      <div className="mt-6 sm:mt-8 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-2xl p-4 sm:p-8 shadow-md">
+        <div className="text-center mb-4 sm:mb-6">
+          <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2 sm:mb-3 flex flex-col sm:flex-row items-center justify-center gap-2">
+            <Mail className="text-blue-600" size={24} />
+            <span>Want This Complete Report in Your Inbox?</span>
           </h3>
-          <p className="text-gray-700 text-lg max-w-2xl mx-auto">
+          <p className="text-gray-700 text-sm sm:text-lg max-w-2xl mx-auto px-2">
             Get your full analysis, aging projections, and all recommendations delivered to your email. Perfect for sharing with your provider or keeping for future reference.
           </p>
         </div>
@@ -3478,18 +3481,19 @@ const resetAnalysis = () => {
           <button
             onClick={handleEmailReport}
             disabled={emailingReport}
-            className="px-10 py-5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-lg font-bold rounded-xl shadow-xl hover:shadow-2xl transition-all disabled:opacity-50 flex items-center gap-3"
+            className="w-full sm:w-auto px-6 sm:px-10 py-4 sm:py-5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-base sm:text-lg font-bold rounded-xl shadow-xl hover:shadow-2xl transition-all disabled:opacity-50 flex items-center justify-center gap-2 sm:gap-3"
             type="button"
           >
             {emailingReport ? (
               <>
-                <Loader className="animate-spin" size={24} />
+                <Loader className="animate-spin" size={20} />
                 <span>Sending Your Report...</span>
               </>
             ) : (
               <>
-                <Mail size={24} />
-                <span>Email Me My Complete Report</span>
+                <Mail size={20} />
+                <span className="hidden sm:inline">Email Me My Complete Report</span>
+                <span className="sm:hidden">Email My Report</span>
               </>
             )}
           </button>
@@ -3498,16 +3502,16 @@ const resetAnalysis = () => {
     )}
 
     {emailSent && (
-      <div className="mt-8 bg-green-50 border-2 border-green-200 rounded-2xl p-8 shadow-md">
-        <div className="flex flex-col items-center gap-4 text-center">
-          <div className="w-16 h-16 rounded-full bg-green-500 flex items-center justify-center">
-            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div className="mt-6 sm:mt-8 bg-green-50 border-2 border-green-200 rounded-2xl p-4 sm:p-8 shadow-md">
+        <div className="flex flex-col items-center gap-3 sm:gap-4 text-center">
+          <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-green-500 flex items-center justify-center">
+            <svg className="w-6 h-6 sm:w-8 sm:h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <div>
-            <h3 className="text-2xl font-bold text-green-900 mb-2">Report Successfully Sent!</h3>
-            <p className="text-green-700 text-lg">Check your email for your complete skincare analysis with all images and recommendations.</p>
+          <div className="px-2">
+            <h3 className="text-xl sm:text-2xl font-bold text-green-900 mb-2">Report Successfully Sent!</h3>
+            <p className="text-green-700 text-sm sm:text-lg">Check your email for your complete skincare analysis with all images and recommendations.</p>
           </div>
         </div>
       </div>
@@ -3519,7 +3523,7 @@ const resetAnalysis = () => {
         )}
 
         {activeTab === 'chat' && (
-          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl shadow-xl overflow-hidden" style={{ height: '700px' }}>
+          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl sm:rounded-2xl shadow-xl overflow-hidden" style={{ height: 'calc(100vh - 250px)', maxHeight: '700px', minHeight: '500px' }}>
             <div className="flex flex-col h-full">
               {/* Header - Premium */}
               <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white px-8 py-8">
