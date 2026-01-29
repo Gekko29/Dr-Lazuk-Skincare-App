@@ -415,11 +415,9 @@ function buildProtocolSet(id) {
 }
 
 function recommendProtocols({ primaryConcern, clusters, conditionWeighting }) {
-  // Primary is based on top weighted condition; Secondary is optional if meaningful (>=0.25 weight) and distinct.
+  // Return ONLY primary protocol based on top weighted condition (authority approach)
   const cw = conditionWeighting || computeConditionWeighting({ primaryConcern, clusters });
   const primaryCond = cw?.primary?.condition || null;
-  const secondaryCond = cw?.secondary?.condition || null;
-  const secondaryWeight = cw?.secondary?.weight || 0;
 
   // Severity signals
   const scores = (clusters || []).map((c) => Number(c.score)).filter((n) => Number.isFinite(n));
@@ -444,23 +442,10 @@ function recommendProtocols({ primaryConcern, clusters, conditionWeighting }) {
   if (primaryCond === "sensitivity_calm") primary = pickSensitivityTrack();
   else primary = pickHydrationTrack(); // default track
 
-  // Optional secondary: only if meaningful and not same track
-  let secondary = null;
-  if (secondaryCond && secondaryWeight >= 0.25) {
-    const secondaryTrack = secondaryCond === "sensitivity_calm" ? pickSensitivityTrack() : pickHydrationTrack();
-    if (secondaryTrack && secondaryTrack.id !== primary?.id) secondary = secondaryTrack;
-  }
-
-  const clause =
-    "These protocol recommendations are not exclusive. If you resonate with more than one track, we can blend priorities over time—starting with the Primary protocol and introducing the Secondary track (if present) as your skin stabilizes.";
-
   return {
     primary,
-    secondary,
-    clause,
     basis: {
       primary_condition: cw?.primary || null,
-      secondary_condition: cw?.secondary || null,
     },
   };
 }
@@ -492,15 +477,12 @@ function buildStructuredSections({ firstName, primaryConcern, captureQuality, co
     .join("<br/>") || "• Not available";
 
   const p = protocols?.primary;
-  const s = protocols?.secondary;
 
   const protoHtml = `
     <div>
-      <div><strong>Primary:</strong> ${p ? `${escapeHtml(p.name)} (${escapeHtml(p.tier)})` : "—"}</div>
-      ${p?.url ? `<div style="margin-top:6px;"><a href="${escapeHtml(p.url)}" target="_blank" rel="noopener noreferrer">View Primary Protocol</a></div>` : ""}
-      ${s ? `<div style="margin-top:10px;"><strong>Secondary (optional):</strong> ${escapeHtml(s.name)} (${escapeHtml(s.tier)})</div>` : ""}
-      ${s?.url ? `<div style="margin-top:6px;"><a href="${escapeHtml(s.url)}" target="_blank" rel="noopener noreferrer">View Secondary Protocol</a></div>` : ""}
-      ${protocols?.clause ? `<div style="margin-top:10px; color:#374151; font-size: 13px;">${escapeHtml(protocols.clause)}</div>` : ""}
+      <div><strong>Your Prescribed Protocol:</strong> ${p ? `${escapeHtml(p.name)}` : "—"}</div>
+      ${p?.url ? `<div style="margin-top:8px;"><a href="${escapeHtml(p.url)}" target="_blank" rel="noopener noreferrer" style="color:#2563eb; text-decoration:underline;">View Complete Protocol Details</a></div>` : ""}
+      ${p ? `<div style="margin-top:8px; color:#6B7280; font-size: 13px;">This protocol is specifically formulated for your skin's needs based on today's analysis.</div>` : ""}
     </div>
   `;
 
@@ -526,7 +508,7 @@ function buildStructuredSections({ firstName, primaryConcern, captureQuality, co
     { n: 4, title: "Interpretive insights (moderate confidence)", html: `Based on the pattern of cluster scores, your near-term leverage tends to come from supporting the lowest-scoring areas first (see Areas of Focus).` },
     { n: 5, title: "Known limitations", html: limitations },
     { n: 6, title: "Condition weighting summary", html: cw },
-    { n: 7, title: "Protocol guidance (Primary + optional Secondary)", html: protoHtml },
+    { n: 7, title: "Your Prescribed Protocol", html: protoHtml },
     { n: 8, title: "Expectation setting", html: expectations },
     { n: 9, title: "Aging imagery context", html: aging + (confidenceHtml ? `<div style="margin-top:10px;">${confidenceHtml}</div>` : "") },
   ];
