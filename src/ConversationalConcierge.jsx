@@ -147,26 +147,10 @@ export default function ConversationalConcierge({
   };
 
   const showProtocol = () => {
-    const firstName = userContext?.firstName || "there";
-    
+    // Skip to complete stage with exit screen
     setStage('complete');
-    
-    // Show protocol
-    addMessage(
-      `✨ Your Personalized Esthetic Protocol\n\nBased on your goals and preferences, we've curated a treatment plan specifically for you.\n\n📧 Your detailed protocol has been sent to your email.\n📞 Our team will be in contact with you shortly to schedule your consultation.`,
-      'ai',
-      500
-    );
-
-    // Ask final question
-    setTimeout(() => {
-      setFinalQuestion(true);
-      addMessage(
-        "Before we finish, is there anything else we can help you with today? Any additional questions or concerns you'd like us to note for your consultation?",
-        'ai',
-        2000
-      );
-    }, 2500);
+    setIsTyping(false);
+    setFinalQuestion(false);
   };
 
   const handleFinalResponse = (e) => {
@@ -431,6 +415,75 @@ export default function ConversationalConcierge({
               <div className="text-center">
                 <Loader className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
                 <p className="text-gray-600 font-medium">Creating your personalized protocol...</p>
+              </div>
+            </div>
+          )}
+
+          {/* EXIT SCREEN - After all questions complete */}
+          {stage === 'complete' && (
+            <div className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 rounded-2xl p-6 sm:p-8 mx-4 sm:mx-6 my-6">
+              <div className="text-center mb-6">
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-500 mb-4">
+                  <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900 mb-2">
+                  Thank You! We've Captured Your Goals
+                </h2>
+                <p className="text-sm sm:text-base text-gray-600">
+                  Here's what you shared with us:
+                </p>
+              </div>
+
+              <div className="bg-white rounded-xl p-4 sm:p-6 mb-6 border border-gray-200">
+                <h3 className="font-bold text-gray-900 mb-4">Your Responses:</h3>
+                <div className="space-y-3">
+                  {Object.entries(answers).map(([key, value], idx) => (
+                    <div key={key} className="text-sm">
+                      <span className="font-semibold text-blue-600">Q{idx + 1}:</span>{' '}
+                      <span className="text-gray-700">{value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mb-4">
+                <h3 className="text-xl font-bold text-gray-900 text-center mb-4">What's Next?</h3>
+                <p className="text-sm text-gray-600 text-center mb-6">
+                  Choose how you'd like to proceed:
+                </p>
+              </div>
+
+              <div className="grid sm:grid-cols-2 gap-4">
+                <button
+                  onClick={() => {
+                    window.dispatchEvent(new CustomEvent('switchToServicesTab'));
+                  }}
+                  className="bg-white border-2 border-blue-600 text-blue-600 hover:bg-blue-50 font-bold py-4 px-6 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 text-center"
+                  type="button"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  </svg>
+                  <span>View Our Services</span>
+                </button>
+
+                <a
+                  href="mailto:contact@skindoctor.ai?subject=Esthetics Consultation Request&body=I'd like to schedule a consultation for esthetic services."
+                  className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-4 px-6 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 text-center shadow-md hover:shadow-lg"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                  <span>Request Consultation</span>
+                </a>
+              </div>
+
+              <div className="mt-6 text-center">
+                <p className="text-xs text-gray-500">
+                  Email us to schedule your visit - we'll respond within 24 hours
+                </p>
               </div>
             </div>
           )}
