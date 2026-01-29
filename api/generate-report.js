@@ -1193,7 +1193,7 @@ function textToHtmlParagraphs(text) {
   return parts
     .map(
       (p) =>
-        `<p style="margin: 0 0 12px 0; font-size: 13px; color: #111827; white-space: pre-wrap;">${p}</p>`
+        `<p style="margin: 0 0 18px 0; font-size: 14px; color: #374151; line-height: 1.7; white-space: pre-wrap;">${p}</p>`
     )
     .join("");
 }
@@ -2045,19 +2045,25 @@ function buildAreasOfFocusSectionHtml({ analysisContext, imageAnalysis, visitorQ
 
   const itemHtml = items
     .map((it, idx) => {
-      const topBorder = idx === 0 ? "" : `border-top: 1px solid #E5E7EB;`;
+      const topBorder = idx === 0 ? "" : `border-top: 2px solid #F3F4F6; margin-top: 20px; padding-top: 20px;`;
       return `
-        <div style="padding: 12px 0; ${topBorder}">
-          <div style="font-size: 13px; font-weight: 800; color: #111827; margin: 0 0 6px 0;">
+        <div style="${topBorder}">
+          <div style="font-size: 16px; font-weight: 700; color: #111827; margin: 0 0 16px 0;">
             ${escapeHtml(it.title)}
           </div>
 
-          <div style="font-size: 12px; color: #111827; line-height: 1.55; margin: 6px 0 0 0;">
-            <strong>The Compounding Risk:</strong> ${escapeHtml(it.compoundingRisk)}
+          <div style="margin: 0 0 16px 0;">
+            <div style="font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 8px;">The Compounding Risk:</div>
+            <p style="margin: 0; font-size: 14px; color: #4B5563; line-height: 1.7;">
+              ${escapeHtml(it.compoundingRisk)}
+            </p>
           </div>
 
-          <div style="font-size: 12px; color: #111827; line-height: 1.55; margin: 8px 0 0 0;">
-            <strong>Do This Now:</strong> ${escapeHtml(it.doThisNow)}
+          <div style="background: #EFF6FF; border-left: 4px solid #3B82F6; padding: 16px; border-radius: 8px; margin: 0;">
+            <div style="font-size: 14px; font-weight: 600; color: #1E40AF; margin-bottom: 10px;">Do This Now:</div>
+            <p style="margin: 0; font-size: 14px; color: #374151; line-height: 1.7;">
+              ${escapeHtml(it.doThisNow)}
+            </p>
           </div>
         </div>
       `;
@@ -2229,7 +2235,7 @@ function toEmailParagraphHtml(text) {
     .split(/\n\s*\n/g) // paragraph breaks
     .map(
       (p) =>
-        `<p style="margin:0 0 14px 0; line-height:1.55; font-size:14px; color:#111827;">${p.replace(
+        `<p style="margin:0 0 18px 0; line-height:1.7; font-size:14px; color:#374151;">${p.replace(
           /\n/g,
           "<br/>"
         )}</p>`
@@ -2239,9 +2245,9 @@ function toEmailParagraphHtml(text) {
 
 function buildEmailReflectionSectionHtml() {
   return `
-  <div style="margin-top:18px; padding-top:18px; border-top:1px solid #E5E7EB;">
-    <p style="margin:0 0 12px 0; font-size:14px; color:#111827; line-height:1.55;">
-      <strong>${escapeHtml(EMAIL_REFLECTION_INTRO)}</strong>
+  <div style="margin: 0;">
+    <p style="margin:0 0 20px 0; font-size:16px; color:#374151; line-height:1.7; font-style: italic;">
+      ${escapeHtml(EMAIL_REFLECTION_INTRO)}
     </p>
     ${EMAIL_REFLECTION_PARAGRAPHS.map(toEmailParagraphHtml).join("")}
   </div>
@@ -3250,9 +3256,9 @@ const structured_report_sections = buildStructuredSections({
 // Wrap structured sections in Analysis Overview card
 const structuredSectionsContent = structured_report_sections
       .map((s) => `
-        <div style="margin: 18px 0; padding: 14px; border: 1px solid #E5E7EB; border-radius: 10px;">
-          <div style="font-weight: 800; color:#111827; font-size: 14px; margin-bottom: 6px;">${s.n}. ${escapeHtml(s.title)}</div>
-          <div style="font-size: 13px; color:#374151; line-height: 1.6;">${s.html}</div>
+        <div style="margin: 20px 0; padding: 16px; border: 1px solid #E5E7EB; border-radius: 12px; background: #F9FAFB;">
+          <div style="font-weight: 700; color:#111827; font-size: 15px; margin-bottom: 10px;">${s.n}. ${escapeHtml(s.title)}</div>
+          <div style="font-size: 14px; color:#374151; line-height: 1.7;">${s.html}</div>
         </div>
       `)
       .join("");
