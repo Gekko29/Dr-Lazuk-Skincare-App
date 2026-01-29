@@ -2065,13 +2065,9 @@ function buildAreasOfFocusSectionHtml({ analysisContext, imageAnalysis, visitorQ
     .join("");
 
   return `
-    <div style="margin: 16px 0 18px 0; padding: 14px 16px; border-radius: 10px; border: 1px solid #111827; background-color: #FFFFFF;">
-      <div style="font-size: 14px; font-weight: 900; color: #111827; margin: 0 0 6px 0;">
-        Areas of Focus
-      </div>
-
-      <div style="font-size: 12px; color: #111827; margin: 0 0 10px 0;">
-        This is not reassurance. It’s course correction — based on the patterns visible in your photo and what you shared.
+    <div style="margin: 0; padding: 0;">
+      <div style="font-size: 14px; color: #374151; margin: 0 0 16px 0; line-height: 1.6;">
+        This is not reassurance. It's course correction — based on the patterns visible in your photo and what you shared.
       </div>
 
       <div>
@@ -3251,7 +3247,8 @@ const structured_report_sections = buildStructuredSections({
       return { ...s, text: plain };
     });
 
-const structuredSectionsHtml = structured_report_sections
+// Wrap structured sections in Analysis Overview card
+const structuredSectionsContent = structured_report_sections
       .map((s) => `
         <div style="margin: 18px 0; padding: 14px; border: 1px solid #E5E7EB; border-radius: 10px;">
           <div style="font-weight: 800; color:#111827; font-size: 14px; margin-bottom: 6px;">${s.n}. ${escapeHtml(s.title)}</div>
@@ -3259,12 +3256,65 @@ const structuredSectionsHtml = structured_report_sections
         </div>
       `)
       .join("");
+
+const structuredSectionsHtml = `
+  <div style="margin: 24px 0; padding: 28px 24px; background: white; border: 2px solid #E5E7EB; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+    <div style="display: flex; align-items: center; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 2px solid #F3F4F6;">
+      <div style="font-size: 32px; margin-right: 16px;">📋</div>
+      <div style="font-size: 22px; font-weight: 800; color: #111827;">Analysis Overview</div>
+    </div>
+    ${structuredSectionsContent}
+  </div>
+`;
+// Wrap each major section in cards with clear headers
+const mainFindingsCard = before ? `
+  <div style="margin: 24px 0; padding: 28px 24px; background: white; border: 2px solid #E5E7EB; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+    <div style="display: flex; align-items: center; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 2px solid #F3F4F6;">
+      <div style="font-size: 32px; margin-right: 16px;">🔬</div>
+      <div style="font-size: 22px; font-weight: 800; color: #111827;">Main Findings</div>
+    </div>
+    ${textToHtmlParagraphs(before)}
+  </div>
+` : '';
+
+const areasOfFocusCard = areasOfFocusHtml ? `
+  <div style="margin: 24px 0; padding: 28px 24px; background: white; border: 2px solid #E5E7EB; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+    <div style="display: flex; align-items: center; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 2px solid #F3F4F6;">
+      <div style="font-size: 32px; margin-right: 16px;">🎯</div>
+      <div style="font-size: 22px; font-weight: 800; color: #111827;">Areas of Focus</div>
+    </div>
+    ${areasOfFocusHtml}
+  </div>
+` : '';
+
+const agingImagesCard = agingPreviewHtml ? `
+  <div style="margin: 24px 0; padding: 28px 24px; background: white; border: 2px solid #E5E7EB; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+    <div style="display: flex; align-items: center; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 2px solid #F3F4F6;">
+      <div style="font-size: 32px; margin-right: 16px;">🔮</div>
+      <div style="font-size: 22px; font-weight: 800; color: #111827;">Your Skin's Future Story</div>
+    </div>
+    ${agingPreviewHtml}
+  </div>
+` : '';
+
+const reflectionCard = reflectionHtml ? `
+  <div style="margin: 24px 0; padding: 28px 24px; background: white; border: 2px solid #E5E7EB; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+    <div style="display: flex; align-items: center; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 2px solid #F3F4F6;">
+      <div style="font-size: 32px; margin-right: 16px;">💭</div>
+      <div style="font-size: 22px; font-weight: 800; color: #111827;">A Moment for Reflection</div>
+    </div>
+    ${reflectionHtml}
+  </div>
+` : '';
+
+const closingText = closing ? textToHtmlParagraphs(closing) : '';
+
 const letterHtmlBody =
-      textToHtmlParagraphs(before) +
-      (areasOfFocusHtml ? areasOfFocusHtml : "") +
-      (agingPreviewHtml ? agingPreviewHtml : "") +
-      (reflectionHtml ? reflectionHtml : "") +
-      (closing ? textToHtmlParagraphs(closing) : "");
+      mainFindingsCard +
+      areasOfFocusCard +
+      agingImagesCard +
+      reflectionCard +
+      closingText;
 
 
 
@@ -3407,9 +3457,14 @@ const protocolRecommendation = protocol_recommendation?.primary || null;
 
     </div>
 
-    <div style="background: white; padding: 32px 24px; margin-top: 2px; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
+    <!-- All sections now have their own card wrappers with headers -->
+    <div style="background: #F9FAFB; padding: 0 24px 24px 24px;">
       ${structuredSectionsHtml}
-      <div style="margin-top: 32px;">${letterHtmlBody}</div>
+      ${letterHtmlBody}
+    </div>
+
+    <!-- CTAs and Footer in separate container -->
+    <div style="background: white; padding: 32px 24px; margin-top: 2px; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
 
       <div style="margin: 32px 0; padding: 20px 24px; border: 2px solid #3B82F6; border-radius: 14px; background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1);">
         <div style="font-size: 16px; font-weight: 800; color: #1E40AF; margin-bottom: 8px;">📅 30-Day Protocol Check-In</div>
